@@ -13,14 +13,28 @@ def _bool(name: str, default: str = "false"):
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _database_uri(raw: str) -> str:
+    """Pin the Postgres driver to psycopg2.
+
+    SQLAlchemy 2.1 makes psycopg (v3) the default DBAPI for a bare
+    ``postgresql://`` URL, but this project ships psycopg2-binary. Hosting
+    dashboards hand out driver-less URLs, so rewrite the scheme here instead of
+    asking every deployer to remember ``postgresql+psycopg2://``.
+    """
+    for scheme in ("postgres://", "postgresql://"):
+        if raw.startswith(scheme):
+            return "postgresql+psycopg2://" + raw[len(scheme) :]
+    return raw
+
+
 class Config:
     SECRET_KEY = os.getenv(
         "SECRET_KEY", "dev-only-secret-change-me-use-32-bytes-minimum"
     )
 
     # Local development uses SQLite; production uses Postgres (Neon) via DATABASE_URL.
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", f"sqlite:///{(BASE_DIR / 'wallet_dev.db').as_posix()}"
+    SQLALCHEMY_DATABASE_URI = _database_uri(
+        os.getenv("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'wallet_dev.db').as_posix()}")
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}

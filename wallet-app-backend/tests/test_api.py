@@ -1,3 +1,6 @@
+from wallet.config import _database_uri
+
+
 def test_health(client):
     response = client.get("/healthz")
     assert response.status_code == 200
@@ -140,6 +143,21 @@ def test_full_onboarding_flow(client):
         "/vpas/resolve", json={"vpa": "9876543210@demoupi"}, headers=headers
     )
     assert self_resolve.status_code == 400
+
+
+def test_postgres_urls_are_pinned_to_the_psycopg2_driver():
+    """SQLAlchemy 2.1 defaults a bare postgresql:// URL to psycopg (v3), which
+    is not installed, so hosting dashboards must not need to know the driver."""
+    assert _database_uri("postgresql://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
+    assert _database_uri("postgres://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
+    assert (
+        _database_uri("postgresql://u:p@h/db?sslmode=require")
+        == "postgresql+psycopg2://u:p@h/db?sslmode=require"
+    )
+
+    # An explicitly chosen driver, and non-Postgres URLs, are left alone.
+    assert _database_uri("postgresql+psycopg2://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
+    assert _database_uri("sqlite:///wallet_dev.db") == "sqlite:///wallet_dev.db"
 
 
 def test_otp_locks_after_three_wrong_attempts(client):
