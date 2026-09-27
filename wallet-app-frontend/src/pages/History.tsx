@@ -60,6 +60,7 @@ export default function HistoryPage() {
   return (
     <AppShell
       nav
+      onRefresh={() => void onRefresh()}
       header={
         <AppBar
           title="Transactions"

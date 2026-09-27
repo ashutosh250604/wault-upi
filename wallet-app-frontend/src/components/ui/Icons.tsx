@@ -34,6 +34,13 @@ export const IconArrowLeft = (p: IconProps) => (
   </Base>
 );
 
+export const IconArrowRight = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4.5 12h15" />
+    <path d="m13 5.5 6.5 6.5-6.5 6.5" />
+  </Base>
+);
+
 export const IconChevronRight = (p: IconProps) => (
   <Base {...p}>
     <path d="m9 18 6-6-6-6" />
@@ -233,6 +240,14 @@ export const IconNote = (p: IconProps) => (
   <Base {...p}>
     <path d="M4.5 3.5h15v11l-5 5h-10v-16Z" />
     <path d="M14.5 19.5v-5h5" />
+  </Base>
+);
+
+export const IconSound = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z" />
+    <path d="M15.5 9a4 4 0 0 1 0 6" />
+    <path d="M18.5 6.5a8 8 0 0 1 0 11" />
   </Base>
 );
 

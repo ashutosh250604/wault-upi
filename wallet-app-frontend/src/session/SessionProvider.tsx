@@ -117,8 +117,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       status,
       error,
       refresh,
-      setBalance: (balance: number) =>
-        setProfile((current) => (current ? { ...current, balance } : current)),
+      patchProfile: (patch: Partial<MeResponse>) =>
+        setProfile((current) => (current ? { ...current, ...patch } : current)),
     }),
     [session, userId, signOut, profile, transactions, status, error, refresh],
   );

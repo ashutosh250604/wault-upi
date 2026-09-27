@@ -1,8 +1,9 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RouteFallback } from "./components/RouteFallback";
+import { feedback } from "./lib/feedback";
 import { ToastProvider } from "./components/Toast";
 import { SessionProvider } from "./session/SessionProvider";
 import { useAppSession } from "./session/context";
@@ -22,6 +23,23 @@ import NotFoundPage from "./pages/NotFound";
 // instead of in the initial bundle.
 const ScanQrPage = lazy(() => import("./pages/ScanQr"));
 
+/**
+ * Browsers refuse to play audio until the user has interacted, so the audio
+ * context is created on the first real gesture rather than on mount.
+ */
+function AudioUnlock() {
+  useEffect(() => {
+    const unlock = () => feedback.unlock();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+  return null;
+}
+
 /** Everything behind this needs a token; the session is read synchronously. */
 function RequireSession({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAppSession();
@@ -38,6 +56,7 @@ function Landing() {
 export default function App() {
   return (
     <ErrorBoundary>
+      <AudioUnlock />
       <BrowserRouter>
         <ToastProvider>
           <SessionProvider>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { feedback, isFeedbackEnabled, setFeedbackEnabled } from "../lib/feedback";
 import { formatCurrency, formatDateTime, formatMobile } from "../lib/format";
 import { inspectToken } from "../lib/session";
 import type { HealthResponse } from "../types";
@@ -12,7 +13,14 @@ import { Card } from "../components/ui/Card";
 import { CopyButton } from "../components/ui/CopyButton";
 import { DetailRow } from "../components/ui/DetailRow";
 import { Sheet } from "../components/ui/Sheet";
-import { IconInfo, IconLogout, IconQr, IconWarning } from "../components/ui/Icons";
+import {
+  IconInfo,
+  IconLogout,
+  IconQr,
+  IconSound,
+  IconWarning,
+} from "../components/ui/Icons";
+import { cx } from "../lib/cx";
 
 const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
 
@@ -20,6 +28,7 @@ export default function ProfilePage() {
   const { session, profile, signOut } = useAppSession();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [sound, setSound] = useState(isFeedbackEnabled);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,6 +117,45 @@ export default function ProfilePage() {
                 screen half-broken.
               </p>
             </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+              <IconSound size={17} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px] font-semibold text-slate-800">
+                Sounds &amp; haptics
+              </p>
+              <p className="text-[12px] text-slate-500">
+                Keypad ticks, a chime when money moves, a buzz on errors.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sound}
+              aria-label="Sounds and haptics"
+              onClick={() => {
+                const next = !sound;
+                setSound(next);
+                setFeedbackEnabled(next);
+                if (next) feedback.success();
+              }}
+              className={cx(
+                "relative h-7 w-12 shrink-0 rounded-full transition",
+                sound ? "bg-brand-600" : "bg-slate-200",
+              )}
+            >
+              <span
+                className={cx(
+                  "absolute top-1 size-5 rounded-full bg-white shadow transition-all",
+                  sound ? "left-6" : "left-1",
+                )}
+              />
+            </button>
           </div>
         </Card>
 

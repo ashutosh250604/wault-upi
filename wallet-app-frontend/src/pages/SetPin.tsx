@@ -15,7 +15,7 @@ type Stage = "create" | "confirm";
 export default function SetPinPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { isAuthenticated } = useAppSession();
+  const { isAuthenticated, patchProfile, refresh } = useAppSession();
 
   const [stage, setStage] = useState<Stage>("create");
   const [value, setValue] = useState("");
@@ -50,6 +50,10 @@ export default function SetPinPage() {
     setError(null);
     try {
       await api.setPin(pin);
+      // The cached profile was fetched before this PIN existed; without the
+      // patch, home would keep showing "Set your PIN to start paying".
+      patchProfile({ has_pin: true });
+      void refresh({ silent: true });
       toast.success("PIN set — you're ready to pay");
       navigate("/home", { replace: true });
     } catch (err) {

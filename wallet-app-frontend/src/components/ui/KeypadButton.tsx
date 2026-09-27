@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 import { cx } from "../../lib/cx";
+import { feedback } from "../../lib/feedback";
 
 export interface KeypadButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Secondary keys (00, backspace) read quieter than the digits. */
@@ -10,12 +11,18 @@ export function KeypadButton({
   muted = false,
   className,
   type = "button",
+  onClick,
   children,
   ...rest
 }: KeypadButtonProps) {
   return (
     <button
       type={type}
+      // One place gives every numeric key its tick and haptic nudge.
+      onClick={(event) => {
+        feedback.tap();
+        onClick?.(event);
+      }}
       className={cx(
         "flex h-12 items-center justify-center rounded-xl font-semibold transition select-none",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",

@@ -1,6 +1,11 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
+import { feedback } from "../lib/feedback";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { PaySheet } from "./PaySheet";
+import { PullIndicator } from "./ui/PullIndicator";
 import {
   IconArrowLeft,
   IconHome,
@@ -22,6 +27,16 @@ export interface AppShellProps {
   footer?: ReactNode;
   children: ReactNode;
   contentClassName?: string;
+  /** Enables the touch pull-to-refresh gesture on the scroll area. */
+  onRefresh?: () => Promise<void> | void;
+  /** Dark, edge-to-edge surface for the camera. */
+  bare?: boolean;
+  /**
+   * Puts the header inside the scroll area so screens can overlap content onto
+   * it (the home hero + quick actions). A fixed header would clip that overlap,
+   * because the scroll container only paints from its own top edge down.
+   */
+  scrollHeader?: boolean;
 }
 
 export function AppShell({
@@ -30,22 +45,47 @@ export function AppShell({
   footer,
   children,
   contentClassName,
+  onRefresh,
+  bare = false,
+  scrollHeader = false,
 }: AppShellProps) {
+  const pull = usePullToRefresh(onRefresh ?? (() => {}), Boolean(onRefresh));
+  // Owned here so the centre "Pay" action works from any tab.
+  const [payOpen, setPayOpen] = useState(false);
+
   return (
     <div className="flex h-dvh flex-col items-center sm:p-4">
-      <div className="flex h-full w-full max-w-[27rem] flex-col overflow-hidden bg-white shadow-xl shadow-slate-900/5 sm:rounded-[1.75rem] sm:ring-1 sm:ring-slate-900/5">
-        {header}
+      <div
+        className={cx(
+          "flex h-full w-full max-w-[27rem] flex-col overflow-hidden shadow-xl shadow-slate-900/10 sm:rounded-[1.75rem] sm:ring-1 sm:ring-slate-900/10",
+          bare ? "bg-slate-950" : "bg-white",
+        )}
+      >
+        {!scrollHeader ? header : null}
+        {onRefresh ? (
+          <PullIndicator
+            distance={pull.distance}
+            progress={pull.progress}
+            refreshing={pull.refreshing}
+          />
+        ) : null}
         <main
+          ref={onRefresh ? pull.ref : undefined}
+          // Every page animates in on mount, which is what makes navigation
+          // feel like a screen push rather than a document swap.
           className={cx(
-            "app-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain",
+            "app-scroll min-h-0 flex-1 animate-enter overflow-y-auto overscroll-contain",
             contentClassName,
           )}
         >
+          {scrollHeader ? header : null}
           {children}
         </main>
         {footer}
-        {nav ? <BottomNav /> : null}
+        {nav ? <BottomNav onPay={() => setPayOpen(true)} /> : null}
       </div>
+
+      <PaySheet open={payOpen} onClose={() => setPayOpen(false)} />
     </div>
   );
 }
@@ -93,14 +133,31 @@ export function AppBar({ title, right, children, showBack = false, border = true
 }
 
 /** The wordmark, with a permanent reminder that this is a demo. */
-export function BrandMark() {
+export function BrandMark({ invert = false }: { invert?: boolean }) {
   return (
     <span className="flex items-center gap-2">
-      <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-fuchsia-500 text-[13px] font-black text-white">
+      <span
+        className={cx(
+          "flex size-7 items-center justify-center rounded-lg text-[13px] font-black",
+          invert ? "bg-white/20 text-white" : "bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white",
+        )}
+      >
         P
       </span>
-      <span className="text-[16px] font-bold tracking-tight text-slate-900">PocketPay</span>
-      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-700 uppercase">
+      <span
+        className={cx(
+          "text-[16px] font-bold tracking-tight",
+          invert ? "text-white" : "text-slate-900",
+        )}
+      >
+        PocketPay
+      </span>
+      <span
+        className={cx(
+          "rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase",
+          invert ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700",
+        )}
+      >
         Demo
       </span>
     </span>
@@ -153,7 +210,7 @@ function NavItem({
   );
 }
 
-export function BottomNav() {
+export function BottomNav({ onPay }: { onPay?: () => void }) {
   return (
     <nav
       aria-label="Primary"
@@ -164,27 +221,20 @@ export function BottomNav() {
           <NavItem key={item.to} {...item} />
         ))}
 
-        <NavLink
-          to="/scan"
-          aria-label="Scan a QR code to pay"
+        <button
+          type="button"
+          onClick={() => {
+            feedback.tap();
+            onPay?.();
+          }}
+          aria-label="Pay or scan"
           className="flex flex-1 flex-col items-center justify-end gap-0.5 text-[10.5px] font-semibold"
         >
-          {({ isActive }) => (
-            <>
-              <span
-                className={cx(
-                  "-mt-5 flex size-12 items-center justify-center rounded-full text-white shadow-lg transition",
-                  isActive
-                    ? "bg-gradient-to-br from-brand-500 to-fuchsia-500 shadow-brand-600/30"
-                    : "bg-brand-600 shadow-brand-600/30 hover:bg-brand-700",
-                )}
-              >
-                <IconScan size={22} />
-              </span>
-              <span className={isActive ? "text-brand-700" : "text-slate-400"}>Scan</span>
-            </>
-          )}
-        </NavLink>
+          <span className="-mt-5 flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white shadow-lg shadow-brand-600/30 transition active:scale-95">
+            <IconScan size={22} />
+          </span>
+          <span className="text-slate-400">Pay</span>
+        </button>
 
         {NAV_ITEMS_RIGHT.map((item) => (
           <NavItem key={item.to} {...item} />

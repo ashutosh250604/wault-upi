@@ -1,5 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { cx } from "../lib/cx";
+import { feedback } from "../lib/feedback";
 import { useKeydown } from "../hooks/useKeydown";
 import { IconBackspace, IconLock } from "./ui/Icons";
 import { KeypadButton } from "./ui/KeypadButton";
@@ -20,6 +21,8 @@ export interface PinPadProps {
   disabled?: boolean;
   /** Reads "Verifying…" while the PIN is checked server-side. */
   busyLabel?: string;
+  /** Shows a "Forgot PIN?" escape hatch when provided. */
+  onForgotPin?: () => void;
 }
 
 export function PinPad({
@@ -32,13 +35,20 @@ export function PinPad({
   busy = false,
   disabled = false,
   busyLabel = "Verifying…",
+  onForgotPin,
 }: PinPadProps) {
   const locked = disabled || busy;
+
+  // A failed attempt should be felt, not just read.
+  useEffect(() => {
+    if (error && !busy) feedback.error();
+  }, [error, busy, shakeToken]);
 
   const push = useCallback(
     (digit: string) => {
       if (locked || value.length >= PIN_LENGTH) return;
       const next = (value + digit).slice(0, PIN_LENGTH);
+      feedback.digit();
       onChange(next);
       if (autoSubmit && next.length === PIN_LENGTH) onComplete?.(next);
     },
@@ -78,15 +88,22 @@ export function PinPad({
                 key={index}
                 aria-hidden="true"
                 className={cx(
-                  "flex size-11 items-center justify-center rounded-xl border text-2xl font-bold transition",
+                  "flex h-14 w-12 items-center justify-center rounded-2xl border-2 transition-colors duration-150",
                   error
-                    ? "border-rose-300 bg-rose-50 text-rose-500"
+                    ? "border-rose-300 bg-rose-50"
                     : filled
-                      ? "border-brand-500 bg-brand-50 text-brand-700"
-                      : "border-slate-200 bg-slate-50 text-slate-400",
+                      ? "border-brand-500 bg-brand-50"
+                      : "border-slate-200 bg-slate-50",
                 )}
               >
-                {filled ? "•" : ""}
+                {filled ? (
+                  <span
+                    className={cx(
+                      "size-3 animate-pop rounded-full",
+                      error ? "bg-rose-500" : "bg-brand-600",
+                    )}
+                  />
+                ) : null}
               </span>
             );
           })}
@@ -133,6 +150,17 @@ export function PinPad({
           <IconBackspace size={22} />
         </KeypadButton>
       </div>
+
+      {onForgotPin ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onForgotPin}
+          className="mt-3 rounded-lg px-2 py-1 text-[12.5px] font-semibold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50"
+        >
+          Forgot PIN?
+        </button>
+      ) : null}
     </div>
   );
 }

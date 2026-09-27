@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
+import { feedback } from "../lib/feedback";
 import { formatCurrency, formatCurrencyShort, groupAmountInput } from "../lib/format";
 import { parsePaymentIntent } from "../lib/routing";
 import {
@@ -29,7 +30,7 @@ export default function AmountEntryPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const { userId, profile, setBalance, refresh } = useAppSession();
+  const { userId, profile, patchProfile, refresh } = useAppSession();
 
   const intent = useMemo(() => parsePaymentIntent(location.state), [location.state]);
   const isTopUp = intent?.mode === "topup";
@@ -83,7 +84,8 @@ export default function AmountEntryPage() {
 
       if (isTopUp) {
         const result = await api.topUp(userId, value);
-        setBalance(result.new_balance);
+        feedback.success();
+        patchProfile({ balance: result.new_balance });
         void refresh({ silent: true });
         navigate("/pay/result", {
           replace: true,
@@ -107,7 +109,8 @@ export default function AmountEntryPage() {
         value,
         note.trim() || null,
       );
-      if (available !== null) setBalance(Math.max(0, available - value));
+      feedback.success();
+      if (available !== null) patchProfile({ balance: Math.max(0, available - value) });
       void refresh({ silent: true });
       navigate("/pay/result", {
         replace: true,
@@ -308,6 +311,10 @@ export default function AmountEntryPage() {
           busy={paying}
           busyLabel={isTopUp ? "Adding money…" : "Sending money…"}
           autoSubmit={!paying}
+          onForgotPin={() => {
+            closePin();
+            navigate("/onboarding/pin");
+          }}
         />
         {needsPinSetup ? (
           <Card tone="muted" className="mt-5 text-center">

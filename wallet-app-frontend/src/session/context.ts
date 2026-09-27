@@ -24,8 +24,12 @@ export interface AppSessionValue {
   error: string | null;
   /** Reloads profile + transactions. `silent` keeps the current UI on screen. */
   refresh: (options?: { silent?: boolean }) => Promise<void>;
-  /** Locally patch the cached balance after a payment settles. */
-  setBalance: (balance: number) => void;
+  /**
+   * Apply a server-confirmed change to the cached profile immediately, so
+   * screens that already rendered don't show stale facts (a just-set name, a
+   * just-created PIN, a new balance) until the next refetch lands.
+   */
+  patchProfile: (patch: Partial<MeResponse>) => void;
 }
 
 export const AppSessionContext = createContext<AppSessionValue | null>(null);

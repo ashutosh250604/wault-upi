@@ -15,7 +15,8 @@ import { StepDots } from "../components/ui/StepDots";
 export default function SetNamePage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { isAuthenticated, session, updateSession, refresh } = useAppSession();
+  const { isAuthenticated, session, updateSession, patchProfile, refresh } =
+    useAppSession();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,8 +38,9 @@ export default function SetNamePage() {
     try {
       const data = await api.setName(name.trim(), email.trim());
       updateSession({ name: name.trim(), vpa: data.vpa });
-      // The cached profile was fetched before the name existed; refresh so the
-      // wallet doesn't greet a freshly-named user as "there".
+      // The cached profile was fetched before the name existed; without the
+      // patch the wallet greets a freshly-named user as "there".
+      patchProfile({ name: name.trim(), vpa: data.vpa, is_verified: true });
       void refresh({ silent: true });
       toast.success("Profile created");
       navigate("/onboarding/pin", { replace: true });
