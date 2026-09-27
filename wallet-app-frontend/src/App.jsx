@@ -8,7 +8,7 @@ import {
   useLocation
 } from "react-router-dom";
 
-import { QrReader } from "react-qr-reader";
+import { Scanner } from "@yudiel/react-qr-scanner";
 import { QRCodeCanvas } from 'qrcode.react';
 
 // Production builds are served from the same origin as the API (single deploy),
@@ -880,17 +880,24 @@ React.useEffect(() => {
           height: 320,
           border: "2px solid #3e64ff",
           borderRadius: 16,
+          overflow: "hidden",
           position: "relative",
         }}
       >
-        <QrReader
-          scanDelay={300}
-          onResult={(result, error) => {
-            if (result) handleScan(result?.text);
-            if (error) handleError(error);
-          }}
+        <Scanner
           constraints={{ facingMode: "environment" }}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onScan={(codes) => {
+            const value = codes?.[0]?.rawValue;
+            if (value) handleScan(value);
+          }}
+          onError={(err) => handleError(err)}
+          // The blue frame below is drawn by this screen, so the library's own
+          // finder/torch chrome is switched off.
+          components={{ finder: false, torch: false, onOff: false, zoom: false }}
+          styles={{
+            container: { width: "100%", height: "100%" },
+            video: { width: "100%", height: "100%", objectFit: "cover" },
+          }}
         />
         <div
           style={{
