@@ -68,24 +68,28 @@ def _seed_history():
 
     now = utcnow()
     history = [
-        # (days ago, type, sender, receiver, rupees)
-        (12, "topup", None, sender.id, 3000),
-        (10, "topup", None, receiver.id, 2500),
-        (6, "transfer", sender.id, receiver.id, 250),
-        (3, "topup", None, sender.id, 2500),
-        (2, "transfer", receiver.id, sender.id, 100),
-        (1, "transfer", sender.id, receiver.id, 400),
+        # (days ago, (hour, minute) UTC, type, sender, receiver, rupees, note)
+        (12, (10, 24), "topup", None, sender.id, 3000, None),
+        (10, (19, 5), "topup", None, receiver.id, 2500, None),
+        (6, (13, 42), "transfer", sender.id, receiver.id, 250, "Groceries"),
+        (3, (9, 15), "topup", None, sender.id, 2500, None),
+        (2, (21, 8), "transfer", receiver.id, sender.id, 100, "Cab fare"),
+        (1, (8, 50), "transfer", sender.id, receiver.id, 400, "Concert tickets"),
     ]
-    for days_ago, kind, sender_id, receiver_id, rupees in history:
+    for days_ago, (hour, minute), kind, sender_id, receiver_id, rupees, note in history:
+        # Vary the clock time too, so the history doesn't read as generated at once.
+        when = (now - timedelta(days=days_ago)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0
+        )
         db.session.add(
             Transaction(
-                reference=make_reference(),
+                reference=make_reference(when),
                 type=kind,
                 sender_id=sender_id,
                 receiver_id=receiver_id,
                 amount_paise=rupees * 100,
-                note="Demo history" if kind == "transfer" else None,
-                timestamp=now - timedelta(days=days_ago),
+                note=note,
+                timestamp=when,
             )
         )
     db.session.commit()

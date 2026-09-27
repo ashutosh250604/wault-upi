@@ -34,7 +34,16 @@ def create_app(config_overrides=None):
 
     @app.get("/healthz")
     def healthz():
-        return jsonify({"status": "ok", "demo_mode": app.config["DEMO_MODE"]})
+        # Report the live DBAPI so a deploy can prove it reached Postgres (rather
+        # than silently falling back to the SQLite file inside the container).
+        return jsonify(
+            {
+                "status": "ok",
+                "demo_mode": app.config["DEMO_MODE"],
+                "db": db.engine.dialect.name,
+                "driver": db.engine.dialect.driver,
+            }
+        )
 
     @app.errorhandler(404)
     def not_found(_error):

@@ -8,7 +8,10 @@ transfers and a transaction history.
 > real payment rail. Handles use the made-up suffix `@demoupi` and payments only move
 > balances between accounts inside this app's own database.
 
-**Live demo:** _add your Render URL here after deploying_ (see [Deploy](#deploy))
+**Live demo:** [upi-wallet-demo.onrender.com](https://upi-wallet-demo.onrender.com) (see [Deploy](#deploy))
+
+> The demo runs on Render's free tier, so the first request after ~15 minutes of idle
+> takes 20-50 seconds while the instance wakes up.
 
 ## Demo accounts
 
@@ -27,16 +30,33 @@ HTTPS, which the deployed URL provides; typed UPI IDs work with or without a cam
 
 ## Features
 
-- OTP login with expiry, attempt limits and resend timer
-- Salaried-style onboarding: claim name/email → auto-generated VPA → 4-digit PIN
-- Wallet home with balance (PIN-protected), top-up and history
+- OTP login with expiry, attempt limits and resend timer (with auto-submit and paste)
+- Guided onboarding: name/email → auto-generated VPA → 4-digit PIN (with confirm step)
+- Wallet home: balance card with hide/show, quick actions, recent activity
 - P2P transfers by UPI ID with **verified recipient name shown before paying**
-- QR scanner (camera) plus manual UPI ID entry as a camera-free fallback
-- Personal QR code encoding a `upi://pay?...` deep link
+- QR scanner (camera, torch, lazy-loaded) plus manual UPI ID entry as a camera-free fallback
+- Personal QR code with copy / save / share, encoding a `upi://pay?...` deep link
+- History with money-in/out filters, day grouping and tap-through receipts
 - Money stored as **integer paise**; transfers use an **atomic conditional debit** so
   concurrent requests cannot overdraw a wallet
 - JWT sessions, scrypt-hashed PINs/OTPs, PIN lockout after 5 wrong attempts,
   ownership checks on every wallet endpoint
+
+## Frontend notes
+
+- **Typed end to end.** `tsc --noEmit` runs in CI-script form (`npm run typecheck`) and every
+  API response is described once in `src/types.ts`.
+- **One error path.** All requests go through `src/lib/api.ts`, which normalises failures into
+  `ApiError`, turns dead connections into human copy, and reports any 401 to the session
+  provider so an expired token signs the user out instead of half-breaking a screen.
+- **Client validation mirrors the server**, but only as UX — the server re-validates every
+  amount, PIN and ownership rule.
+- **Accessible by default:** labelled inputs, `aria-live` errors, Escape-to-close sheets with
+  focus management, and `prefers-reduced-motion` support.
+- **Fast first paint:** the barcode-decoding engine is code-split, so the scanner's ~150 kB
+  chunk only downloads when someone opens the scanner (initial bundle ≈ 330 kB / 103 kB gzip).
+- **Honest states:** skeleton loaders, empty states with a next step, retryable error states,
+  and a top-level error boundary.
 
 ## Architecture
 
@@ -64,22 +84,29 @@ wallet-app-backend/
     blueprints/      auth.py, wallet.py
   migrations/        Alembic schema
   tests/             pytest suite
-wallet-app-frontend/
-  src/App.jsx        screens, routing and API client
+wallet-app-frontend/            React 19 + TypeScript + Tailwind v4 (Vite)
+  src/
+    App.tsx                     routes, session guards, providers
+    pages/                      one file per screen (sign-in → onboarding → wallet → payment)
+    components/                 app shell + bottom tabs, keypads, PIN pad, QR views, toasts
+    components/ui/              design system: Button, Card, Field, Sheet, Badge, states, icons
+    lib/                        typed API client, formatting, validation, session storage
+    session/                    auth state + cached profile/transactions provider
+    types.ts                    the API contract, in one place
 ```
 
 ## API
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| GET | `/healthz` | – | health check |
+| GET | `/healthz` | – | health check (reports the live database + driver) |
 | POST | `/start_login` | – | validate mobile, issue OTP (`dev_otp` in demo mode) |
 | POST | `/verify_otp` | – | verify OTP, returns JWT + user id |
 | POST | `/demo_login` | – | one-tap demo session (demo mode only) |
 | POST | `/set_name` | Bearer | save name/email, generate VPA, create wallet |
 | POST | `/set_pin` | Bearer | store scrypt-hashed PIN |
 | POST | `/verify_pin` | Bearer | PIN check with lockout |
-| GET | `/me` | Bearer | current profile + balance |
+| GET | `/me` | Bearer | current profile + balance (and whether a PIN is set) |
 | GET | `/get_balance/<id>` | Bearer | wallet balance (own wallet only) |
 | POST | `/topup` | Bearer | add funds (own wallet only) |
 | POST | `/transfer` | Bearer | send money by receiver id |
@@ -103,9 +130,15 @@ Frontend:
 
 ```bash
 cd wallet-app-frontend
-npm install
+npm ci
 npm run dev          # http://localhost:5173, talks to http://localhost:5000
+npm run typecheck    # tsc --noEmit
+npm run lint         # eslint (flat config, TypeScript-aware)
+npm run build        # production bundle into dist/
 ```
+
+The production bundle is served by Flask itself, so `npm run build` then visiting
+`http://localhost:5000` reproduces the deployed setup exactly (same origin, no CORS).
 
 To demo from your phone on the same Wi-Fi, point `VITE_API_BASE` in
 `wallet-app-frontend/.env.development` at your machine's LAN IP and allow that origin in
@@ -150,7 +183,7 @@ HTTPS.
 ## Roadmap
 
 - [ ] Double-entry ledger for every money movement + idempotency keys on transfers
-- [ ] Split `App.jsx` into a TypeScript + Tailwind design system with a bottom-tab app shell
 - [ ] PIN change, active sessions, "log out everywhere", delete account
 - [ ] Money requests, contacts, statements (CSV/PDF), notifications centre
-- [ ] Playwright end-to-end tests in CI
+- [ ] Playwright end-to-end tests plus a GitHub Actions job running typecheck, lint, build and pytest
+- [ ] Screenshot gallery and a short architecture write-up at the top of this README

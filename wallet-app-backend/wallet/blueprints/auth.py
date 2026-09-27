@@ -277,4 +277,7 @@ def me():
     payload["balance"] = round(
         (user.wallet.balance_paise if user.wallet else 0) / 100, 2
     )
+    # Lets the client send a half-onboarded account back to the PIN step even
+    # if it never learns that from the sign-in response.
+    payload["has_pin"] = bool(user.pin_hash)
     return jsonify(payload), 200

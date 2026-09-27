@@ -4,7 +4,11 @@ from wallet.config import _database_uri
 def test_health(client):
     response = client.get("/healthz")
     assert response.status_code == 200
-    assert response.get_json()["status"] == "ok"
+    body = response.get_json()
+    assert body["status"] == "ok"
+    # The test app runs on SQLite; a Postgres deploy must report "postgresql"/"psycopg2".
+    assert body["db"] == "sqlite"
+    assert body["driver"] == "pysqlite"
 
 
 def test_demo_login_returns_token_and_balance(client):
@@ -130,6 +134,10 @@ def test_full_onboarding_flow(client):
     assert named.status_code == 200
     assert named.get_json()["vpa"] == "9876543210@demoupi"
 
+    # Half-onboarded: named, but no PIN yet — the client uses this to route
+    # the user back to the PIN step.
+    assert client.get("/me", headers=headers).get_json()["has_pin"] is False
+
     assert client.post("/set_pin", json={"pin": "4321"}, headers=headers).status_code == 200
     assert client.post("/verify_pin", json={"pin": "4321"}, headers=headers).status_code == 200
     assert client.post("/verify_pin", json={"pin": "1111"}, headers=headers).status_code == 403
@@ -137,6 +145,7 @@ def test_full_onboarding_flow(client):
     profile = client.get("/me", headers=headers).get_json()
     assert profile["name"] == "Dev Tester"
     assert profile["balance"] == 0.0
+    assert profile["has_pin"] is True
 
     # The user cannot pay themselves.
     self_resolve = client.post(
