@@ -80,6 +80,27 @@ export interface MeResponse {
   has_pin: boolean;
 }
 
+/** A bank account the wallet can top up from. The balance is PIN-gated. */
+export interface LinkedAccount {
+  id: number;
+  bank_name: string;
+  nickname: string | null;
+  holder_name: string | null;
+  /** Already masked server-side, e.g. "•••• 4821". */
+  masked_number: string;
+  account_last4: string;
+  ifsc: string | null;
+  is_default: boolean;
+  /** Only present after a PIN-gated balance check. */
+  balance?: number;
+}
+
+export interface AccountBalanceResponse {
+  account_id: number;
+  balance: number;
+  checked_at: string;
+}
+
 export interface BalanceResponse {
   user_id: number;
   balance: number;
@@ -149,6 +170,8 @@ export interface TopUpResponse {
   new_balance: number;
   user_id: number;
   txn_id: string;
+  /** Present when the top-up was funded from a linked account. */
+  account?: LinkedAccount;
 }
 
 export type RequestStatus = "pending" | "paid" | "declined" | "cancelled";

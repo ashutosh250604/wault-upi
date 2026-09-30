@@ -10,7 +10,7 @@ from datetime import timedelta
 from flask import current_app
 
 from .extensions import db
-from .models import Contact, Transaction, User, Wallet
+from .models import Contact, LinkedAccount, Transaction, User, Wallet
 from .money import make_reference
 from .security import hash_secret
 from .timeutils import utcnow
@@ -93,6 +93,7 @@ def seed_demo():
     db.session.commit()
     _seed_history()
     _seed_contacts()
+    _seed_accounts()
 
 
 def _seed_history():
@@ -140,6 +141,45 @@ def _seed_history():
                 amount_paise=rupees * 100,
                 note=note,
                 timestamp=when,
+            )
+        )
+    db.session.commit()
+
+
+# (mobile, bank, holder, last4, ifsc, nickname, balance paise, default)
+DEMO_ACCOUNTS = [
+    ("9000000001", "State Bank of India", "Aarav Sharma", "4821", "SBIN0001234", "Salary", 4825000, True),
+    ("9000000001", "HDFC Bank", "Aarav Sharma", "9077", "HDFC0000456", "Savings", 1124000, False),
+    ("9000000002", "ICICI Bank", "Meera Iyer", "3312", "ICIC0000789", None, 2150000, True),
+    ("9000000004", "Axis Bank", "Rohan Verma", "6640", "UTIB0000321", None, 780000, True),
+    ("9000000005", "Kotak Mahindra Bank", "Ananya Desai", "1198", "KKBK0000654", None, 430000, True),
+    ("9000000006", "Bank of Baroda", "Gupta Kirana Store", "7755", "BARB0KIRANA", "Current", 9600000, True),
+]
+
+
+def _seed_accounts():
+    """Link a couple of bank accounts per demo user, so top-ups have a source."""
+    if LinkedAccount.query.count() > 0:
+        return
+
+    for mobile, bank, holder, last4, ifsc, nickname, paise, is_default in DEMO_ACCOUNTS:
+        user = User.query.filter_by(mobile=mobile).first()
+        if user is None:
+            continue
+        if LinkedAccount.query.filter_by(
+            user_id=user.id, bank_name=bank, account_last4=last4
+        ).first():
+            continue
+        db.session.add(
+            LinkedAccount(
+                user_id=user.id,
+                bank_name=bank,
+                holder_name=holder,
+                account_last4=last4,
+                ifsc=ifsc,
+                nickname=nickname,
+                balance_paise=paise,
+                is_default=is_default,
             )
         )
     db.session.commit()

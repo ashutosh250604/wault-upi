@@ -30,6 +30,7 @@ def create_app(config_overrides=None):
         methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     )
 
+    from .blueprints.accounts import bp as accounts_bp
     from .blueprints.auth import bp as auth_bp
     from .blueprints.people import bp as people_bp
     from .blueprints.requests import bp as requests_bp
@@ -43,6 +44,7 @@ def create_app(config_overrides=None):
     app.register_blueprint(wallet_bp, url_prefix=API_PREFIX)
     app.register_blueprint(people_bp, url_prefix=API_PREFIX)
     app.register_blueprint(requests_bp, url_prefix=API_PREFIX)
+    app.register_blueprint(accounts_bp, url_prefix=API_PREFIX)
 
     @app.get("/healthz")
     def healthz():

@@ -106,6 +106,60 @@ class Contact(db.Model):
         }
 
 
+class LinkedAccount(db.Model):
+    """A bank account the wallet can top up from.
+
+    Modelled the way a UPI app actually thinks: the app never holds the money,
+    it holds a pointer to an account plus a masked number. The balance is kept
+    here but only handed out by the PIN-gated endpoint, because that is exactly
+    how a real app gates "check balance" — the number exists, but seeing it is
+    an authenticated action.
+    """
+
+    __tablename__ = "linked_accounts"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "bank_name", "account_last4", name="uq_accounts_user_bank_last4"
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    bank_name = db.Column(db.String(80), nullable=False)
+    holder_name = db.Column(db.String(120))
+    # Only the last four digits are ever stored or shown — as with a real app.
+    account_last4 = db.Column(db.String(4), nullable=False)
+    ifsc = db.Column(db.String(11))
+    nickname = db.Column(db.String(40))
+    balance_paise = db.Column(db.BigInteger, nullable=False, default=0)
+    is_default = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    @property
+    def masked_number(self) -> str:
+        return f"•••• {self.account_last4}"
+
+    def to_dict(self, include_balance: bool = False):
+        payload = {
+            "id": self.id,
+            "bank_name": self.bank_name,
+            "nickname": self.nickname,
+            "holder_name": self.holder_name,
+            "masked_number": self.masked_number,
+            "account_last4": self.account_last4,
+            "ifsc": self.ifsc,
+            "is_default": self.is_default,
+        }
+        if include_balance:
+            payload["balance"] = paise_to_rupees(self.balance_paise)
+        return payload
+
+
 class PaymentRequest(db.Model):
     """"Please pay me" — a request for money, not money itself.
 

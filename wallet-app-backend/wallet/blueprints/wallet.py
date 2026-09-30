@@ -5,7 +5,7 @@ from sqlalchemy.orm import aliased
 from ..directory import classify_identifier, find_payee
 from ..extensions import db
 from ..ledger import TransferRefused, settle_transfer
-from ..models import Transaction, User, Wallet
+from ..models import LinkedAccount, Transaction, User, Wallet
 from ..money import make_reference, paise_to_rupees, rupees_to_paise
 from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
@@ -45,6 +45,43 @@ def topup():
             {"message": f"Top-up limit is ₹{current_app.config['MAX_TOPUP_RUPEES']:,}"}
         ), 400
 
+    # Adding money moves money, so it needs the same server-side PIN check as a
+    # payment — a top-up is the easiest possible way to launder a stolen token.
+    user = current_user()
+    if user is None:
+        return jsonify({"message": "User not found"}), 404
+    message, status = check_pin(user, (data.get("pin") or "").strip())
+    if message:
+        return jsonify({"message": message}), status
+
+    # Optional funding source: when given, the linked account is debited in the
+    # same commit that credits the wallet, so the two can't disagree.
+    account_id = data.get("account_id")
+    account = None
+    if account_id is not None:
+        try:
+            account_id = int(account_id)
+        except (TypeError, ValueError):
+            return jsonify({"message": "Invalid account"}), 400
+        account = db.session.get(LinkedAccount, account_id)
+        if account is None or account.user_id != g.user_id:
+            return jsonify({"message": "Account not found"}), 404
+
+        debited = db.session.execute(
+            update(LinkedAccount)
+            .where(
+                LinkedAccount.id == account.id,
+                LinkedAccount.balance_paise >= paise,
+            )
+            .values(balance_paise=LinkedAccount.balance_paise - paise, updated_at=utcnow())
+        )
+        if debited.rowcount == 0:
+            db.session.rollback()
+            return (
+                jsonify({"message": f"{account.bank_name} doesn't have that much to spare"}),
+                400,
+            )
+
     updated = db.session.execute(
         update(Wallet)
         .where(Wallet.user_id == user_id)
@@ -65,14 +102,15 @@ def topup():
     db.session.commit()
 
     wallet = Wallet.query.filter_by(user_id=user_id).first()
-    return jsonify(
-        {
-            "message": "Wallet topped up successfully!",
-            "new_balance": paise_to_rupees(wallet.balance_paise),
-            "user_id": user_id,
-            "txn_id": txn.reference,
-        }
-    ), 200
+    payload = {
+        "message": "Wallet topped up successfully!",
+        "new_balance": paise_to_rupees(wallet.balance_paise),
+        "user_id": user_id,
+        "txn_id": txn.reference,
+    }
+    if account is not None:
+        payload["account"] = account.to_dict(include_balance=True)
+    return jsonify(payload), 200
 
 
 @bp.post("/transfer")

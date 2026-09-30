@@ -22,6 +22,7 @@ import {
   IconSent,
   IconSound,
   IconUser,
+  IconWallet,
   IconWarning,
 } from "../components/ui/Icons";
 import { cx } from "../lib/cx";
@@ -128,6 +129,12 @@ export default function ProfilePage() {
         </Card>
 
         <Card padded={false} className="divide-y divide-slate-100 px-4">
+          <LinkRow
+            to="/accounts"
+            icon={<IconWallet size={17} />}
+            title="Linked accounts"
+            subtitle="Where your top-ups come from"
+          />
           <LinkRow
             to="/contacts"
             icon={<IconUser size={17} />}

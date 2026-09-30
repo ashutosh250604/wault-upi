@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { WalletTransaction } from "../types";
+import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
+import { saveBlob } from "../lib/download";
 import { formatCurrency } from "../lib/format";
+import { useToast } from "../hooks/toast";
 import { classifyTransaction } from "../lib/transactions";
 import { useAppSession } from "../session/context";
 import { AppBar, AppShell } from "../components/AppShell";
 import { TransactionDetailSheet, TransactionList } from "../components/Transactions";
 import { Card } from "../components/ui/Card";
-import { IconRefresh } from "../components/ui/Icons";
+import { Button } from "../components/ui/Button";
+import { IconDownload, IconRefresh } from "../components/ui/Icons";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
 
@@ -22,9 +26,11 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
 
 export default function HistoryPage() {
   const { userId, transactions, status, error, refresh } = useAppSession();
+  const toast = useToast();
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<WalletTransaction | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const { visible, totals } = useMemo(() => {
     const list = transactions ?? [];
@@ -55,6 +61,21 @@ export default function HistoryPage() {
     setRefreshing(true);
     await refresh({ silent: true });
     setRefreshing(false);
+  };
+
+  const exportStatement = async () => {
+    setExporting(true);
+    try {
+      // The server builds the CSV from the ledger, so the download can't drift
+      // from the rows on screen.
+      const { blob, filename } = await api.statementCsv();
+      saveBlob(blob, filename);
+      toast.success(`Statement saved as ${filename}`);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -97,6 +118,17 @@ export default function HistoryPage() {
             </p>
           </div>
         </Card>
+
+        <Button
+          variant="secondary"
+          fullWidth
+          size="sm"
+          loading={exporting}
+          leftIcon={<IconDownload size={15} />}
+          onClick={() => void exportStatement()}
+        >
+          Download statement (CSV)
+        </Button>
 
         <div
           className="flex gap-1.5 rounded-2xl bg-slate-100 p-1.5"

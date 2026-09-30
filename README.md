@@ -49,8 +49,12 @@ numbers and UPI IDs work with or without a camera.
 - Money requests: ask a contact for an amount with a note, see what you owe and what's coming
   to you, and approve an ask with the PIN — the transfer and the request closing land in the
   same commit, so a request can never look open after the money moved
-- **The PIN is verified by the server on every debit** (payments and request approvals), sharing
-  one attempt counter and lockout, so a stolen token alone can't move money
+- **The PIN is verified by the server on every debit** (payments, request approvals and
+  top-ups), sharing one attempt counter and lockout, so a stolen token alone can't move money
+- Linked bank accounts with a default, **PIN-gated "check balance"**, and top-ups that debit the
+  chosen account in the same transaction that credits the wallet
+- Statement export: a real CSV download built from the ledger, with signed amounts from the
+  account owner's point of view
 - QR scanner (camera, torch, lazy-loaded) plus manual number/UPI ID entry as a camera-free
   fallback
 - Personal QR code with copy / save / share, encoding a `upi://pay?...` deep link
@@ -130,7 +134,7 @@ health checks.
 | POST | `/api/verify_pin` | Bearer | PIN check with lockout |
 | GET | `/api/me` | Bearer | current profile + balance (and whether a PIN is set) |
 | GET | `/api/get_balance/<id>` | Bearer | wallet balance (own wallet only) |
-| POST | `/api/topup` | Bearer | add funds (own wallet only) |
+| POST | `/api/topup` | Bearer + PIN | add funds, optionally debiting a linked account |
 | POST | `/api/transfer` | Bearer + PIN | send money: the PIN is verified server-side before the debit |
 | POST | `/api/vpas/resolve` | Bearer | UPI ID → verified name + user id |
 | POST | `/api/payees/resolve` | Bearer | mobile number *or* UPI ID → verified name + user id |
@@ -144,6 +148,10 @@ health checks.
 | POST | `/api/requests/<id>/pay` | Bearer + PIN | approve an ask: verifies the PIN, transfers, closes the request |
 | POST | `/api/requests/<id>/decline` | Bearer | refuse an ask (payer only) |
 | POST | `/api/requests/<id>/cancel` | Bearer | withdraw an ask (requester only) |
+| GET | `/api/accounts` | Bearer | linked bank accounts (masked numbers, default flagged) |
+| POST | `/api/accounts/<id>/default` | Bearer | switch the default funding account |
+| POST | `/api/accounts/<id>/balance` | Bearer + PIN | the PIN-gated balance check |
+| GET | `/api/statements.csv` | Bearer | statement download, optional `?month=YYYY-MM` |
 | GET | `/api/transactions/<id>` | Bearer | history with sender/receiver names |
 
 ## Local development
@@ -219,6 +227,8 @@ HTTPS.
 - [ ] PIN change, active sessions, "log out everywhere", delete account
 - [x] Address book: saved contacts, favourites, nicknames, recent-payer ranking
 - [x] Money requests: ask, pay with PIN, decline, cancel
-- [ ] Split a bill between several people at once, statements (CSV/PDF), notifications centre
+- [x] Linked accounts, PIN-gated balance check, CSV statements
+- [ ] Split a bill between several people at once, PDF statements, notifications centre
+- [ ] Autopay/mandates and a UPI-Lite-style small-value balance
 - [ ] Playwright end-to-end tests plus a GitHub Actions job running typecheck, lint, build and pytest
 - [ ] Screenshot gallery and a short architecture write-up at the top of this README

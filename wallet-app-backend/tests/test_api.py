@@ -1,3 +1,5 @@
+from pytest import mark
+
 from wallet.config import _database_uri
 
 
@@ -89,7 +91,9 @@ def test_topup_then_transfer(client, demo_auth):
     user_id = demo_auth["user_id"]
 
     topup = client.post(
-        "/api/topup", json={"user_id": user_id, "amount": 1000}, headers=headers
+        "/api/topup",
+        json={"user_id": user_id, "amount": 1000, "pin": PIN},
+        headers=headers,
     )
     assert topup.status_code == 200
     assert topup.get_json()["new_balance"] == 6000.0
@@ -469,6 +473,151 @@ def test_asking_twice_for_the_same_amount_refreshes_the_open_request(client, dem
         if row["status"] == "pending"
     ]
     assert len(pending) == 1
+
+
+def test_accounts_are_listed_default_first_and_only_one_is_default(client, demo_auth):
+    headers = demo_auth["headers"]
+
+    accounts = client.get("/api/accounts", headers=headers).get_json()
+    assert len(accounts) == 2
+    assert accounts[0]["is_default"] is True
+    # The masked number is the only account identifier the client ever sees.
+    assert accounts[0]["masked_number"].startswith("•••• ")
+    assert len(accounts[0]["account_last4"]) == 4
+    assert "balance" not in accounts[0]
+
+    switched = client.post(f"/api/accounts/{accounts[1]['id']}/default", headers=headers)
+    assert switched.status_code == 200
+    assert switched.get_json()["account"]["is_default"] is True
+
+    refreshed = client.get("/api/accounts", headers=headers).get_json()
+    assert [item["is_default"] for item in refreshed] == [True, False]
+    assert refreshed[0]["id"] == accounts[1]["id"]
+
+    # Another user's account is invisible, and can't be switched or read.
+    other = login_as(client, "9000000002")
+    assert (
+        client.post(
+            f"/api/accounts/{accounts[0]['id']}/default", headers=other["headers"]
+        ).status_code
+        == 404
+    )
+
+
+def test_checking_a_linked_balance_requires_the_pin(client, demo_auth):
+    headers = demo_auth["headers"]
+    account = client.get("/api/accounts", headers=headers).get_json()[0]
+
+    assert (
+        client.post(f"/api/accounts/{account['id']}/balance", json={}, headers=headers).status_code
+        == 400
+    )
+    wrong = client.post(
+        f"/api/accounts/{account['id']}/balance", json={"pin": "9999"}, headers=headers
+    )
+    assert wrong.status_code == 403
+    assert "Incorrect PIN" in wrong.get_json()["message"]
+
+    ok = client.post(
+        f"/api/accounts/{account['id']}/balance", json={"pin": PIN}, headers=headers
+    )
+    assert ok.status_code == 200
+    assert ok.get_json()["balance"] == 48250.0
+    assert ok.get_json()["checked_at"]
+
+
+def test_topup_from_a_linked_account_debits_it_and_needs_a_pin(client, demo_auth):
+    headers = demo_auth["headers"]
+    user_id = demo_auth["user_id"]
+    account = client.get("/api/accounts", headers=headers).get_json()[0]
+
+    no_pin = client.post(
+        "/api/topup",
+        json={"user_id": user_id, "amount": 500, "account_id": account["id"]},
+        headers=headers,
+    )
+    assert no_pin.status_code == 400
+    assert (
+        client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
+        == 5000.0
+    )
+
+    okay = client.post(
+        "/api/topup",
+        json={"user_id": user_id, "amount": 500, "account_id": account["id"], "pin": PIN},
+        headers=headers,
+    )
+    assert okay.status_code == 200
+    assert okay.get_json()["new_balance"] == 5500.0
+    assert okay.get_json()["account"]["balance"] == 47750.0
+
+    # A top-up larger than the linked account holds is refused outright.
+    too_big = client.post(
+        "/api/topup",
+        json={"user_id": user_id, "amount": 90000, "account_id": account["id"], "pin": PIN},
+        headers=headers,
+    )
+    assert too_big.status_code == 400
+    assert "doesn't have that much" in too_big.get_json()["message"]
+    assert (
+        client.get(f"/api/accounts", headers=headers).get_json()[0]["is_default"] is True
+    )
+
+    # Someone else's account is not a valid funding source.
+    other = login_as(client, "9000000002")
+    assert (
+        client.post(
+            "/api/topup",
+            json={
+                "user_id": other["user_id"],
+                "amount": 10,
+                "account_id": account["id"],
+                "pin": PIN,
+            },
+            headers=other["headers"],
+        ).status_code
+        == 404
+    )
+
+
+def test_statement_csv_exports_only_the_callers_ledger(client, demo_auth):
+    headers = demo_auth["headers"]
+
+    response = client.get("/api/statements.csv", headers=headers)
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert "pocketpay-statement" in response.headers["Content-Disposition"]
+
+    text = response.get_data(as_text=True)
+    rows = text.strip().splitlines()
+    assert rows[0].startswith("Date,Time,Reference,Type,Direction")
+    assert len(rows) > 5
+    # Amounts are signed from the statement owner's point of view.
+    assert any(line.split(",")[7].startswith("-") for line in rows[1:])
+    assert "Credit" in text
+    # Meera's statement must not leak into Aarav's file.
+    meera = login_as(client, "9000000002")
+    meera_text = client.get("/api/statements.csv", headers=meera["headers"]).get_data(
+        as_text=True
+    )
+    assert meera_text != text
+    assert "Aarav Sharma" in meera_text
+
+    # A month filter narrows the window instead of exporting everything.
+    filtered = client.get("/api/statements.csv?month=2020-01", headers=headers)
+    assert filtered.status_code == 200
+    assert len(filtered.get_data(as_text=True).strip().splitlines()) == 1
+
+
+@mark.parametrize("bad_month", ["2026-13", "nonsense"])
+def test_statement_ignores_an_unparseable_month(client, demo_auth, bad_month):
+    response = client.get(
+        f"/api/statements.csv?month={bad_month}", headers=demo_auth["headers"]
+    )
+    assert response.status_code == 200
+    # Falls back to the full statement rather than erroring on a bad query.
+    assert len(response.get_data(as_text=True).strip().splitlines()) > 1
 
 
 def test_postgres_urls_are_pinned_to_the_psycopg2_driver():

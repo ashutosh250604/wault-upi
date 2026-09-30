@@ -7,10 +7,12 @@
  */
 
 import type {
+  AccountBalanceResponse,
   BalanceResponse,
   Contact,
   DemoLoginResponse,
   HealthResponse,
+  LinkedAccount,
   MeResponse,
   PayeePreview,
   MoneyRequest,
@@ -24,6 +26,7 @@ import type {
   VerifyOtpResponse,
   WalletTransaction,
 } from "../types";
+import { filenameFromDisposition } from "./download";
 import { readToken } from "./session";
 import { messageForStatus } from "./validation";
 
@@ -182,13 +185,66 @@ export const api = {
   transactions: (userId: number, signal?: AbortSignal) =>
     request<WalletTransaction[]>(`/transactions/${userId}`, { auth: true, signal }),
 
-  topUp: (userId: number, amount: number, signal?: AbortSignal) =>
+  /**
+   * Adds money to the wallet. The PIN is verified server-side, and an optional
+   * `accountId` debits a linked bank account in the same transaction.
+   */
+  topUp: (
+    userId: number,
+    amount: number,
+    pin: string,
+    accountId?: number,
+    signal?: AbortSignal,
+  ) =>
     request<TopUpResponse>("/topup", {
       method: "POST",
-      body: { user_id: userId, amount },
+      body: { user_id: userId, amount, pin, account_id: accountId },
       auth: true,
       signal,
     }),
+
+  accounts: (signal?: AbortSignal) =>
+    request<LinkedAccount[]>("/accounts", { auth: true, signal }),
+
+  setDefaultAccount: (accountId: number, signal?: AbortSignal) =>
+    request<{ message: string; account: LinkedAccount }>(
+      `/accounts/${accountId}/default`,
+      { method: "POST", auth: true, signal },
+    ),
+
+  /** The PIN-gated "check balance" a real UPI app makes you authenticate for. */
+  checkAccountBalance: (accountId: number, pin: string, signal?: AbortSignal) =>
+    request<AccountBalanceResponse>(`/accounts/${accountId}/balance`, {
+      method: "POST",
+      body: { pin },
+      auth: true,
+      signal,
+    }),
+
+  /**
+   * The statement as a file, not JSON, so it bypasses `request()`. Reads the
+   * filename the server chose from Content-Disposition.
+   */
+  statementCsv: async (signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> => {
+    const token = readToken();
+    if (!token) throw new ApiError("Your session expired. Please sign in again.", 401);
+
+    const response = await fetch(`${API_BASE}${API_PREFIX}/statements.csv`, {
+      headers: { Accept: "text/csv", Authorization: `Bearer ${token}` },
+      signal,
+    });
+    if (!response.ok) {
+      if (response.status === 401) authFailureListener?.();
+      throw new ApiError(messageForStatus(response.status), response.status);
+    }
+
+    return {
+      blob: await response.blob(),
+      filename:
+        filenameFromDisposition(response.headers.get("Content-Disposition")) ??
+        "pocketpay-statement.csv",
+    };
+  },
 
   /**
    * Sends money. The PIN travels with the request so the server authorises the

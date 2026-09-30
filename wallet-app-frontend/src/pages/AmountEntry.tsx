@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import type { LinkedAccount } from "../types";
 import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
 import { feedback } from "../lib/feedback";
@@ -21,7 +22,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { TextArea } from "../components/ui/Field";
-import { IconInfo, IconNote, IconWarning } from "../components/ui/Icons";
+import { IconCheck, IconInfo, IconNote, IconWarning } from "../components/ui/Icons";
 import { Sheet } from "../components/ui/Sheet";
 
 const QUICK_AMOUNTS = [100, 500, 1000, 2000];
@@ -46,6 +47,9 @@ export default function AmountEntryPage() {
   const [needsPinSetup, setNeedsPinSetup] = useState(false);
   const [shakeToken, setShakeToken] = useState(0);
   const [paying, setPaying] = useState(false);
+  // Funding sources appear only for a top-up: paying someone never touches them.
+  const [accounts, setAccounts] = useState<LinkedAccount[] | null>(null);
+  const [sourceId, setSourceId] = useState<number | null>(null);
 
   const available = profile?.balance ?? null;
   const rules =
@@ -62,6 +66,23 @@ export default function AmountEntryPage() {
   useEffect(() => {
     if (amount === "") setTouched(false);
   }, [amount]);
+
+  // Load the linked accounts and preselect the user's default one.
+  useEffect(() => {
+    if (!isTopUp) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const list = await api.accounts(controller.signal);
+        setAccounts(list);
+        setSourceId(list.find((item) => item.is_default)?.id ?? list[0]?.id ?? null);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setAccounts([]);
+      }
+    })();
+    return () => controller.abort();
+  }, [isTopUp]);
 
   if (!intent || !userId) return <Navigate to="/home" replace />;
 
@@ -80,10 +101,9 @@ export default function AmountEntryPage() {
 
     try {
       if (isTopUp) {
-        // A top-up only credits your own wallet, so the PIN here is a deliberate
-        // confirmation step rather than an authorisation of a debit.
-        await api.verifyPin(enteredPin);
-        const result = await api.topUp(userId, value);
+        // The PIN is verified server-side with the debit, and the chosen account
+        // is charged in the same transaction that credits the wallet.
+        const result = await api.topUp(userId, value, enteredPin, sourceId ?? undefined);
         feedback.success();
         patchProfile({ balance: result.new_balance });
         void refresh({ silent: true });
@@ -186,16 +206,61 @@ export default function AmountEntryPage() {
     >
       <div className="space-y-4 px-5 pt-4 pb-5">
         {isTopUp ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-            <Avatar name={profile?.name} size="md" tone="gradient" />
-            <div className="min-w-0">
-              <p className="truncate text-[15px] font-semibold text-slate-900">
-                {profile?.name ?? "Your wallet"}
-              </p>
-              <p className="truncate text-[12.5px] text-slate-500">
-                Top-up · balance {formatCurrency(available ?? 0)}
-              </p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <Avatar name={profile?.name} size="md" tone="gradient" />
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold text-slate-900">
+                  {profile?.name ?? "Your wallet"}
+                </p>
+                <p className="truncate text-[12.5px] text-slate-500">
+                  Wallet balance {formatCurrency(available ?? 0)}
+                </p>
+              </div>
             </div>
+
+            {accounts && accounts.length > 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <p className="px-1 pb-1.5 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                  Add money from
+                </p>
+                {accounts.map((account) => {
+                  const selected = sourceId === account.id;
+                  return (
+                    <button
+                      key={account.id}
+                      type="button"
+                      onClick={() => setSourceId(account.id)}
+                      aria-pressed={selected}
+                      className={cx(
+                        "flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition",
+                        selected ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50",
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition",
+                          selected
+                            ? "border-brand-600 bg-brand-600 text-white"
+                            : "border-slate-300",
+                        )}
+                      >
+                        {selected ? <IconCheck size={10} /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-semibold text-slate-800">
+                          {account.bank_name}
+                        </span>
+                        <span className="block truncate text-[11.5px] text-slate-500 tabular-nums">
+                          {account.masked_number}
+                          {account.is_default ? " · default" : ""}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-2">
@@ -292,7 +357,7 @@ export default function AmountEntryPage() {
           <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
           <p className="text-[12.5px] leading-relaxed text-slate-600">
             {isTopUp
-              ? "In a real wallet this would pull from a linked bank account. Here it simply credits the demo balance."
+              ? "The linked account is debited and the wallet credited in one transaction, so the two balances can never disagree about how much moved."
               : "The debit and the balance check happen in a single atomic statement, so a repeated or racing transfer can never overdraw the wallet."}
           </p>
         </Card>
