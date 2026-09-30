@@ -46,6 +46,11 @@ numbers and UPI IDs work with or without a camera.
   paying**
 - Address book: searchable contacts, favourites, per-person nicknames, one-tap repeat payments;
   a person's registered name is always read live from the directory and can't be edited away
+- Money requests: ask a contact for an amount with a note, see what you owe and what's coming
+  to you, and approve an ask with the PIN — the transfer and the request closing land in the
+  same commit, so a request can never look open after the money moved
+- **The PIN is verified by the server on every debit** (payments and request approvals), sharing
+  one attempt counter and lockout, so a stolen token alone can't move money
 - QR scanner (camera, torch, lazy-loaded) plus manual number/UPI ID entry as a camera-free
   fallback
 - Personal QR code with copy / save / share, encoding a `upi://pay?...` deep link
@@ -110,30 +115,36 @@ wallet-app-frontend/            React 19 + TypeScript + Tailwind v4 (Vite)
 
 ## API
 
+Every JSON endpoint lives under **`/api`**, so the API can never shadow a client route:
+`/requests` is a screen, `/api/requests` is data. `/healthz` stays at the root for hosting
+health checks.
+
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | GET | `/healthz` | – | health check (reports the live database + driver) |
-| POST | `/start_login` | – | validate mobile, issue OTP (`dev_otp` in demo mode) |
-| POST | `/verify_otp` | – | verify OTP, returns JWT + user id |
-| POST | `/demo_login` | – | one-tap demo session (demo mode only) |
-| POST | `/set_name` | Bearer | save name/email, generate VPA, create wallet |
-| POST | `/set_pin` | Bearer | store scrypt-hashed PIN |
-| POST | `/verify_pin` | Bearer | PIN check with lockout |
-| GET | `/me` | Bearer | current profile + balance (and whether a PIN is set) |
-| GET | `/get_balance/<id>` | Bearer | wallet balance (own wallet only) |
-| POST | `/topup` | Bearer | add funds (own wallet only) |
-| POST | `/transfer` | Bearer | send money by receiver id |
-| POST | `/vpas/resolve` | Bearer | UPI ID → verified name + user id |
-| POST | `/payees/resolve` | Bearer | mobile number *or* UPI ID → verified name + user id |
-| GET | `/people/recent` | Bearer | home strip: people paid recently, then saved contacts |
-| GET | `/contacts` | Bearer | the caller's address book |
-| POST | `/contacts` | Bearer | save a payee (idempotent: re-saving updates the nickname) |
-| PATCH | `/contacts/<id>` | Bearer | rename / favourite a saved payee |
-| DELETE | `/contacts/<id>` | Bearer | remove a saved payee |
-| GET | `/transactions/<id>` | Bearer | history with sender/receiver names |
-
-The contacts screen is served at **`/people`**, not `/contacts`: the API owns `GET /contacts`,
-and an explicit Flask route wins over the SPA catch-all that serves the built frontend.
+| POST | `/api/start_login` | – | validate mobile, issue OTP (`dev_otp` in demo mode) |
+| POST | `/api/verify_otp` | – | verify OTP, returns JWT + user id |
+| POST | `/api/demo_login` | – | one-tap demo session (demo mode only) |
+| POST | `/api/set_name` | Bearer | save name/email, generate VPA, create wallet |
+| POST | `/api/set_pin` | Bearer | store scrypt-hashed PIN |
+| POST | `/api/verify_pin` | Bearer | PIN check with lockout |
+| GET | `/api/me` | Bearer | current profile + balance (and whether a PIN is set) |
+| GET | `/api/get_balance/<id>` | Bearer | wallet balance (own wallet only) |
+| POST | `/api/topup` | Bearer | add funds (own wallet only) |
+| POST | `/api/transfer` | Bearer + PIN | send money: the PIN is verified server-side before the debit |
+| POST | `/api/vpas/resolve` | Bearer | UPI ID → verified name + user id |
+| POST | `/api/payees/resolve` | Bearer | mobile number *or* UPI ID → verified name + user id |
+| GET | `/api/people/recent` | Bearer | home strip: people paid recently, then saved contacts |
+| GET | `/api/contacts` | Bearer | the caller's address book |
+| POST | `/api/contacts` | Bearer | save a payee (idempotent: re-saving updates the nickname) |
+| PATCH | `/api/contacts/<id>` | Bearer | rename / favourite a saved payee |
+| DELETE | `/api/contacts/<id>` | Bearer | remove a saved payee |
+| POST | `/api/requests` | Bearer | ask someone for money |
+| GET | `/api/requests` | Bearer | every ask involving the caller, open ones first |
+| POST | `/api/requests/<id>/pay` | Bearer + PIN | approve an ask: verifies the PIN, transfers, closes the request |
+| POST | `/api/requests/<id>/decline` | Bearer | refuse an ask (payer only) |
+| POST | `/api/requests/<id>/cancel` | Bearer | withdraw an ask (requester only) |
+| GET | `/api/transactions/<id>` | Bearer | history with sender/receiver names |
 
 ## Local development
 
@@ -207,6 +218,7 @@ HTTPS.
 - [ ] Double-entry ledger for every money movement + idempotency keys on transfers
 - [ ] PIN change, active sessions, "log out everywhere", delete account
 - [x] Address book: saved contacts, favourites, nicknames, recent-payer ranking
-- [ ] Money requests (ask, approve, decline, split), statements (CSV/PDF), notifications centre
+- [x] Money requests: ask, pay with PIN, decline, cancel
+- [ ] Split a bill between several people at once, statements (CSV/PDF), notifications centre
 - [ ] Playwright end-to-end tests plus a GitHub Actions job running typecheck, lint, build and pytest
 - [ ] Screenshot gallery and a short architecture write-up at the top of this README

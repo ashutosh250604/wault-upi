@@ -13,7 +13,9 @@ import type {
   HealthResponse,
   MeResponse,
   PayeePreview,
+  MoneyRequest,
   Person,
+  RequestPaymentResponse,
   ResolvedVpa,
   SetNameResponse,
   StartLoginResponse,
@@ -30,6 +32,13 @@ import { messageForStatus } from "./validation";
  * VITE_API_BASE from .env.development.
  */
 export const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/+$/, "");
+
+/**
+ * Every JSON endpoint lives under /api, which keeps the API from ever
+ * shadowing a client route: `/requests` is a screen, `/api/requests` is data.
+ * Paths below stay relative to this.
+ */
+const API_PREFIX = "/api";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -79,7 +88,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -181,15 +190,64 @@ export const api = {
       signal,
     }),
 
+  /**
+   * Sends money. The PIN travels with the request so the server authorises the
+   * debit itself, rather than trusting a separate "PIN was fine" call.
+   */
   transfer: (
     receiverId: number,
     amount: number,
     note: string | null,
+    pin: string,
     signal?: AbortSignal,
   ) =>
     request<TransferResponse>("/transfer", {
       method: "POST",
-      body: { receiver_id: receiverId, amount, note: note || undefined },
+      body: { receiver_id: receiverId, amount, note: note || undefined, pin },
+      auth: true,
+      signal,
+    }),
+
+  requests: (signal?: AbortSignal) =>
+    request<MoneyRequest[]>("/requests", { auth: true, signal }),
+
+  createRequest: (
+    target: { payerId: number } | { identifier: string },
+    amount: number,
+    note: string | null,
+    signal?: AbortSignal,
+  ) =>
+    request<MoneyRequest & { message: string }>("/requests", {
+      method: "POST",
+      body: {
+        ...("payerId" in target
+          ? { payer_id: target.payerId }
+          : { identifier: target.identifier }),
+        amount,
+        note: note || undefined,
+      },
+      auth: true,
+      signal,
+    }),
+
+  payRequest: (requestId: number, pin: string, signal?: AbortSignal) =>
+    request<RequestPaymentResponse>(`/requests/${requestId}/pay`, {
+      method: "POST",
+      body: { pin },
+      auth: true,
+      signal,
+    }),
+
+  declineRequest: (requestId: number, signal?: AbortSignal) =>
+    request<MoneyRequest & { message: string }>(`/requests/${requestId}/decline`, {
+      method: "POST",
+      auth: true,
+      signal,
+    }),
+
+  cancelRequest: (requestId: number, signal?: AbortSignal) =>
+    request<MoneyRequest & { message: string }>(`/requests/${requestId}/cancel`, {
+      method: "POST",
       auth: true,
       signal,
     }),

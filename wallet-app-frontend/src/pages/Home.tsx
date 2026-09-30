@@ -4,11 +4,13 @@ import type { WalletTransaction } from "../types";
 import { firstName } from "../lib/format";
 import { usePayeeResolution } from "../hooks/usePayeeResolution";
 import { useRecentPeople } from "../hooks/useRecentPeople";
+import { useMoneyRequests } from "../hooks/useMoneyRequests";
 import { useAppSession } from "../session/context";
 import { AppShell, BrandMark } from "../components/AppShell";
 import { BalanceCard } from "../components/BalanceCard";
 import { OffersStrip } from "../components/OffersStrip";
 import { PeopleSection } from "../components/People";
+import { RequestsBanner } from "../components/Requests";
 import { TransactionDetailSheet, TransactionList } from "../components/Transactions";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
@@ -83,6 +85,9 @@ export default function HomePage() {
     transactions?.[0]?.id ?? null,
   );
   const { startPayment } = usePayeeResolution();
+  // Same reload key as the people strip: a settled request also mints a
+  // transaction, so both views refresh off the newest ledger row.
+  const { requests } = useMoneyRequests(transactions?.[0]?.id ?? null);
 
   const loading = status === "loading" && profile === null;
   // Fall back to the session name until /me lands, so a just-onboarded user
@@ -175,13 +180,15 @@ export default function HomePage() {
           />
         </div>
 
+        <RequestsBanner requests={requests ?? []} onOpen={() => navigate("/requests")} />
+
         <PeopleSection
           people={people}
           status={peopleStatus}
           onSelect={(person) => startPayment(person)}
-          onAdd={() => navigate("/people", { state: { add: true } })}
+          onAdd={() => navigate("/contacts", { state: { add: true } })}
           onRetry={reloadPeople}
-          onSeeAll={() => navigate("/people")}
+          onSeeAll={() => navigate("/contacts")}
         />
 
         {needsPin ? (

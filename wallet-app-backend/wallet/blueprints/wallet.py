@@ -1,13 +1,13 @@
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import or_, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
-from ..directory import classify_identifier, find_payee, stamp_last_paid
+from ..directory import classify_identifier, find_payee
 from ..extensions import db
+from ..ledger import TransferRefused, settle_transfer
 from ..models import Transaction, User, Wallet
 from ..money import make_reference, paise_to_rupees, rupees_to_paise
-from ..security import require_auth
+from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
 
 bp = Blueprint("wallet", __name__)
@@ -80,11 +80,11 @@ def topup():
 def transfer():
     data = request.get_json(silent=True) or {}
     sender_id = g.user_id
-    receiver_id = data.get("receiver_id")
+    pin = (data.get("pin") or "").strip()
     note = (data.get("note") or "").strip()[:140] or None
 
     try:
-        receiver_id = int(receiver_id)
+        receiver_id = int(data.get("receiver_id"))
     except (TypeError, ValueError):
         return jsonify({"message": "Receiver is required"}), 400
     if receiver_id == sender_id:
@@ -94,48 +94,22 @@ def transfer():
     if error:
         return jsonify({"message": error}), 400
 
-    # Atomic debit: the balance check and the deduction happen in one statement,
-    # so two concurrent transfers can never overdraw the wallet.
-    debited = db.session.execute(
-        update(Wallet)
-        .where(Wallet.user_id == sender_id, Wallet.balance_paise >= paise)
-        .values(balance_paise=Wallet.balance_paise - paise, updated_at=utcnow())
-    )
-    if debited.rowcount == 0:
-        db.session.rollback()
-        return jsonify({"message": "Insufficient funds!"}), 400
+    # The PIN is verified here, not just on the PIN screen. Otherwise a stolen
+    # token would be enough to move money, and the attempt counter could be
+    # skipped entirely by calling this endpoint directly.
+    sender = current_user()
+    if sender is None:
+        return jsonify({"message": "User not found"}), 404
+    message, status = check_pin(sender, pin)
+    if message:
+        return jsonify({"message": message}), status
 
-    credited = db.session.execute(
-        update(Wallet)
-        .where(Wallet.user_id == receiver_id)
-        .values(balance_paise=Wallet.balance_paise + paise, updated_at=utcnow())
-    )
-    if credited.rowcount == 0:
-        db.session.rollback()
-        return jsonify({"message": "Receiver wallet not found!"}), 404
-
-    # Timestamped explicitly rather than by the column default: the address book
-    # stamp below needs the same instant, and a column default only fills in at
-    # INSERT time (so the in-memory row would still read None here).
-    settled_at = utcnow()
-    txn = Transaction(
-        reference=make_reference(settled_at),
-        type="transfer",
-        sender_id=sender_id,
-        receiver_id=receiver_id,
-        amount_paise=paise,
-        note=note,
-        timestamp=settled_at,
-    )
-    db.session.add(txn)
-    # If the payee is in the sender's address book, remember when we last paid
-    # them — that is what makes "recent" ordering on the contacts screen honest.
-    stamp_last_paid(sender_id, receiver_id, settled_at)
     try:
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({"message": "Transfer failed, please retry."}), 500
+        txn = settle_transfer(sender_id, receiver_id, paise, note=note)
+    except TransferRefused as refusal:
+        return jsonify({"message": refusal.message}), refusal.status
+
+    db.session.commit()
 
     return jsonify(
         {

@@ -151,6 +151,45 @@ export interface TopUpResponse {
   txn_id: string;
 }
 
+export type RequestStatus = "pending" | "paid" | "declined" | "cancelled";
+
+/** The other side of a money request, from the current user's point of view. */
+export interface RequestCounterparty {
+  user_id: number | null;
+  name: string | null;
+  vpa: string | null;
+  mobile: string | null;
+}
+
+/**
+ * Someone asking to be paid. `direction: "incoming"` means the ask is addressed
+ * to you, i.e. somebody wants your money.
+ */
+export interface MoneyRequest {
+  id: number;
+  direction: "incoming" | "outgoing";
+  status: RequestStatus;
+  amount: number;
+  note: string | null;
+  created_at: string | null;
+  resolved_at: string | null;
+  counterparty: RequestCounterparty;
+  /** Set once the request has been paid. */
+  transfer_reference: string | null;
+}
+
+/** Response of approving a request: the receipt the result screen renders. */
+export interface RequestPaymentResponse {
+  message: string;
+  request: MoneyRequest;
+  txn_id: string;
+  amount: number;
+  from: number;
+  to: number;
+  note: string | null;
+  timestamp: string;
+}
+
 /** Everything the receipt screen needs, carried through router state. */
 export interface Receipt {
   kind: "transfer" | "topup";

@@ -53,6 +53,8 @@ class Config:
     PIN_LOCK_MINUTES = 15
 
     MAX_TOPUP_RUPEES = 100000
+    # Ceiling for any single debit: a direct payment, or paying off a request.
+    MAX_TRANSFER_RUPEES = int(os.getenv("MAX_TRANSFER_RUPEES", "100000"))
 
     CORS_ORIGINS = _csv(
         "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"

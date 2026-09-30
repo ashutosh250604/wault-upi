@@ -89,3 +89,41 @@ def pin_is_locked(user: User):
         minutes = max(1, int((locked_until - utcnow()).total_seconds() // 60) + 1)
         return f"PIN locked after too many wrong attempts. Try again in {minutes} minute(s)."
     return None
+
+
+def check_pin(user: User, pin: str) -> tuple[str | None, int]:
+    """Verify a PIN against the full lockout policy.
+
+    Returns `(message, status)` when the PIN can't be accepted, or `(None, 200)`.
+
+    Every debit path goes through here — approvals and transfers alike — so a
+    payment can never be authorised by a weaker check than the one the PIN
+    screen performs, and the attempt counter can't be sidestepped by choosing a
+    different endpoint.
+    """
+    if not PIN_RE.match(pin or ""):
+        return "Invalid PIN format", 400
+    if not user.pin_hash:
+        return "PIN not set. Please set PIN first.", 403
+
+    locked = pin_is_locked(user)
+    if locked:
+        return locked, 403
+
+    if verify_secret(user.pin_hash, pin):
+        user.pin_attempts = 0
+        user.pin_locked_until = None
+        return None, 200
+
+    user.pin_attempts += 1
+    max_attempts = current_app.config["PIN_MAX_ATTEMPTS"]
+    if user.pin_attempts >= max_attempts:
+        lock_minutes = current_app.config["PIN_LOCK_MINUTES"]
+        user.pin_locked_until = utcnow() + timedelta(minutes=lock_minutes)
+        user.pin_attempts = 0
+        db.session.commit()
+        return f"Too many wrong attempts. PIN locked for {lock_minutes} minutes.", 403
+
+    remaining = max_attempts - user.pin_attempts
+    db.session.commit()
+    return f"Incorrect PIN. {remaining} attempt(s) left.", 403

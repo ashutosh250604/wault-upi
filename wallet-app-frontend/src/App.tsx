@@ -14,6 +14,7 @@ import SetPinPage from "./pages/SetPin";
 import HomePage from "./pages/Home";
 import HistoryPage from "./pages/History";
 import ContactsPage from "./pages/Contacts";
+import RequestsPage from "./pages/Requests";
 import AmountEntryPage from "./pages/AmountEntry";
 import PaymentResultPage from "./pages/PaymentResult";
 import ShowQrPage from "./pages/ShowQr";
@@ -101,10 +102,16 @@ export default function App() {
                   </RequireSession>
                 }
               />
-              {/* Path is /people, not /contacts: the API owns GET /contacts, and an
-                  explicit Flask route beats the SPA catch-all. */}
               <Route
-                path="/people"
+                path="/requests"
+                element={
+                  <RequireSession>
+                    <RequestsPage />
+                  </RequireSession>
+                }
+              />
+              <Route
+                path="/contacts"
                 element={
                   <RequireSession>
                     <ContactsPage />
@@ -159,6 +166,8 @@ export default function App() {
               {/* Legacy paths from the first version of the app */}
               <Route path="/verify-otp/*" element={<Navigate to="/verify-otp" replace />} />
               <Route path="/balance" element={<Navigate to="/history" replace />} />
+              <Route path="/money-requests" element={<Navigate to="/requests" replace />} />
+              <Route path="/people" element={<Navigate to="/contacts" replace />} />
               <Route path="/scan-qr" element={<Navigate to="/scan" replace />} />
               <Route path="/show-qr" element={<Navigate to="/my-qr" replace />} />
               <Route path="/set-name" element={<Navigate to="/onboarding/name" replace />} />

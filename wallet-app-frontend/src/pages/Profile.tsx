@@ -19,6 +19,7 @@ import {
   IconLogout,
   IconQr,
   IconReceipt,
+  IconSent,
   IconSound,
   IconUser,
   IconWarning,
@@ -128,10 +129,16 @@ export default function ProfilePage() {
 
         <Card padded={false} className="divide-y divide-slate-100 px-4">
           <LinkRow
-            to="/people"
+            to="/contacts"
             icon={<IconUser size={17} />}
             title="Contacts"
             subtitle="People you pay often"
+          />
+          <LinkRow
+            to="/requests"
+            icon={<IconSent size={17} />}
+            title="Requests"
+            subtitle="Money you've asked for, and been asked for"
           />
           <LinkRow
             to="/history"

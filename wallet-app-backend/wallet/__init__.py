@@ -6,6 +6,9 @@ from flask import Flask, jsonify, send_from_directory
 from .config import Config
 from .extensions import cors, db, migrate
 
+# Single prefix for every JSON endpoint, and never a client route.
+API_PREFIX = "/api"
+
 
 def create_app(config_overrides=None):
     app = Flask(__name__, static_folder=None)
@@ -29,11 +32,17 @@ def create_app(config_overrides=None):
 
     from .blueprints.auth import bp as auth_bp
     from .blueprints.people import bp as people_bp
+    from .blueprints.requests import bp as requests_bp
     from .blueprints.wallet import bp as wallet_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(wallet_bp)
-    app.register_blueprint(people_bp)
+    # Everything under /api so the API can never shadow a client route. Without
+    # this, `GET /requests` (the API) and `/requests` (the screen) are the same
+    # path, and a browser refresh or a shared link hits the JSON endpoint
+    # instead of the app. /healthz stays at the root for hosting health checks.
+    app.register_blueprint(auth_bp, url_prefix=API_PREFIX)
+    app.register_blueprint(wallet_bp, url_prefix=API_PREFIX)
+    app.register_blueprint(people_bp, url_prefix=API_PREFIX)
+    app.register_blueprint(requests_bp, url_prefix=API_PREFIX)
 
     @app.get("/healthz")
     def healthz():
@@ -85,6 +94,11 @@ def _register_frontend(app):
 
     @app.get("/<path:path>")
     def spa_assets(path):
+        # An unknown /api path is a client bug, not a page: answer with JSON so
+        # a typo doesn't quietly hand the app an HTML document to parse.
+        if path == API_PREFIX.strip("/") or path.startswith(f"{API_PREFIX.strip('/')}/"):
+            return jsonify({"message": "Not found"}), 404
+
         candidate = os.path.join(static_dir, path)
         if os.path.isfile(candidate):
             return send_from_directory(static_dir, path)

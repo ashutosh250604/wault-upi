@@ -6,7 +6,7 @@ import { useRecentPeople } from "../hooks/useRecentPeople";
 import { PeopleStrip } from "./People";
 import { Button } from "./ui/Button";
 import { Field, TextInput } from "./ui/Field";
-import { IconPhone, IconPlus, IconScan, IconUser, IconWarning } from "./ui/Icons";
+import { IconPhone, IconPlus, IconScan, IconSent, IconUser, IconWarning } from "./ui/Icons";
 import { Sheet } from "./ui/Sheet";
 
 export interface PaySheetProps {
@@ -142,6 +142,13 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
           tone="bg-slate-100 text-slate-600"
           onClick={() => go("/pay/amount", { mode: "topup" })}
         />
+        <OptionRow
+          icon={<IconSent size={21} />}
+          title="Ask for money"
+          description="Send a request they can approve"
+          tone="bg-amber-50 text-amber-600"
+          onClick={() => go("/requests", { compose: true })}
+        />
       </div>
 
       {mode ? (
@@ -179,7 +186,7 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
 
       <button
         type="button"
-        onClick={() => go("/people")}
+        onClick={() => go("/contacts")}
         className="mt-3 w-full rounded-2xl border border-dashed border-slate-200 py-3 text-[12.5px] font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
       >
         Manage contacts

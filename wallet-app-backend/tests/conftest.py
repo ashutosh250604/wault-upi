@@ -30,7 +30,7 @@ def client(app):
 
 @pytest.fixture()
 def demo_auth(client):
-    response = client.post("/demo_login")
+    response = client.post("/api/demo_login")
     assert response.status_code == 200
     payload = response.get_json()
     return {

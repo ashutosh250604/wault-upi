@@ -3,7 +3,6 @@ from datetime import timedelta
 
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
-from werkzeug.security import check_password_hash
 
 from ..extensions import db
 from ..models import User, Wallet
@@ -11,10 +10,10 @@ from ..security import (
     EMAIL_RE,
     MOBILE_RE,
     PIN_RE,
+    check_pin,
     current_user,
     hash_secret,
     issue_token,
-    pin_is_locked,
     require_auth,
     verify_secret,
 )
@@ -193,40 +192,16 @@ def verify_pin():
     data = request.get_json(silent=True) or {}
     pin = (data.get("pin") or "").strip()
 
-    if not PIN_RE.match(pin):
-        return jsonify({"message": "Invalid PIN format"}), 400
-
     user = current_user()
     if user is None:
         return jsonify({"message": "User not found"}), 404
-    if not user.pin_hash:
-        return jsonify({"message": "PIN not set. Please set PIN first."}), 403
 
-    locked_message = pin_is_locked(user)
-    if locked_message:
-        return jsonify({"message": locked_message}), 403
+    # Same helper the debit endpoints use, so "verify" and "actually pay" can
+    # never drift apart in lockout behaviour or attempt counting.
+    message, status = check_pin(user, pin)
+    if message:
+        return jsonify({"message": message}), status
 
-    if not check_password_hash(user.pin_hash, pin):
-        user.pin_attempts += 1
-        if user.pin_attempts >= current_app.config["PIN_MAX_ATTEMPTS"]:
-            user.pin_locked_until = utcnow() + timedelta(
-                minutes=current_app.config["PIN_LOCK_MINUTES"]
-            )
-            user.pin_attempts = 0
-            db.session.commit()
-            return jsonify(
-                {
-                    "message": "Too many wrong attempts. PIN locked for "
-                    f"{current_app.config['PIN_LOCK_MINUTES']} minutes."
-                }
-            ), 403
-        remaining = current_app.config["PIN_MAX_ATTEMPTS"] - user.pin_attempts
-        db.session.commit()
-        return jsonify({"message": f"Incorrect PIN. {remaining} attempt(s) left."}), 403
-
-    user.pin_attempts = 0
-    user.pin_locked_until = None
-    db.session.commit()
     return jsonify({"message": "PIN verified"}), 200
 
 

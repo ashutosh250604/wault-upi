@@ -79,10 +79,10 @@ export default function AmountEntryPage() {
     setPinError(null);
 
     try {
-      // The server re-checks the PIN before any money moves.
-      await api.verifyPin(enteredPin);
-
       if (isTopUp) {
+        // A top-up only credits your own wallet, so the PIN here is a deliberate
+        // confirmation step rather than an authorisation of a debit.
+        await api.verifyPin(enteredPin);
         const result = await api.topUp(userId, value);
         feedback.success();
         patchProfile({ balance: result.new_balance });
@@ -104,10 +104,13 @@ export default function AmountEntryPage() {
         return;
       }
 
+      // The PIN travels with the payment, so the server authorises the debit
+      // itself — there is no gap between "PIN was fine" and "money moved".
       const result = await api.transfer(
         intent.receiverId as number,
         value,
         note.trim() || null,
+        enteredPin,
       );
       feedback.success();
       if (available !== null) patchProfile({ balance: Math.max(0, available - value) });
