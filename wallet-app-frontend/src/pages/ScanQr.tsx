@@ -6,7 +6,7 @@ import { api, errorMessage } from "../lib/api";
 import { feedback } from "../lib/feedback";
 import { decodeQrFromImage, isImageFile } from "../lib/qr";
 import { parsePaymentCode } from "../lib/upi";
-import { vpaError } from "../lib/validation";
+import { payeeIdentifierError } from "../lib/validation";
 import { useToast } from "../hooks/toast";
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/ui/Button";
@@ -101,7 +101,7 @@ export default function ScanQrPage() {
         source === "gallery" ? "Reading that QR code…" : `Looking up ${identifier}…`,
       );
       try {
-        const resolved = await api.resolveVpa(identifier);
+        const resolved = await api.resolvePayee(identifier);
         feedback.success();
         navigate("/pay/amount", {
           state: {
@@ -191,10 +191,10 @@ export default function ScanQrPage() {
   };
 
   const submitManual = async () => {
-    const issue = vpaError(manualVpa);
+    const issue = payeeIdentifierError(manualVpa);
     setManualIssue(issue);
     if (issue) return;
-    const failure = await pay(manualVpa.trim().toLowerCase());
+    const failure = await pay(manualVpa.trim());
     if (failure) {
       // Keep the sheet open so the user can correct the ID.
       setManualIssue(failure);
@@ -336,7 +336,7 @@ export default function ScanQrPage() {
               Upload QR
             </Button>
             <Button size="lg" onClick={() => setManualOpen(true)} disabled={resolving}>
-              Enter UPI ID
+              Enter number
             </Button>
           </div>
 
@@ -357,21 +357,21 @@ export default function ScanQrPage() {
       <Sheet
         open={manualOpen}
         onClose={() => setManualOpen(false)}
-        title="Pay by UPI ID"
-        description="Type the handle you want to pay."
+        title="Pay by number or UPI ID"
+        description="Type the number or handle you want to pay."
       >
         <div className="space-y-4">
           <Field
-            label="UPI ID"
+            label="Mobile number or UPI ID"
             error={manualIssue}
-            hint="Try 9000000002@demoupi — the seeded second account."
+            hint="Try 9000000004, or 9000000002@demoupi"
           >
             {({ id, describedBy }) => (
               <TextInput
                 id={id}
                 aria-describedby={describedBy}
                 autoFocus
-                placeholder="name@demoupi"
+                placeholder="9000000004 or name@demoupi"
                 value={manualVpa}
                 invalid={Boolean(manualIssue)}
                 onChange={(event) => {

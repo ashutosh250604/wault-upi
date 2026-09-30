@@ -1,5 +1,5 @@
 from .extensions import db
-from .timeutils import utcnow
+from .timeutils import as_utc, utcnow
 
 
 class User(db.Model):
@@ -58,6 +58,51 @@ class Wallet(db.Model):
     )
 
     user = db.relationship("User", back_populates="wallet")
+
+
+class Contact(db.Model):
+    """A saved payee — the app's address book.
+
+    The payee's name/mobile/UPI ID are deliberately *not* copied into this
+    table: they are read live from `users` on every read, because in UPI the
+    directory decides who you are paying, not the payer's device. Only the
+    owner's own annotations (nickname, favourite) live here.
+    """
+
+    __tablename__ = "contacts"
+    __table_args__ = (
+        db.UniqueConstraint("owner_id", "payee_id", name="uq_contacts_owner_payee"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    payee_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    # What the owner calls this person; the registered name is still shown under it.
+    nickname = db.Column(db.String(60))
+    is_favourite = db.Column(db.Boolean, nullable=False, default=False)
+    last_paid_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    payee = db.relationship("User", foreign_keys=[payee_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.payee_id,
+            "name": self.payee.name if self.payee else None,
+            "nickname": self.nickname,
+            "vpa": self.payee.vpa if self.payee else None,
+            "mobile": self.payee.mobile if self.payee else None,
+            "is_favourite": self.is_favourite,
+            "last_paid_at": as_utc(self.last_paid_at).isoformat()
+            if self.last_paid_at
+            else None,
+        }
 
 
 class Transaction(db.Model):

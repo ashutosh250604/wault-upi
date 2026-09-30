@@ -19,22 +19,35 @@ transfers and a transaction history.
 | --- | --- | --- | --- | --- |
 | Aarav Sharma | `9000000001` | `9000000001@demoupi` | `1234` | ₹5,000 (+ seeded history) |
 | Meera Iyer | `9000000002` | `9000000002@demoupi` | `1234` | ₹2,500 |
+| Rohan Verma | `9000000004` | `9000000004@demoupi` | `1234` | ₹1,800 |
+| Ananya Desai | `9000000005` | `9000000005@demoupi` | `1234` | ₹950 |
+| Gupta Kirana Store | `9000000006` | `9000000006@demoupi` | `1234` | ₹4,200 |
+
+The extra accounts exist so the address book, the "Send money to" strip and the
+frequent-payer ranking have something real to show on a fresh install. Anyone in that table
+can be signed into with the demo OTP.
 
 Two ways to get in:
 
 - **Explore demo account** on the login screen → one-tap token login as Aarav (no OTP).
 - Normal flow with a mobile number → in demo mode the OTP is shown on screen (no SMS provider).
 
-Try a payment: **Scan QR → type `9000000002@demoupi` → amount → PIN `1234`**. Cameras need
-HTTPS, which the deployed URL provides; typed UPI IDs work with or without a camera.
+Try a payment: **tap a face under "Send money to" → amount → PIN `1234`**, or **Scan QR →
+type `9000000002@demoupi`**. Cameras need HTTPS, which the deployed URL provides; typed
+numbers and UPI IDs work with or without a camera.
 
 ## Features
 
 - OTP login with expiry, attempt limits and resend timer (with auto-submit and paste)
 - Guided onboarding: name/email → auto-generated VPA → 4-digit PIN (with confirm step)
-- Wallet home: balance card with hide/show, quick actions, recent activity
-- P2P transfers by UPI ID with **verified recipient name shown before paying**
-- QR scanner (camera, torch, lazy-loaded) plus manual UPI ID entry as a camera-free fallback
+- Wallet home: balance card with hide/show, quick actions, **"Send money to" avatar strip** of
+  people you pay, offers, recent activity
+- P2P transfers by mobile number **or** UPI ID, with the **verified recipient name shown before
+  paying**
+- Address book: searchable contacts, favourites, per-person nicknames, one-tap repeat payments;
+  a person's registered name is always read live from the directory and can't be edited away
+- QR scanner (camera, torch, lazy-loaded) plus manual number/UPI ID entry as a camera-free
+  fallback
 - Personal QR code with copy / save / share, encoding a `upi://pay?...` deep link
 - History with money-in/out filters, day grouping and tap-through receipts
 - Money stored as **integer paise**; transfers use an **atomic conditional debit** so
@@ -54,7 +67,7 @@ HTTPS, which the deployed URL provides; typed UPI IDs work with or without a cam
 - **Accessible by default:** labelled inputs, `aria-live` errors, Escape-to-close sheets with
   focus management, and `prefers-reduced-motion` support.
 - **Fast first paint:** the barcode-decoding engine is code-split, so the scanner's ~150 kB
-  chunk only downloads when someone opens the scanner (initial bundle ≈ 330 kB / 103 kB gzip).
+  chunk only downloads when someone opens the scanner (initial bundle ≈ 359 kB / 111 kB gzip).
 - **Honest states:** skeleton loaders, empty states with a next step, retryable error states,
   and a top-level error boundary.
 
@@ -111,7 +124,16 @@ wallet-app-frontend/            React 19 + TypeScript + Tailwind v4 (Vite)
 | POST | `/topup` | Bearer | add funds (own wallet only) |
 | POST | `/transfer` | Bearer | send money by receiver id |
 | POST | `/vpas/resolve` | Bearer | UPI ID → verified name + user id |
+| POST | `/payees/resolve` | Bearer | mobile number *or* UPI ID → verified name + user id |
+| GET | `/people/recent` | Bearer | home strip: people paid recently, then saved contacts |
+| GET | `/contacts` | Bearer | the caller's address book |
+| POST | `/contacts` | Bearer | save a payee (idempotent: re-saving updates the nickname) |
+| PATCH | `/contacts/<id>` | Bearer | rename / favourite a saved payee |
+| DELETE | `/contacts/<id>` | Bearer | remove a saved payee |
 | GET | `/transactions/<id>` | Bearer | history with sender/receiver names |
+
+The contacts screen is served at **`/people`**, not `/contacts`: the API owns `GET /contacts`,
+and an explicit Flask route wins over the SPA catch-all that serves the built frontend.
 
 ## Local development
 
@@ -184,6 +206,7 @@ HTTPS.
 
 - [ ] Double-entry ledger for every money movement + idempotency keys on transfers
 - [ ] PIN change, active sessions, "log out everywhere", delete account
-- [ ] Money requests, contacts, statements (CSV/PDF), notifications centre
+- [x] Address book: saved contacts, favourites, nicknames, recent-payer ranking
+- [ ] Money requests (ask, approve, decline, split), statements (CSV/PDF), notifications centre
 - [ ] Playwright end-to-end tests plus a GitHub Actions job running typecheck, lint, build and pytest
 - [ ] Screenshot gallery and a short architecture write-up at the top of this README

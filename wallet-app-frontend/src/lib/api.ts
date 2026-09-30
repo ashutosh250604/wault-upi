@@ -8,9 +8,12 @@
 
 import type {
   BalanceResponse,
+  Contact,
   DemoLoginResponse,
   HealthResponse,
   MeResponse,
+  PayeePreview,
+  Person,
   ResolvedVpa,
   SetNameResponse,
   StartLoginResponse,
@@ -56,7 +59,7 @@ export function onAuthFailure(listener: AuthFailureListener | null): void {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** Attach the Bearer token; throws early when there isn't one. */
   auth?: boolean;
@@ -195,6 +198,55 @@ export const api = {
     request<ResolvedVpa>("/vpas/resolve", {
       method: "POST",
       body: { vpa },
+      auth: true,
+      signal,
+    }),
+
+  /** Resolves a UPI ID *or* a mobile number to the wallet behind it. */
+  resolvePayee: (identifier: string, signal?: AbortSignal) =>
+    request<PayeePreview>("/payees/resolve", {
+      method: "POST",
+      body: { identifier },
+      auth: true,
+      signal,
+    }),
+
+  recentPeople: (limit = 8, signal?: AbortSignal) =>
+    request<Person[]>(`/people/recent?limit=${limit}`, { auth: true, signal }),
+
+  contacts: (signal?: AbortSignal) => request<Contact[]>("/contacts", { auth: true, signal }),
+
+  addContact: (
+    identifier: string,
+    options: { nickname?: string; favourite?: boolean } = {},
+    signal?: AbortSignal,
+  ) =>
+    request<Contact & { message: string }>("/contacts", {
+      method: "POST",
+      body: {
+        identifier,
+        nickname: options.nickname || undefined,
+        is_favourite: options.favourite ?? false,
+      },
+      auth: true,
+      signal,
+    }),
+
+  updateContact: (
+    contactId: number,
+    patch: { nickname?: string | null; is_favourite?: boolean },
+    signal?: AbortSignal,
+  ) =>
+    request<Contact>(`/contacts/${contactId}`, {
+      method: "PATCH",
+      body: patch,
+      auth: true,
+      signal,
+    }),
+
+  removeContact: (contactId: number, signal?: AbortSignal) =>
+    request<{ message: string }>(`/contacts/${contactId}`, {
+      method: "DELETE",
       auth: true,
       signal,
     }),

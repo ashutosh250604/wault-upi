@@ -1,15 +1,23 @@
-"""Seed data for the public demo: two accounts with balances and history."""
+"""Seed data for the public demo: accounts, an address book and some history.
+
+Idempotent by design — every deploy runs this, so it may only create what is
+missing. History is only written when the ledger is completely empty, so a
+production-ish database is never re-seeded underneath its owner.
+"""
 
 from datetime import timedelta
 
 from flask import current_app
 
 from .extensions import db
-from .models import Transaction, User, Wallet
+from .models import Contact, Transaction, User, Wallet
 from .money import make_reference
 from .security import hash_secret
 from .timeutils import utcnow
 
+# The first two are the documented demo pair; the rest exist so the "Send money
+# to" row, the contacts screen and the frequent-payer ranking aren't empty on a
+# fresh install. Anyone here can be signed into with the demo OTP.
 DEMO_USERS = [
     {
         "mobile": "9000000001",
@@ -25,11 +33,41 @@ DEMO_USERS = [
         "pin": "1234",
         "balance_paise": 250000,  # ₹2,500
     },
+    {
+        "mobile": "9000000004",
+        "name": "Rohan Verma",
+        "email": "rohan@demowallet.app",
+        "pin": "1234",
+        "balance_paise": 180000,  # ₹1,800
+    },
+    {
+        "mobile": "9000000005",
+        "name": "Ananya Desai",
+        "email": "ananya@demowallet.app",
+        "pin": "1234",
+        "balance_paise": 95000,  # ₹950
+    },
+    {
+        "mobile": "9000000006",
+        "name": "Gupta Kirana Store",
+        "email": "kirana@demowallet.app",
+        "pin": "1234",
+        "balance_paise": 420000,  # ₹4,200
+    },
+]
+
+# (owner mobile, payee mobile, nickname, favourite)
+DEMO_CONTACTS = [
+    ("9000000001", "9000000002", None, True),
+    ("9000000001", "9000000004", None, True),
+    ("9000000001", "9000000005", None, False),
+    ("9000000001", "9000000006", "Kirana uncle", False),
+    ("9000000002", "9000000001", None, True),
 ]
 
 
 def seed_demo():
-    """Idempotently create the demo accounts, wallets and a little history."""
+    """Idempotently create the demo accounts, wallets, contacts and history."""
     suffix = current_app.config["VPA_SUFFIX"]
     created = {}
 
@@ -54,6 +92,7 @@ def seed_demo():
 
     db.session.commit()
     _seed_history()
+    _seed_contacts()
 
 
 def _seed_history():
@@ -61,20 +100,31 @@ def _seed_history():
     if Transaction.query.count() > 0:
         return
 
-    sender = User.query.filter_by(mobile=DEMO_USERS[0]["mobile"]).first()
-    receiver = User.query.filter_by(mobile=DEMO_USERS[1]["mobile"]).first()
-    if sender is None or receiver is None:
+    people = {spec["mobile"]: User.query.filter_by(mobile=spec["mobile"]).first()
+              for spec in DEMO_USERS}
+    if any(user is None for user in people.values()):
         return
+
+    aarav = people["9000000001"]
+    meera = people["9000000002"]
+    rohan = people["9000000004"]
+    ananya = people["9000000005"]
+    kirana = people["9000000006"]
 
     now = utcnow()
     history = [
         # (days ago, (hour, minute) UTC, type, sender, receiver, rupees, note)
-        (12, (10, 24), "topup", None, sender.id, 3000, None),
-        (10, (19, 5), "topup", None, receiver.id, 2500, None),
-        (6, (13, 42), "transfer", sender.id, receiver.id, 250, "Groceries"),
-        (3, (9, 15), "topup", None, sender.id, 2500, None),
-        (2, (21, 8), "transfer", receiver.id, sender.id, 100, "Cab fare"),
-        (1, (8, 50), "transfer", sender.id, receiver.id, 400, "Concert tickets"),
+        (14, (10, 24), "topup", None, aarav.id, 3000, None),
+        (12, (19, 5), "topup", None, meera.id, 2500, None),
+        (9, (18, 40), "topup", None, rohan.id, 1800, None),
+        (7, (13, 42), "transfer", aarav.id, meera.id, 250, "Groceries"),
+        (6, (20, 15), "topup", None, kirana.id, 4200, None),
+        (5, (17, 30), "transfer", aarav.id, rohan.id, 320, "Dinner split"),
+        (4, (11, 12), "transfer", ananya.id, aarav.id, 150, "Movie tickets"),
+        (3, (9, 15), "topup", None, aarav.id, 2500, None),
+        (3, (19, 55), "transfer", aarav.id, kirana.id, 480, "Monthly groceries"),
+        (2, (21, 8), "transfer", meera.id, aarav.id, 100, "Cab fare"),
+        (1, (8, 50), "transfer", aarav.id, meera.id, 400, "Concert tickets"),
     ]
     for days_ago, (hour, minute), kind, sender_id, receiver_id, rupees, note in history:
         # Vary the clock time too, so the history doesn't read as generated at once.
@@ -90,6 +140,37 @@ def _seed_history():
                 amount_paise=rupees * 100,
                 note=note,
                 timestamp=when,
+            )
+        )
+    db.session.commit()
+
+
+def _seed_contacts():
+    """Give the demo accounts an address book, so people screens have content."""
+    if Contact.query.count() > 0:
+        return
+
+    for owner_mobile, payee_mobile, nickname, favourite in DEMO_CONTACTS:
+        owner = User.query.filter_by(mobile=owner_mobile).first()
+        payee = User.query.filter_by(mobile=payee_mobile).first()
+        if owner is None or payee is None:
+            continue
+        if Contact.query.filter_by(owner_id=owner.id, payee_id=payee.id).first():
+            continue
+        # Stamp the ones we already "paid" in the seeded ledger, so recent-first
+        # ordering on the contacts screen has something real to sort by.
+        last_paid = (
+            Transaction.query.filter_by(sender_id=owner.id, receiver_id=payee.id)
+            .order_by(Transaction.timestamp.desc())
+            .first()
+        )
+        db.session.add(
+            Contact(
+                owner_id=owner.id,
+                payee_id=payee.id,
+                nickname=nickname,
+                is_favourite=favourite,
+                last_paid_at=last_paid.timestamp if last_paid else None,
             )
         )
     db.session.commit()

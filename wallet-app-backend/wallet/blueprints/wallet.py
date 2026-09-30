@@ -1,12 +1,13 @@
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import or_, update
-from sqlalchemy.orm import aliased
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 
+from ..directory import classify_identifier, find_payee, stamp_last_paid
 from ..extensions import db
 from ..models import Transaction, User, Wallet
 from ..money import make_reference, paise_to_rupees, rupees_to_paise
-from ..security import current_user, require_auth
+from ..security import require_auth
 from ..timeutils import as_utc, utcnow
 
 bp = Blueprint("wallet", __name__)
@@ -113,15 +114,23 @@ def transfer():
         db.session.rollback()
         return jsonify({"message": "Receiver wallet not found!"}), 404
 
+    # Timestamped explicitly rather than by the column default: the address book
+    # stamp below needs the same instant, and a column default only fills in at
+    # INSERT time (so the in-memory row would still read None here).
+    settled_at = utcnow()
     txn = Transaction(
-        reference=make_reference(),
+        reference=make_reference(settled_at),
         type="transfer",
         sender_id=sender_id,
         receiver_id=receiver_id,
         amount_paise=paise,
         note=note,
+        timestamp=settled_at,
     )
     db.session.add(txn)
+    # If the payee is in the sender's address book, remember when we last paid
+    # them — that is what makes "recent" ordering on the contacts screen honest.
+    stamp_last_paid(sender_id, receiver_id, settled_at)
     try:
         db.session.commit()
     except IntegrityError:
@@ -143,13 +152,17 @@ def transfer():
 @bp.post("/vpas/resolve")
 @require_auth
 def resolve_vpa():
-    """Turn a scanned/typed UPI ID into a wallet the user can pay."""
+    """Turn a scanned/typed UPI ID into a wallet the user can pay.
+
+    Kept as the narrow, UPI-ID-only entry point (the scanner still uses it);
+    /payees/resolve in the people blueprint handles UPI IDs *and* mobiles.
+    """
     data = request.get_json(silent=True) or {}
-    vpa = (data.get("vpa") or "").strip().lower()
-    if not vpa or "@" not in vpa:
+    vpa, _ = classify_identifier(data.get("vpa") or data.get("identifier"))
+    if not vpa:
         return jsonify({"message": "Invalid UPI ID"}), 400
 
-    user = User.query.filter(db.func.lower(User.vpa) == vpa).first()
+    user = find_payee(vpa=vpa)
     if user is None:
         return jsonify({"message": "No wallet found for this UPI ID"}), 404
     if user.id == g.user_id:

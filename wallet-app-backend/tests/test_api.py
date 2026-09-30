@@ -1,6 +1,18 @@
 from wallet.config import _database_uri
 
 
+def onboard(client, mobile, name):
+    """Walk a brand-new mobile through OTP -> name -> PIN and return its auth."""
+    otp = client.post("/start_login", json={"mobile": mobile}).get_json()["dev_otp"]
+    payload = client.post(
+        "/verify_otp", json={"mobile": mobile, "otp": otp}
+    ).get_json()
+    headers = {"Authorization": f"Bearer {payload['token']}"}
+    client.post("/set_name", json={"name": name}, headers=headers)
+    client.post("/set_pin", json={"pin": "1234"}, headers=headers)
+    return {"headers": headers, "user_id": payload["user_id"]}
+
+
 def test_health(client):
     response = client.get("/healthz")
     assert response.status_code == 200
@@ -167,6 +179,157 @@ def test_postgres_urls_are_pinned_to_the_psycopg2_driver():
     # An explicitly chosen driver, and non-Postgres URLs, are left alone.
     assert _database_uri("postgresql+psycopg2://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
     assert _database_uri("sqlite:///wallet_dev.db") == "sqlite:///wallet_dev.db"
+
+
+def test_resolve_accepts_mobile_numbers_as_well_as_upi_ids(client, demo_auth):
+    headers = demo_auth["headers"]
+
+    by_mobile = client.post("/payees/resolve", json={"mobile": "9000000002"}, headers=headers)
+    assert by_mobile.status_code == 200
+    assert by_mobile.get_json()["name"] == "Meera Iyer"
+
+    # +91 / spaced input is normalised rather than rejected.
+    messy = client.post("/payees/resolve", json={"identifier": "+91 90000 00002"}, headers=headers)
+    assert messy.status_code == 200
+    assert messy.get_json()["user_id"] == by_mobile.get_json()["user_id"]
+
+    assert (
+        client.post("/payees/resolve", json={"identifier": "not a handle"}, headers=headers)
+        .status_code
+        == 400
+    )
+    assert (
+        client.post("/payees/resolve", json={"mobile": "9111111111"}, headers=headers)
+        .status_code
+        == 404
+    )
+    # Paying yourself, and paying a wallet that never finished onboarding.
+    assert (
+        client.post("/payees/resolve", json={"mobile": "9000000001"}, headers=headers)
+        .status_code
+        == 400
+    )
+    # A wallet that verified by OTP but never finished onboarding has no name to
+    # show the payer, so it must not be payable.
+    otp = client.post("/start_login", json={"mobile": "9000000999"}).get_json()["dev_otp"]
+    client.post("/verify_otp", json={"mobile": "9000000999", "otp": otp})
+    blank = client.post("/payees/resolve", json={"mobile": "9000000999"}, headers=headers)
+    assert blank.status_code == 409
+    assert "finished setting up" in blank.get_json()["message"]
+
+
+def test_contacts_crud_is_idempotent_and_owner_scoped(client, demo_auth):
+    headers = demo_auth["headers"]
+    saved_count = len(client.get("/contacts", headers=headers).get_json())
+
+    # The seeded address book already holds a few demo people.
+    assert saved_count >= 4
+
+    onboard(client, "9000000088", "Dev Friend")
+    first = client.post(
+        "/contacts", json={"identifier": "9000000088", "nickname": "Dev Friend"}, headers=headers
+    )
+    assert first.status_code == 201
+    contact_id = first.get_json()["id"]
+    assert first.get_json()["nickname"] == "Dev Friend"
+    assert first.get_json()["name"] == "Dev Friend"
+
+    # Saving the same person again updates instead of duplicating.
+    again = client.post("/contacts", json={"identifier": "9000000088@demoupi"}, headers=headers)
+    assert again.status_code == 200
+    assert again.get_json()["id"] == contact_id
+
+    listed = client.get("/contacts", headers=headers).get_json()
+    assert len([c for c in listed if c["user_id"] == again.get_json()["user_id"]]) == 1
+    assert len(listed) == saved_count + 1
+
+    starred = client.patch(
+        f"/contacts/{contact_id}", json={"is_favourite": True}, headers=headers
+    )
+    assert starred.status_code == 200
+    assert starred.get_json()["is_favourite"] is True
+
+    # A second user cannot see or touch the first user's address book.
+    other = onboard(client, "9000000977", "Nosy Neighbour")
+    assert client.get("/contacts", headers=other["headers"]).get_json() == []
+    assert (
+        client.delete(f"/contacts/{contact_id}", headers=other["headers"]).status_code == 404
+    )
+    assert (
+        client.patch(
+            f"/contacts/{contact_id}", json={"is_favourite": True}, headers=other["headers"]
+        ).status_code
+        == 404
+    )
+
+    assert client.delete(f"/contacts/{contact_id}", headers=headers).status_code == 200
+    assert len(client.get("/contacts", headers=headers).get_json()) == saved_count
+
+
+def test_contacts_reject_self_unknown_and_bad_input(client, demo_auth):
+    headers = demo_auth["headers"]
+    assert (
+        client.post("/contacts", json={"identifier": "9000000001"}, headers=headers).status_code
+        == 400
+    )
+    assert (
+        client.post("/contacts", json={"identifier": "9111111111"}, headers=headers).status_code
+        == 404
+    )
+    assert client.post("/contacts", json={"identifier": "x"}, headers=headers).status_code == 400
+
+
+def test_people_recent_ranks_recency_then_appends_saved_contacts(client, demo_auth):
+    headers = demo_auth["headers"]
+    user_id = demo_auth["user_id"]
+
+    recent = client.get("/people/recent", headers=headers).get_json()
+    assert len(recent) >= 4
+    # Meera is the only seeded counterparty paid more than once.
+    assert recent[0]["name"] == "Meera Iyer"
+    assert recent[0]["txn_count"] == 3
+    assert recent[0]["is_saved"] is True
+
+    # A saved contact with no history yet still shows up, ranked last.
+    stranger = onboard(client, "9000000988", "Nikhil Rao")
+    client.post("/contacts", json={"identifier": "9000000988"}, headers=headers)
+    recent = client.get("/people/recent", headers=headers).get_json()
+    last = recent[-1]
+    assert last["user_id"] == stranger["user_id"]
+    assert last["txn_count"] == 0
+    assert last["is_saved"] is True
+
+    # limit is honoured and clamped.
+    assert len(client.get("/people/recent?limit=2", headers=headers).get_json()) == 2
+    assert len(client.get("/people/recent?limit=999", headers=headers).get_json()) <= 20
+
+
+def test_transfer_stamps_last_paid_on_a_saved_contact(client, demo_auth):
+    headers = demo_auth["headers"]
+    payee = onboard(client, "9000000966", "Paid Person")
+
+    saved = client.post(
+        "/contacts", json={"identifier": "9000000966"}, headers=headers
+    ).get_json()
+    assert saved["last_paid_at"] is None
+
+    client.post("/topup", json={"user_id": demo_auth["user_id"], "amount": 500}, headers=headers)
+    assert (
+        client.post(
+            "/transfer",
+            json={"receiver_id": payee["user_id"], "amount": 25, "note": "chai"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+
+    refreshed = client.get("/contacts", headers=headers).get_json()[0]
+    assert refreshed["last_paid_at"] is not None
+
+    recent = client.get("/people/recent", headers=headers).get_json()
+    assert recent[0]["user_id"] == payee["user_id"]
+    assert recent[0]["last_note"] == "chai"
+    assert recent[0]["last_direction"] == "out"
 
 
 def test_otp_locks_after_three_wrong_attempts(client):

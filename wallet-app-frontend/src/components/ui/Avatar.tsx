@@ -1,5 +1,6 @@
 import { cx } from "../../lib/cx";
 import { initials } from "../../lib/format";
+import type { AvatarTone } from "../../lib/avatar";
 
 const SIZES = {
   sm: "size-8 text-[11px]",
@@ -8,17 +9,24 @@ const SIZES = {
   xl: "size-16 text-xl",
 } as const;
 
-const TONES = {
+const TONES: Record<AvatarTone, string> = {
   brand: "bg-brand-100 text-brand-700",
   slate: "bg-slate-100 text-slate-600",
   emerald: "bg-emerald-100 text-emerald-700",
   gradient: "bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white",
-} as const;
+  // Solid gradients for contact avatars, so a row of people reads as a set of
+  // distinct faces the way it does in a real payments app.
+  ocean: "bg-gradient-to-br from-sky-400 to-blue-600 text-white",
+  meadow: "bg-gradient-to-br from-emerald-400 to-teal-600 text-white",
+  sunset: "bg-gradient-to-br from-amber-400 to-rose-500 text-white",
+  berry: "bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white",
+  dusk: "bg-gradient-to-br from-indigo-400 to-violet-600 text-white",
+};
 
 export interface AvatarProps {
   name?: string | null;
   size?: keyof typeof SIZES;
-  tone?: keyof typeof TONES;
+  tone?: AvatarTone;
   className?: string;
 }
 

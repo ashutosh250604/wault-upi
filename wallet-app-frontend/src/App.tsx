@@ -13,6 +13,7 @@ import SetNamePage from "./pages/SetName";
 import SetPinPage from "./pages/SetPin";
 import HomePage from "./pages/Home";
 import HistoryPage from "./pages/History";
+import ContactsPage from "./pages/Contacts";
 import AmountEntryPage from "./pages/AmountEntry";
 import PaymentResultPage from "./pages/PaymentResult";
 import ShowQrPage from "./pages/ShowQr";
@@ -97,6 +98,16 @@ export default function App() {
                 element={
                   <RequireSession>
                     <HistoryPage />
+                  </RequireSession>
+                }
+              />
+              {/* Path is /people, not /contacts: the API owns GET /contacts, and an
+                  explicit Flask route beats the SPA catch-all. */}
+              <Route
+                path="/people"
+                element={
+                  <RequireSession>
+                    <ContactsPage />
                   </RequireSession>
                 }
               />

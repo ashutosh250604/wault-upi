@@ -60,6 +60,31 @@ export function vpaError(value: string): string | null {
   return null;
 }
 
+/** The bare 10-digit mobile in a typed value, or null when there isn't one. */
+export function normaliseMobile(value: string): string | null {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(1);
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  return digits || null;
+}
+
+/**
+ * Payment entry points accept either identifier, so they share one check:
+ * anything with an "@" is a UPI ID, everything else must be a mobile number.
+ */
+export function payeeIdentifierError(value: string): string | null {
+  const text = value.trim();
+  if (!text) return "Enter a mobile number or UPI ID";
+  if (text.includes("@")) return vpaError(text);
+
+  const local = normaliseMobile(text);
+  if (!local || local.length !== 10) {
+    return "Enter a 10-digit mobile number, or a UPI ID like name@demoupi";
+  }
+  if (!MOBILE_RE.test(local)) return "Indian mobile numbers start with 6-9";
+  return null;
+}
+
 /** "9000000001@demoupi" -> { handle: "9000000001", suffix: "demoupi" } */
 export function splitVpa(vpa: string | null | undefined): {
   handle: string;

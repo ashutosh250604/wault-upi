@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePayeeResolution } from "../hooks/usePayeeResolution";
-import { vpaError } from "../lib/validation";
+import { mobileError, vpaError } from "../lib/validation";
+import { useRecentPeople } from "../hooks/useRecentPeople";
+import { PeopleStrip } from "./People";
 import { Button } from "./ui/Button";
 import { Field, TextInput } from "./ui/Field";
-import { IconPlus, IconScan, IconUser, IconWarning } from "./ui/Icons";
+import { IconPhone, IconPlus, IconScan, IconUser, IconWarning } from "./ui/Icons";
 import { Sheet } from "./ui/Sheet";
 
 export interface PaySheetProps {
@@ -42,19 +44,23 @@ function OptionRow({
   );
 }
 
+type EntryMode = "mobile" | "vpa" | null;
+
 /** The centre action: how real UPI apps start a payment. */
 export function PaySheet({ open, onClose }: PaySheetProps) {
   const navigate = useNavigate();
-  const [showVpa, setShowVpa] = useState(false);
-  const [vpa, setVpa] = useState("");
+  const [mode, setMode] = useState<EntryMode>(null);
+  const [value, setValue] = useState("");
   const [issue, setIssue] = useState<string | null>(null);
-  const { resolve, busy, error, clearError } = usePayeeResolution();
+  const { resolve, startPayment, busy, error, clearError } = usePayeeResolution();
+  // Recents load with the sheet, so the fastest path is one tap from opening.
+  const { people, status, reload } = useRecentPeople(8);
 
   // Reset the inline form each time the sheet is reopened.
   useEffect(() => {
     if (!open) {
-      setShowVpa(false);
-      setVpa("");
+      setMode(null);
+      setValue("");
       setIssue(null);
       clearError();
     }
@@ -65,21 +71,48 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
     navigate(path, state ? { state } : undefined);
   };
 
-  const submitVpa = async () => {
-    const problem = vpaError(vpa);
+  const openEntry = (next: Exclude<EntryMode, null>) => {
+    setMode((current) => (current === next ? null : next));
+    setValue("");
+    setIssue(null);
+    clearError();
+  };
+
+  const submit = async () => {
+    const problem = mode === "mobile" ? mobileError(value) : vpaError(value);
     setIssue(problem);
     if (problem) return;
-    const ok = await resolve(vpa);
+    const ok = await resolve(value);
     if (ok) onClose();
   };
+
+  const isMobile = mode === "mobile";
 
   return (
     <Sheet
       open={open}
       onClose={onClose}
       title="Pay someone"
-      description="Scan a code or type a UPI ID. Money moves only inside this demo."
+      description="Pick a recent contact, scan a code, or enter a number or UPI ID."
     >
+      {people && people.length > 0 ? (
+        <div className="mb-4">
+          <p className="mb-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
+            Recents
+          </p>
+          <PeopleStrip
+            people={people}
+            status={status}
+            showCaption
+            onSelect={(person) => {
+              onClose();
+              startPayment(person);
+            }}
+            onRetry={reload}
+          />
+        </div>
+      ) : null}
+
       <div className="space-y-1">
         <OptionRow
           icon={<IconScan size={21} />}
@@ -88,51 +121,69 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
           tone="bg-brand-50 text-brand-600"
           onClick={() => go("/scan")}
         />
-
+        <OptionRow
+          icon={<IconPhone size={21} />}
+          title="Pay to mobile number"
+          description="Any 10-digit number on this demo network"
+          tone="bg-emerald-50 text-emerald-600"
+          onClick={() => openEntry("mobile")}
+        />
         <OptionRow
           icon={<IconUser size={21} />}
-          title="Pay by UPI ID"
-          description="Type a handle like 9000000002@demoupi"
+          title="Pay to UPI ID"
+          description="A handle like 9000000002@demoupi"
           tone="bg-fuchsia-50 text-fuchsia-600"
-          onClick={() => setShowVpa((value) => !value)}
+          onClick={() => openEntry("vpa")}
         />
-
         <OptionRow
           icon={<IconPlus size={21} />}
           title="Add money"
           description="Top up your own balance"
-          tone="bg-emerald-50 text-emerald-600"
+          tone="bg-slate-100 text-slate-600"
           onClick={() => go("/pay/amount", { mode: "topup" })}
         />
       </div>
 
-      {showVpa ? (
+      {mode ? (
         <div className="mt-3 animate-enter space-y-3 rounded-2xl bg-slate-50 p-3.5">
-          <Field label="UPI ID" error={issue ?? error} hint="Example: 9000000002@demoupi">
+          <Field
+            label={isMobile ? "Mobile number" : "UPI ID"}
+            error={issue ?? error}
+            hint={isMobile ? "Try 9000000004" : "Try 9000000002@demoupi"}
+          >
             {({ id, describedBy }) => (
               <TextInput
                 id={id}
                 aria-describedby={describedBy}
-                autoFocus
-                placeholder="name@demoupi"
-                value={vpa}
+                data-autofocus
+                inputMode={isMobile ? "tel" : "text"}
+                placeholder={isMobile ? "10-digit mobile number" : "name@demoupi"}
+                value={value}
                 invalid={Boolean(issue ?? error)}
                 onChange={(event) => {
-                  setVpa(event.target.value);
+                  setValue(event.target.value);
                   setIssue(null);
                   clearError();
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") void submitVpa();
+                  if (event.key === "Enter") void submit();
                 }}
               />
             )}
           </Field>
-          <Button fullWidth loading={busy} onClick={() => void submitVpa()}>
+          <Button fullWidth loading={busy} onClick={() => void submit()}>
             Continue
           </Button>
         </div>
       ) : null}
+
+      <button
+        type="button"
+        onClick={() => go("/people")}
+        className="mt-3 w-full rounded-2xl border border-dashed border-slate-200 py-3 text-[12.5px] font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+      >
+        Manage contacts
+      </button>
 
       <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[11.5px] leading-relaxed text-amber-800">
         <IconWarning size={14} className="mt-px shrink-0" />

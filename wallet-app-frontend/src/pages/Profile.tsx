@@ -14,15 +14,44 @@ import { CopyButton } from "../components/ui/CopyButton";
 import { DetailRow } from "../components/ui/DetailRow";
 import { Sheet } from "../components/ui/Sheet";
 import {
+  IconChevronRight,
   IconInfo,
   IconLogout,
   IconQr,
+  IconReceipt,
   IconSound,
+  IconUser,
   IconWarning,
 } from "../components/ui/Icons";
 import { cx } from "../lib/cx";
 
 const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
+
+/** A plain navigation row, so the profile screen can point at the deeper screens. */
+function LinkRow({
+  to,
+  icon,
+  title,
+  subtitle,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link to={to} className="flex items-center gap-3 py-3.5 transition hover:opacity-80">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold text-slate-800">{title}</span>
+        <span className="block text-[12px] text-slate-500">{subtitle}</span>
+      </span>
+      <IconChevronRight size={16} className="shrink-0 text-slate-300" />
+    </Link>
+  );
+}
 
 export default function ProfilePage() {
   const { session, profile, signOut } = useAppSession();
@@ -95,6 +124,21 @@ export default function ProfilePage() {
               </Link>
             )}
           </DetailRow>
+        </Card>
+
+        <Card padded={false} className="divide-y divide-slate-100 px-4">
+          <LinkRow
+            to="/people"
+            icon={<IconUser size={17} />}
+            title="Contacts"
+            subtitle="People you pay often"
+          />
+          <LinkRow
+            to="/history"
+            icon={<IconReceipt size={17} />}
+            title="Transactions"
+            subtitle="Every payment and top-up"
+          />
         </Card>
 
         <Card>

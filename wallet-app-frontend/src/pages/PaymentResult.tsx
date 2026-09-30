@@ -1,10 +1,12 @@
 import { Link, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { formatCurrency, formatDateTime } from "../lib/format";
 import { buildReceiptText } from "../lib/transactions";
 import { parseReceipt } from "../lib/routing";
 import { shareText } from "../lib/clipboard";
 import { useMemo } from "react";
 import { useToast } from "../hooks/toast";
+import { useAppSession } from "../session/context";
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
@@ -15,7 +17,15 @@ import { IconCheck, IconShare } from "../components/ui/Icons";
 export default function PaymentResultPage() {
   const location = useLocation();
   const toast = useToast();
+  const { refresh } = useAppSession();
   const receipt = useMemo(() => parseReceipt(location.state), [location.state]);
+
+  // A payment just happened, so the cached balance and history are behind. One
+  // silent refresh here means Home (and its people row) is already correct when
+  // the user taps Done.
+  useEffect(() => {
+    void refresh({ silent: true });
+  }, [refresh]);
 
   if (!receipt) return <Navigate to="/home" replace />;
 

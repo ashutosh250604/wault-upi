@@ -91,6 +91,50 @@ export interface ResolvedVpa {
   vpa: string;
 }
 
+/** A payee as the directory returns them, before any money is involved. */
+export interface PayeePreview {
+  user_id: number;
+  name: string | null;
+  vpa: string | null;
+  mobile: string | null;
+  /** The owner's own label for them, when they are already saved. */
+  nickname: string | null;
+  is_saved: boolean;
+}
+
+/**
+ * A row in the home "Send money to" avatar strip: everyone the user has paid,
+ * followed by saved contacts who have no history yet.
+ */
+export interface Person {
+  user_id: number;
+  name: string | null;
+  nickname: string | null;
+  vpa: string | null;
+  mobile: string | null;
+  is_saved: boolean;
+  is_favourite: boolean;
+  /** Transfers in either direction; 0 for a contact with no history yet. */
+  txn_count: number;
+  total: number;
+  last_amount: number | null;
+  last_direction: "in" | "out" | null;
+  last_note: string | null;
+  last_at: string | null;
+}
+
+/** A saved payee in the user's address book. */
+export interface Contact {
+  id: number;
+  user_id: number;
+  name: string | null;
+  nickname: string | null;
+  vpa: string | null;
+  mobile: string | null;
+  is_favourite: boolean;
+  last_paid_at: string | null;
+}
+
 export interface TransferResponse {
   message: string;
   from: number;

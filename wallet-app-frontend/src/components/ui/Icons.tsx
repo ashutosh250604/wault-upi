@@ -208,6 +208,15 @@ export const IconInfo = (p: IconProps) => (
   </Base>
 );
 
+export const IconTrash = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4.5 6.5h15" />
+    <path d="M9.5 6.5V4.8a1.3 1.3 0 0 1 1.3-1.3h2.4a1.3 1.3 0 0 1 1.3 1.3v1.7" />
+    <path d="M6.5 6.5 7.6 20a1.4 1.4 0 0 0 1.4 1.3h6a1.4 1.4 0 0 0 1.4-1.3l1.1-13.5" />
+    <path d="M10.5 10.5v6.5M13.5 10.5v6.5" />
+  </Base>
+);
+
 export const IconPhone = (p: IconProps) => (
   <Base {...p}>
     <path d="M5 2.5h2.6l1.9 4.6-2.1 1.3a12.5 12.5 0 0 0 6.2 6.2l1.3-2.1 4.6 1.9V17a2.5 2.5 0 0 1-2.5 2.5A15.5 15.5 0 0 1 2.5 5 2.5 2.5 0 0 1 5 2.5Z" />

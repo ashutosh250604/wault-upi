@@ -23,14 +23,17 @@ def create_app(config_overrides=None):
         resources={r"/*": {"origins": app.config["CORS_ORIGINS"]}},
         supports_credentials=True,
         allow_headers=["Content-Type", "Authorization"],
-        methods=["GET", "POST", "OPTIONS"],
+        # The address book edits in place, so the browser preflights PATCH/DELETE.
+        methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     )
 
     from .blueprints.auth import bp as auth_bp
+    from .blueprints.people import bp as people_bp
     from .blueprints.wallet import bp as wallet_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(wallet_bp)
+    app.register_blueprint(people_bp)
 
     @app.get("/healthz")
     def healthz():

@@ -2,12 +2,15 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, errorMessage } from "../lib/api";
 import { feedback } from "../lib/feedback";
+import { payeeIdentifierError } from "../lib/validation";
 import { useToast } from "./toast";
 
-export interface ResolvedPayee {
+/** The minimum a caller must know to start a payment. */
+export interface PayablePerson {
   user_id: number;
   name: string | null;
-  vpa: string;
+  vpa: string | null;
+  mobile?: string | null;
 }
 
 export interface IncludeOptions {
@@ -16,9 +19,10 @@ export interface IncludeOptions {
 }
 
 /**
- * Turns a typed UPI ID into a payment: verifies the payee exists, then hands off
- * to the amount screen with the resolved name. Shared by the scanner, the pay
- * sheet and (later) the people picker so the flow can't drift between them.
+ * Turns a typed UPI ID or mobile number into a payment: the identifier is
+ * checked locally, verified against the directory, then handed to the amount
+ * screen with the resolved name. Shared by the scanner, the pay sheet, the
+ * contacts book and the home avatar row so the flow can't drift between them.
  */
 export function usePayeeResolution() {
   const navigate = useNavigate();
@@ -26,24 +30,38 @@ export function usePayeeResolution() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** Start a payment to someone we already know (a contact, a recent payee). */
+  const startPayment = useCallback(
+    (payee: PayablePerson, options: IncludeOptions = {}) => {
+      navigate("/pay/amount", {
+        state: {
+          mode: "transfer",
+          receiverId: payee.user_id,
+          receiverName: payee.name,
+          receiverVpa: payee.vpa,
+          suggestedAmount: options.amount,
+          note: options.note,
+        },
+      });
+    },
+    [navigate],
+  );
+
   const resolve = useCallback(
     async (identifier: string, options: IncludeOptions = {}): Promise<boolean> => {
-      const vpa = identifier.trim().toLowerCase();
+      const problem = payeeIdentifierError(identifier);
+      if (problem) {
+        setError(problem);
+        feedback.warn();
+        return false;
+      }
+
       setBusy(true);
       setError(null);
       try {
-        const resolved: ResolvedPayee = await api.resolveVpa(vpa);
+        const payee = await api.resolvePayee(identifier.trim());
         feedback.success();
-        navigate("/pay/amount", {
-          state: {
-            mode: "transfer",
-            receiverId: resolved.user_id,
-            receiverName: resolved.name,
-            receiverVpa: resolved.vpa,
-            suggestedAmount: options.amount,
-            note: options.note,
-          },
-        });
+        startPayment(payee, options);
         return true;
       } catch (err) {
         const message = errorMessage(err);
@@ -55,8 +73,8 @@ export function usePayeeResolution() {
         setBusy(false);
       }
     },
-    [navigate, toast],
+    [startPayment, toast],
   );
 
-  return { resolve, busy, error, clearError: () => setError(null) };
+  return { resolve, startPayment, busy, error, clearError: () => setError(null) };
 }

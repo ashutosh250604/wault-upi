@@ -2,10 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { WalletTransaction } from "../types";
 import { firstName } from "../lib/format";
+import { usePayeeResolution } from "../hooks/usePayeeResolution";
+import { useRecentPeople } from "../hooks/useRecentPeople";
 import { useAppSession } from "../session/context";
 import { AppShell, BrandMark } from "../components/AppShell";
 import { BalanceCard } from "../components/BalanceCard";
 import { OffersStrip } from "../components/OffersStrip";
+import { PeopleSection } from "../components/People";
 import { TransactionDetailSheet, TransactionList } from "../components/Transactions";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
@@ -72,6 +75,14 @@ export default function HomePage() {
       return false;
     }
   });
+
+  // The people row is refreshed by whatever transaction the ledger most
+  // recently gained, so paying someone moves them to the front of the strip.
+  const { people, status: peopleStatus, reload: reloadPeople } = useRecentPeople(
+    8,
+    transactions?.[0]?.id ?? null,
+  );
+  const { startPayment } = usePayeeResolution();
 
   const loading = status === "loading" && profile === null;
   // Fall back to the session name until /me lands, so a just-onboarded user
@@ -163,6 +174,15 @@ export default function HomePage() {
             tone="bg-slate-100 text-slate-600"
           />
         </div>
+
+        <PeopleSection
+          people={people}
+          status={peopleStatus}
+          onSelect={(person) => startPayment(person)}
+          onAdd={() => navigate("/people", { state: { add: true } })}
+          onRetry={reloadPeople}
+          onSeeAll={() => navigate("/people")}
+        />
 
         {needsPin ? (
           <Card className="space-y-3 bg-amber-50 ring-1 ring-amber-200">

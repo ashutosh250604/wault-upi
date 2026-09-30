@@ -34,9 +34,7 @@ export function OffersStrip() {
     <section aria-label="Offers">
       <div className="mb-2 flex items-baseline justify-between px-1">
         <h2 className="text-[15px] font-bold tracking-tight text-slate-900">Offers for you</h2>
-        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-700 uppercase">
-          Decorative
-        </span>
+        <span className="text-[11.5px] font-semibold text-slate-400">Demo offers</span>
       </div>
 
       <div className="no-scrollbar -mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1">
