@@ -20,21 +20,28 @@ export function classifyTransaction(
   userId: number,
 ): ClassifiedTransaction {
   const isTopUp = transaction.type === "topup";
+  // A cashback has no counterparty at all: the money comes from Wallet Pay's
+  // rewards engine, so it is credited rather than received "from" anyone.
+  const isCashback = transaction.type === "cashback";
   const direction: "in" | "out" =
-    isTopUp || transaction.receiver === userId ? "in" : "out";
+    isTopUp || isCashback || transaction.receiver === userId ? "in" : "out";
 
   const counterpartyName =
     direction === "out"
       ? (transaction.receiver_name ?? "Recipient")
       : isTopUp
         ? "Self top-up"
-        : (transaction.sender_name ?? "Someone");
+        : isCashback
+          ? "Wallet Pay rewards"
+          : (transaction.sender_name ?? "Someone");
 
   const title = isTopUp
     ? "Wallet top-up"
-    : direction === "out"
-      ? `To ${counterpartyName}`
-      : `From ${counterpartyName}`;
+    : isCashback
+      ? "Cashback credited"
+      : direction === "out"
+        ? `To ${counterpartyName}`
+        : `From ${counterpartyName}`;
 
   const sign = direction === "in" ? "+" : "−";
   const subtitle =
@@ -81,6 +88,13 @@ export function groupTransactionsByDay(
   return [...days.values()];
 }
 
+/** "Wallet top-up" / "Cashback" / "UPI-style transfer" — the Type row on a receipt. */
+export function transactionTypeLabel(type: WalletTransaction["type"]): string {
+  if (type === "topup") return "Wallet top-up";
+  if (type === "cashback") return "Cashback credit";
+  return "UPI-style transfer";
+}
+
 export interface ReceiptTextInput {
   headline: string;
   amount: number;
@@ -99,6 +113,6 @@ export function buildReceiptText(input: ReceiptTextInput): string {
     `Date: ${input.timestamp}`,
   ];
   if (input.note) lines.push(`Note: ${input.note}`);
-  lines.push("", "Sent via PocketPay — a UPI-style demo wallet (not real UPI).");
+  lines.push("", "Paid with Wallet Pay — UPI-style instant payments.");
   return lines.join("\n");
 }

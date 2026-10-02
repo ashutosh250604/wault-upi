@@ -4,7 +4,33 @@
  * screens expect — or reject it and send the user somewhere sane.
  */
 
-import type { PaymentIntent, Receipt } from "../types";
+import type { CreditedReward, PaymentIntent, Receipt } from "../types";
+
+/**
+ * Cashback rows carried on a receipt.
+ *
+ * This guard exists because the parser *rebuilds* the object rather than
+ * trusting it, which means any field it forgets is silently dropped — a reward
+ * credited by the server can otherwise never reach the celebration on screen.
+ */
+function parseCreditedRewards(raw: unknown): CreditedReward[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+
+  const items = raw.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const item = entry as Record<string, unknown>;
+    if (typeof item.title !== "string" || typeof item.amount !== "number") return [];
+    return [
+      {
+        code: typeof item.code === "string" ? item.code : "reward",
+        title: item.title,
+        amount: item.amount,
+      },
+    ];
+  });
+
+  return items.length > 0 ? items : undefined;
+}
 
 export function parsePaymentIntent(state: unknown): PaymentIntent | null {
   if (typeof state !== "object" || state === null) return null;
@@ -52,5 +78,6 @@ export function parseReceipt(state: unknown): Receipt | null {
     note: typeof receipt.note === "string" ? receipt.note : null,
     timestamp:
       typeof receipt.timestamp === "string" ? receipt.timestamp : new Date().toISOString(),
+    cashback: parseCreditedRewards(receipt.cashback),
   };
 }

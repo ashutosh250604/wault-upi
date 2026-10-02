@@ -8,17 +8,21 @@
 
 import type {
   AccountBalanceResponse,
+  AppNotification,
   BalanceResponse,
   Contact,
-  DemoLoginResponse,
+  SampleLoginResponse,
   HealthResponse,
+  LimitsResponse,
   LinkedAccount,
   MeResponse,
+  NotificationsResponse,
   PayeePreview,
   MoneyRequest,
   Person,
   RequestPaymentResponse,
   ResolvedVpa,
+  Reward,
   SetNameResponse,
   StartLoginResponse,
   TopUpResponse,
@@ -75,11 +79,13 @@ interface RequestOptions {
   body?: unknown;
   /** Attach the Bearer token; throws early when there isn't one. */
   auth?: boolean;
+  /** Skip the /api prefix — only `/healthz` lives at the root. */
+  root?: boolean;
   signal?: AbortSignal;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, auth = false, signal } = options;
+  const { method = "GET", body, auth = false, root = false, signal } = options;
   const headers: Record<string, string> = { Accept: "application/json" };
 
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -91,7 +97,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
+    response = await fetch(`${API_BASE}${root ? "" : API_PREFIX}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -134,7 +140,7 @@ export function errorMessage(error: unknown): string {
 }
 
 export const api = {
-  health: (signal?: AbortSignal) => request<HealthResponse>("/healthz", { signal }),
+  health: (signal?: AbortSignal) => request<HealthResponse>("/healthz", { root: true, signal }),
 
   startLogin: (mobile: string, signal?: AbortSignal) =>
     request<StartLoginResponse>("/start_login", {
@@ -150,8 +156,9 @@ export const api = {
       signal,
     }),
 
-  demoLogin: (signal?: AbortSignal) =>
-    request<DemoLoginResponse>("/demo_login", { method: "POST", signal }),
+  /** One-tap sign-in as the pre-seeded sample account, when the server offers it. */
+  sampleLogin: (signal?: AbortSignal) =>
+    request<SampleLoginResponse>("/demo_login", { method: "POST", signal }),
 
   setName: (name: string, email: string, signal?: AbortSignal) =>
     request<SetNameResponse>("/set_name", {
@@ -242,7 +249,7 @@ export const api = {
       blob: await response.blob(),
       filename:
         filenameFromDisposition(response.headers.get("Content-Disposition")) ??
-        "pocketpay-statement.csv",
+        "walletpay-statement.csv",
     };
   },
 
@@ -329,6 +336,39 @@ export const api = {
     request<Person[]>(`/people/recent?limit=${limit}`, { auth: true, signal }),
 
   contacts: (signal?: AbortSignal) => request<Contact[]>("/contacts", { auth: true, signal }),
+
+  /**
+   * The inbox and its unread badge in one call, because the bell that shows the
+   * badge is on the same screen as the list that clears it.
+   */
+  notifications: (limit = 50, signal?: AbortSignal) =>
+    request<NotificationsResponse>(`/notifications?limit=${limit}`, { auth: true, signal }),
+
+  markNotificationRead: (notificationId: number, signal?: AbortSignal) =>
+    request<{ notification: AppNotification; unread_count: number }>(
+      `/notifications/${notificationId}/read`,
+      { method: "POST", auth: true, signal },
+    ),
+
+  markAllNotificationsRead: (signal?: AbortSignal) =>
+    request<{ message: string; marked: number; unread_count: number }>(
+      "/notifications/read-all",
+      { method: "POST", auth: true, signal },
+    ),
+
+  /** Deleting a notification only forgets the note — the ledger row stays. */
+  deleteNotification: (notificationId: number, signal?: AbortSignal) =>
+    request<{ message: string; unread_count: number }>(`/notifications/${notificationId}`, {
+      method: "DELETE",
+      auth: true,
+      signal,
+    }),
+
+  /** Offers with this user's progress, counted from the ledger server-side. */
+  rewards: (signal?: AbortSignal) => request<Reward[]>("/rewards", { auth: true, signal }),
+
+  /** What's left of today's cap: the numbers the ledger enforces on a debit. */
+  limits: (signal?: AbortSignal) => request<LimitsResponse>("/limits", { auth: true, signal }),
 
   addContact: (
     identifier: string,

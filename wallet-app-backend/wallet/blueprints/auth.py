@@ -4,8 +4,9 @@ from datetime import timedelta
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from ..events import notify
 from ..extensions import db
-from ..models import User, Wallet
+from ..models import Notification, User, Wallet
 from ..security import (
     EMAIL_RE,
     MOBILE_RE,
@@ -55,7 +56,7 @@ def start_login():
 
     payload = {"message": "OTP sent!"}
     if current_app.config["DEMO_MODE"]:
-        # Public demo: no SMS provider, so the OTP is returned for the UI to display.
+        # No SMS provider configured: the OTP comes back in the response instead.
         payload["dev_otp"] = otp
     else:
         # Console SMS provider (development / self-hosted).
@@ -98,6 +99,14 @@ def verify_otp():
     user.otp_is_used = True
     user.is_verified = True
     user.updated_at = utcnow()
+    # Every real payment app mails you about a sign-in. Ours writes it to the
+    # inbox instead, which is where the rest of the wallet's news lives.
+    notify(
+        user.id,
+        Notification.SECURITY,
+        "New sign-in to your wallet",
+        f"Verified with a one-time code on {user.mobile}",
+    )
     db.session.commit()
 
     return (
@@ -181,6 +190,12 @@ def set_pin():
     user.pin_attempts = 0
     user.pin_locked_until = None
     user.updated_at = utcnow()
+    notify(
+        user.id,
+        Notification.SECURITY,
+        "Payment PIN set",
+        "Transfers and top-ups will ask for it before any money moves",
+    )
     db.session.commit()
 
     return jsonify({"message": "PIN set successfully"}), 200
@@ -207,18 +222,20 @@ def verify_pin():
 
 @bp.post("/demo_login")
 def demo_login():
-    """One-tap access to the seeded demo account (only when DEMO_MODE is on)."""
+    """One-tap access to the pre-seeded sample account (only when DEMO_MODE is on)."""
     if not current_app.config["DEMO_MODE"]:
-        return jsonify({"message": "Demo login is disabled"}), 404
+        return jsonify({"message": "Sample sign-in is disabled"}), 404
 
     mobile = current_app.config["DEMO_MOBILE"]
     user = User.query.filter_by(mobile=mobile).first()
     if user is None:
-        return jsonify({"message": "Demo account is not seeded yet"}), 503
+        return jsonify({"message": "Sample account is not seeded yet"}), 503
 
+    # Deliberately no "new sign-in" note here, unlike the OTP flow: this account
+    # is shared by every visitor, so one person's visit is not another's news.
     return jsonify(
         {
-            "message": f"Demo login successful. Welcome, {user.name or 'there'}!",
+            "message": f"Welcome, {user.name or 'there'}!",
             "token": issue_token(user.id),
             "user_id": user.id,
             "mobile": user.mobile,

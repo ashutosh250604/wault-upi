@@ -132,7 +132,7 @@ export function AppBar({ title, right, children, showBack = false, border = true
   );
 }
 
-/** The wordmark, with a permanent reminder that this is a demo. */
+/** The wordmark. */
 export function BrandMark({ invert = false }: { invert?: boolean }) {
   return (
     <span className="flex items-center gap-2">
@@ -141,8 +141,9 @@ export function BrandMark({ invert = false }: { invert?: boolean }) {
           "flex size-7 items-center justify-center rounded-lg text-[13px] font-black",
           invert ? "bg-white/20 text-white" : "bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white",
         )}
+        aria-hidden="true"
       >
-        P
+        W
       </span>
       <span
         className={cx(
@@ -150,15 +151,7 @@ export function BrandMark({ invert = false }: { invert?: boolean }) {
           invert ? "text-white" : "text-slate-900",
         )}
       >
-        PocketPay
-      </span>
-      <span
-        className={cx(
-          "rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase",
-          invert ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700",
-        )}
-      >
-        Demo
+        Wallet Pay
       </span>
     </span>
   );

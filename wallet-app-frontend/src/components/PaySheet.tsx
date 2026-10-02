@@ -117,21 +117,21 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
         <OptionRow
           icon={<IconScan size={21} />}
           title="Scan any QR code"
-          description="Point your camera at a PocketPay code"
+          description="Point your camera at a Wallet Pay code"
           tone="bg-brand-50 text-brand-600"
           onClick={() => go("/scan")}
         />
         <OptionRow
           icon={<IconPhone size={21} />}
           title="Pay to mobile number"
-          description="Any 10-digit number on this demo network"
+          description="Any registered 10-digit mobile number"
           tone="bg-emerald-50 text-emerald-600"
           onClick={() => openEntry("mobile")}
         />
         <OptionRow
           icon={<IconUser size={21} />}
           title="Pay to UPI ID"
-          description="A handle like 9000000002@demoupi"
+          description="A handle like 9000000002@okwalletpay"
           tone="bg-fuchsia-50 text-fuchsia-600"
           onClick={() => openEntry("vpa")}
         />
@@ -156,7 +156,7 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
           <Field
             label={isMobile ? "Mobile number" : "UPI ID"}
             error={issue ?? error}
-            hint={isMobile ? "Try 9000000004" : "Try 9000000002@demoupi"}
+            hint={isMobile ? "Try 9000000004" : "Try 9000000002@okwalletpay"}
           >
             {({ id, describedBy }) => (
               <TextInput
@@ -164,7 +164,7 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
                 aria-describedby={describedBy}
                 data-autofocus
                 inputMode={isMobile ? "tel" : "text"}
-                placeholder={isMobile ? "10-digit mobile number" : "name@demoupi"}
+                placeholder={isMobile ? "10-digit mobile number" : "name@okwalletpay"}
                 value={value}
                 invalid={Boolean(issue ?? error)}
                 onChange={(event) => {
@@ -194,7 +194,7 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
 
       <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[11.5px] leading-relaxed text-amber-800">
         <IconWarning size={14} className="mt-px shrink-0" />
-        A portfolio demo: there is no NPCI/UPI integration and no real payment rail.
+        Check the payee's name before you approve. A completed transfer cannot be reversed.
       </p>
     </Sheet>
   );

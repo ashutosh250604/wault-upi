@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import type { LinkedAccount } from "../types";
+import type { CreditedReward, LimitsResponse, LinkedAccount } from "../types";
 import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
 import { feedback } from "../lib/feedback";
@@ -50,12 +50,20 @@ export default function AmountEntryPage() {
   // Funding sources appear only for a top-up: paying someone never touches them.
   const [accounts, setAccounts] = useState<LinkedAccount[] | null>(null);
   const [sourceId, setSourceId] = useState<number | null>(null);
+  // Today's cap, straight from the endpoint the ledger itself reads.
+  const [limits, setLimits] = useState<LimitsResponse | null>(null);
 
   const available = profile?.balance ?? null;
   const rules =
     isTopUp || available === null
       ? { max: MAX_TOPUP_RUPEES }
-      : { max: MAX_TRANSFER_RUPEES, available };
+      : {
+          max: MAX_TRANSFER_RUPEES,
+          available,
+          // The cap is enforced by the ledger; showing it here is what stops the
+          // user discovering it only after typing a PIN.
+          dailyRemaining: limits?.remaining,
+        };
 
   const value = toRupees(amount);
   const issue = amountError(amount, rules);
@@ -66,6 +74,19 @@ export default function AmountEntryPage() {
   useEffect(() => {
     if (amount === "") setTouched(false);
   }, [amount]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        setLimits(await api.limits(controller.signal));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setLimits(null);
+      }
+    })();
+    return () => controller.abort();
+  }, []);
 
   // Load the linked accounts and preselect the user's default one.
   useEffect(() => {
@@ -87,6 +108,12 @@ export default function AmountEntryPage() {
   if (!intent || !userId) return <Navigate to="/home" replace />;
 
   const receiverLabel = isTopUp ? "your wallet" : (intent.receiverName ?? "recipient");
+  /** A payment can complete an offer; say so once, at the moment it lands. */
+  const announceCashback = (rewards?: CreditedReward[]) => {
+    for (const reward of rewards ?? []) {
+      toast.success(`${reward.title} credited`);
+    }
+  };
   const closePin = () => {
     setPinOpen(false);
     setPin("");
@@ -106,6 +133,7 @@ export default function AmountEntryPage() {
         const result = await api.topUp(userId, value, enteredPin, sourceId ?? undefined);
         feedback.success();
         patchProfile({ balance: result.new_balance });
+        announceCashback(result.rewards);
         void refresh({ silent: true });
         navigate("/pay/result", {
           replace: true,
@@ -118,6 +146,7 @@ export default function AmountEntryPage() {
               counterpartyVpa: profile?.vpa ?? null,
               note: null,
               timestamp: new Date().toISOString(),
+              cashback: result.rewards,
             },
           },
         });
@@ -134,6 +163,7 @@ export default function AmountEntryPage() {
       );
       feedback.success();
       if (available !== null) patchProfile({ balance: Math.max(0, available - value) });
+      announceCashback(result.rewards);
       void refresh({ silent: true });
       navigate("/pay/result", {
         replace: true,
@@ -146,6 +176,7 @@ export default function AmountEntryPage() {
             counterpartyVpa: intent.receiverVpa ?? null,
             note: result.note,
             timestamp: new Date().toISOString(),
+            cashback: result.rewards,
           },
         },
       });
@@ -307,6 +338,24 @@ export default function AmountEntryPage() {
               </span>
             ) : null}
           </div>
+
+          {!isTopUp && limits ? (
+            <div className="mt-1">
+              <div className="mx-auto h-1 w-44 overflow-hidden rounded-full bg-slate-100">
+                <span
+                  className={cx(
+                    "block h-full rounded-full transition-all",
+                    limits.used_percent >= 90 ? "bg-rose-500" : "bg-brand-500",
+                  )}
+                  style={{ width: `${Math.min(100, Math.max(0, limits.used_percent))}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-[11.5px] text-slate-500">
+                {formatCurrencyShort(limits.remaining)} of your{" "}
+                {formatCurrencyShort(limits.daily_limit)} daily limit left
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex justify-center gap-2">

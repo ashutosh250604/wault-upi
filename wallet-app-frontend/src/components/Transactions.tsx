@@ -5,6 +5,7 @@ import {
   buildReceiptText,
   classifyTransaction,
   groupTransactionsByDay,
+  transactionTypeLabel,
   type ClassifiedTransaction,
 } from "../lib/transactions";
 import { shareText } from "../lib/clipboard";
@@ -19,6 +20,7 @@ import {
   IconReceived,
   IconSent,
   IconShare,
+  IconSpark,
   IconWallet,
 } from "./ui/Icons";
 import { Sheet } from "./ui/Sheet";
@@ -26,18 +28,23 @@ import { EmptyState, TransactionSkeleton } from "./ui/States";
 
 function DirectionIcon({ direction, type }: { direction: "in" | "out"; type: string }) {
   const isTopUp = type === "topup";
+  const isCashback = type === "cashback";
   return (
     <span
       className={cx(
         "flex size-10 shrink-0 items-center justify-center rounded-full",
-        isTopUp
-          ? "bg-brand-50 text-brand-600"
-          : direction === "in"
-            ? "bg-emerald-50 text-emerald-600"
-            : "bg-slate-100 text-slate-500",
+        isCashback
+          ? "bg-amber-50 text-amber-600"
+          : isTopUp
+            ? "bg-brand-50 text-brand-600"
+            : direction === "in"
+              ? "bg-emerald-50 text-emerald-600"
+              : "bg-slate-100 text-slate-500",
       )}
     >
-      {isTopUp ? (
+      {isCashback ? (
+        <IconSpark size={18} />
+      ) : isTopUp ? (
         <IconWallet size={18} />
       ) : direction === "in" ? (
         <IconReceived size={18} />
@@ -194,12 +201,17 @@ export function TransactionDetailSheet({
   if (!transaction) return null;
   const item = classifyTransaction(transaction, userId);
   const isCredit = item.direction === "in";
+  const isCashback = transaction.type === "cashback";
 
   const onShare = async () => {
     const result = await shareText({
-      title: "PocketPay receipt",
+      title: "Wallet Pay receipt",
       text: buildReceiptText({
-        headline: isCredit ? "Money received" : "Payment successful",
+        headline: isCashback
+          ? "Cashback credited"
+          : isCredit
+            ? "Money received"
+            : "Payment successful",
         amount: transaction.amount,
         counterpartyName: item.counterpartyName,
         reference: transaction.reference,
@@ -215,7 +227,7 @@ export function TransactionDetailSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title={isCredit ? "Money received" : "Payment details"}
+      title={isCashback ? "Cashback credited" : isCredit ? "Money received" : "Payment details"}
       footer={
         <div className="flex gap-2">
           <Button
@@ -270,9 +282,7 @@ export function TransactionDetailSheet({
           </span>
         </DetailRow>
         <DetailRow label="Date">{formatDateTime(transaction.timestamp)}</DetailRow>
-        <DetailRow label="Type">
-          {transaction.type === "topup" ? "Wallet top-up" : "UPI-style transfer"}
-        </DetailRow>
+        <DetailRow label="Type">{transactionTypeLabel(transaction.type)}</DetailRow>
         {transaction.note ? (
           <DetailRow label="Note">
             <span className="inline-flex items-start justify-end gap-1">

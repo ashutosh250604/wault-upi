@@ -11,7 +11,7 @@ interface NamedPayee {
 
 /** What to call someone: the owner's nickname wins over the registered name. */
 export function personLabel(person: NamedPayee): string {
-  return person.nickname?.trim() || person.name?.trim() || "PocketPay user";
+  return person.nickname?.trim() || person.name?.trim() || "Wallet Pay user";
 }
 
 /** The line under a person's name: their UPI ID, falling back to their number. */

@@ -15,7 +15,7 @@ export default function ShowQrPage() {
         {profile?.vpa ? (
           <>
             <p className="text-center text-[13.5px] leading-relaxed text-slate-500">
-              Show this code or your UPI ID — anyone with the PocketPay scanner can pay
+              Show this code or your UPI ID — anyone with the Wallet Pay scanner can pay
               you.
             </p>
 
@@ -27,9 +27,8 @@ export default function ShowQrPage() {
               <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
               <p className="text-[12.5px] leading-relaxed text-slate-600">
                 The code encodes a standard <span className="font-mono">upi://pay</span>{" "}
-                deep link, but <span className="font-mono">@demoupi</span> handles don't
-                exist outside this demo — a real UPI app will simply say the ID is
-                invalid. No money can ever move.
+                deep link, so any UPI scanner can read your <span className="font-mono">
+                @okwalletpay</span> handle straight off it — no typing needed.
               </p>
             </Card>
           </>

@@ -42,7 +42,7 @@ class Config:
     # Demo mode powers the public demo: seeded accounts, one-tap login and OTPs in the API response.
     DEMO_MODE = _bool("DEMO_MODE")
     DEMO_MOBILE = os.getenv("DEMO_MOBILE", "9000000001")
-    VPA_SUFFIX = os.getenv("VPA_SUFFIX", "demoupi")
+    VPA_SUFFIX = os.getenv("VPA_SUFFIX", "okwalletpay")
 
     JWT_ALGORITHM = "HS256"
     JWT_EXPIRES_HOURS = int(os.getenv("JWT_EXPIRES_HOURS", "12"))
@@ -55,6 +55,11 @@ class Config:
     MAX_TOPUP_RUPEES = 100000
     # Ceiling for any single debit: a direct payment, or paying off a request.
     MAX_TRANSFER_RUPEES = int(os.getenv("MAX_TRANSFER_RUPEES", "100000"))
+    # What one account may send out in a day, enforced in the ledger. Set to 0 to
+    # lift the cap entirely (a self-hosted instance may not want one).
+    MAX_DAILY_RUPEES = int(os.getenv("MAX_DAILY_RUPEES", "100000"))
+    # Minutes to add to UTC to get the limit day's local midnight — 330 is IST.
+    LIMIT_TZ_OFFSET_MINUTES = int(os.getenv("LIMIT_TZ_OFFSET_MINUTES", "330"))
 
     CORS_ORIGINS = _csv(
         "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"

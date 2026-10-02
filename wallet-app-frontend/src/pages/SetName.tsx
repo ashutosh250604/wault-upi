@@ -76,7 +76,7 @@ export default function SetNamePage() {
               {name.trim() || "Your name"}
             </p>
             <p className="text-[12.5px] text-slate-500">
-              {session?.mobile ? `+91 ${session.mobile}` : "New PocketPay account"}
+              {session?.mobile ? `+91 ${session.mobile}` : "New Wallet Pay account"}
             </p>
           </div>
         </div>
@@ -108,7 +108,7 @@ export default function SetNamePage() {
           <Field
             label="Email (optional)"
             error={emailIssue}
-            hint="Used for your account record only — no email is ever sent in this demo."
+            hint="Only used on your account record — we never email you."
           >
             {({ id, describedBy }) => (
               <TextInput
@@ -135,7 +135,7 @@ export default function SetNamePage() {
             <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
             <p className="text-[12.5px] leading-relaxed text-slate-600">
               We'll create your UPI-style ID from your mobile number — for example{" "}
-              <span className="font-mono font-semibold">9000000001@demoupi</span>. Next
+              <span className="font-mono font-semibold">9000000001@okwalletpay</span>. Next
               you'll set the 4-digit PIN that approves every payment.
             </p>
           </Card>

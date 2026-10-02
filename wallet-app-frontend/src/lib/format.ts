@@ -118,7 +118,7 @@ export function formatDateTime(iso: string): string {
 /** "AS" — used by the avatar circles. */
 export function initials(name: string | null | undefined): string {
   const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "PP";
+  if (parts.length === 0) return "WP";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }

@@ -1,6 +1,9 @@
+from datetime import datetime, timedelta, timezone
+
 from pytest import mark
 
 from wallet.config import _database_uri
+from wallet.limits import day_window
 
 
 PIN = "1234"
@@ -45,7 +48,7 @@ def test_demo_login_returns_token_and_balance(client):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["token"]
-    assert payload["vpa"] == "9000000001@demoupi"
+    assert payload["vpa"] == "9000000001@okwalletpay"
     assert payload["balance"] == 5000.0
 
 
@@ -53,7 +56,7 @@ def test_protected_endpoints_require_token(client):
     assert client.get("/api/get_balance/1").status_code == 401
     assert client.get("/api/transactions/1").status_code == 401
     assert client.post("/api/transfer", json={"receiver_id": 2, "amount": 10}).status_code == 401
-    assert client.post("/api/vpas/resolve", json={"vpa": "9000000002@demoupi"}).status_code == 401
+    assert client.post("/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}).status_code == 401
 
 
 def test_balance_and_seeded_history(client, demo_auth):
@@ -73,7 +76,7 @@ def test_balance_and_seeded_history(client, demo_auth):
 def test_cannot_touch_another_wallet(client, demo_auth):
     headers = demo_auth["headers"]
     other_id = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@demoupi"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
     ).get_json()["user_id"]
 
     assert client.get(f"/api/get_balance/{other_id}", headers=headers).status_code == 403
@@ -96,10 +99,15 @@ def test_topup_then_transfer(client, demo_auth):
         headers=headers,
     )
     assert topup.status_code == 200
-    assert topup.get_json()["new_balance"] == 6000.0
+    # ₹1000 is the first qualifying top-up, so the welcome offer pays ₹25 inside
+    # the same commit as the top-up itself.
+    assert topup.get_json()["new_balance"] == 6025.0
+    assert topup.get_json()["rewards"] == [
+        {"code": "first_topup", "title": "₹25 cashback", "amount": 25.0}
+    ]
 
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@demoupi"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
     ).get_json()
     assert receiver["name"] == "Meera Iyer"
 
@@ -115,16 +123,18 @@ def test_topup_then_transfer(client, demo_auth):
     )
     assert transfer.status_code == 200
     assert transfer.get_json()["txn_id"].startswith("TXN")
+    # One payment of three, so the payments offer is still open.
+    assert "rewards" not in transfer.get_json()
 
     balance = client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()
-    assert balance["balance"] == 5899.75
+    assert balance["balance"] == 5924.75
 
 
 def test_transfer_rejects_self_and_insufficient_funds(client, demo_auth):
     headers = demo_auth["headers"]
     user_id = demo_auth["user_id"]
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@demoupi"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
     ).get_json()
 
     self_transfer = client.post(
@@ -179,7 +189,7 @@ def test_full_onboarding_flow(client):
         "/api/set_name", json={"name": "Dev Tester", "email": "dev@test.app"}, headers=headers
     )
     assert named.status_code == 200
-    assert named.get_json()["vpa"] == "9876543210@demoupi"
+    assert named.get_json()["vpa"] == "9876543210@okwalletpay"
 
     # Half-onboarded: named, but no PIN yet — the client uses this to route
     # the user back to the PIN step.
@@ -196,7 +206,7 @@ def test_full_onboarding_flow(client):
 
     # The user cannot pay themselves.
     self_resolve = client.post(
-        "/api/vpas/resolve", json={"vpa": "9876543210@demoupi"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9876543210@okwalletpay"}, headers=headers
     )
     assert self_resolve.status_code == 400
 
@@ -204,7 +214,7 @@ def test_full_onboarding_flow(client):
 def test_transfer_requires_a_pin_that_the_server_verifies(client, demo_auth):
     headers = demo_auth["headers"]
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@demoupi"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
     ).get_json()["user_id"]
 
     # A stolen token alone must not be able to move money.
@@ -240,7 +250,7 @@ def test_transfer_requires_a_pin_that_the_server_verifies(client, demo_auth):
 def test_pin_lockout_is_shared_by_every_debit_path(client, demo_auth):
     headers = demo_auth["headers"]
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@demoupi"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
     ).get_json()["user_id"]
 
     for _ in range(5):
@@ -316,11 +326,13 @@ def test_request_lifecycle_ends_in_a_real_transfer(client, demo_auth):
         ]
         == 2200.0
     )
+    # 5000 + 300 received, plus the ₹10 "when someone pays you" cashback that
+    # arriving money unlocks for Aarav (Meera only paid, so hers stays closed).
     assert (
         client.get(f"/api/get_balance/{aarav['user_id']}", headers=aarav["headers"]).get_json()[
             "balance"
         ]
-        == 5300.0
+        == 5310.0
     )
     ledger = client.get(
         f"/api/transactions/{meera['user_id']}", headers=meera["headers"]
@@ -548,7 +560,8 @@ def test_topup_from_a_linked_account_debits_it_and_needs_a_pin(client, demo_auth
         headers=headers,
     )
     assert okay.status_code == 200
-    assert okay.get_json()["new_balance"] == 5500.0
+    # ₹500 clears the ₹100 first-top-up threshold, so the ₹25 cashback rides along.
+    assert okay.get_json()["new_balance"] == 5525.0
     assert okay.get_json()["account"]["balance"] == 47750.0
 
     # A top-up larger than the linked account holds is refused outright.
@@ -587,7 +600,7 @@ def test_statement_csv_exports_only_the_callers_ledger(client, demo_auth):
     assert response.status_code == 200
     assert response.mimetype == "text/csv"
     assert "attachment" in response.headers["Content-Disposition"]
-    assert "pocketpay-statement" in response.headers["Content-Disposition"]
+    assert "walletpay-statement" in response.headers["Content-Disposition"]
 
     text = response.get_data(as_text=True)
     rows = text.strip().splitlines()
@@ -689,7 +702,7 @@ def test_contacts_crud_is_idempotent_and_owner_scoped(client, demo_auth):
     assert first.get_json()["name"] == "Dev Friend"
 
     # Saving the same person again updates instead of duplicating.
-    again = client.post("/api/contacts", json={"identifier": "9000000088@demoupi"}, headers=headers)
+    again = client.post("/api/contacts", json={"identifier": "9000000088@okwalletpay"}, headers=headers)
     assert again.status_code == 200
     assert again.get_json()["id"] == contact_id
 
@@ -802,3 +815,268 @@ def test_otp_locks_after_three_wrong_attempts(client):
     blocked = client.post("/api/verify_otp", json={"mobile": "9876543211", "otp": "000000"})
     assert blocked.status_code == 403
     assert "Too many" in blocked.get_json()["message"]
+
+
+def test_the_inbox_logs_both_sides_of_a_payment(client, demo_auth):
+    aarav = demo_auth
+    meera = login_as(client, "9000000002")
+    payee = client.post(
+        "/api/vpas/resolve",
+        json={"vpa": "9000000002@okwalletpay"},
+        headers=aarav["headers"],
+    ).get_json()["user_id"]
+
+    client.post(
+        "/api/topup",
+        json={"user_id": aarav["user_id"], "amount": 100, "pin": PIN},
+        headers=aarav["headers"],
+    )
+    assert (
+        client.post(
+            "/api/transfer",
+            json={"receiver_id": payee, "amount": 100, "note": "lunch", "pin": PIN},
+            headers=aarav["headers"],
+        ).status_code
+        == 200
+    )
+
+    inbox = client.get("/api/notifications", headers=aarav["headers"]).get_json()
+    assert inbox["unread_count"] >= 1
+    sent = inbox["notifications"][0]
+    assert sent["kind"] == "money_sent"
+    assert sent["title"] == "Money sent to Meera Iyer"
+    assert sent["body"] == "lunch"
+    assert sent["amount"] == 100.0
+    assert sent["is_read"] is False
+    assert sent["reference"].startswith("TXN")
+
+    # The payee's inbox describes the same ledger row from the other side.
+    mine = client.get("/api/notifications", headers=meera["headers"]).get_json()
+    received = [row for row in mine["notifications"] if row["kind"] == "money_received"]
+    assert received[0]["title"] == "Money received from Aarav Sharma"
+    assert received[0]["amount"] == 100.0
+
+
+def test_a_request_and_a_refusal_both_reach_the_other_person(client, demo_auth):
+    aarav = demo_auth
+    meera = login_as(client, "9000000002")
+
+    created = client.post(
+        "/api/requests",
+        json={"identifier": "9000000002", "amount": 250, "note": "cabs"},
+        headers=aarav["headers"],
+    ).get_json()
+
+    asked = client.get("/api/notifications", headers=meera["headers"]).get_json()
+    assert asked["notifications"][0]["kind"] == "request_received"
+    assert asked["notifications"][0]["title"] == "Aarav Sharma asked you for money"
+    assert asked["notifications"][0]["amount"] == 250.0
+
+    client.post(f"/api/requests/{created['id']}/decline", headers=meera["headers"])
+    told = client.get("/api/notifications", headers=aarav["headers"]).get_json()
+    assert told["notifications"][0]["kind"] == "request_declined"
+    assert told["notifications"][0]["title"] == "Meera Iyer declined your request"
+
+
+def test_inbox_rows_can_be_read_marked_cleared_and_deleted(client, demo_auth):
+    headers = demo_auth["headers"]
+    inbox = client.get("/api/notifications", headers=headers).get_json()
+    note_id = inbox["notifications"][0]["id"]
+    assert inbox["unread_count"] >= 2
+
+    read = client.post(f"/api/notifications/{note_id}/read", headers=headers)
+    assert read.status_code == 200
+    assert read.get_json()["notification"]["is_read"] is True
+    assert read.get_json()["unread_count"] == inbox["unread_count"] - 1
+
+    cleared = client.post("/api/notifications/read-all", headers=headers)
+    assert cleared.status_code == 200
+    assert cleared.get_json()["unread_count"] == 0
+    assert cleared.get_json()["marked"] == inbox["unread_count"] - 1
+
+    removed = client.delete(f"/api/notifications/{note_id}", headers=headers)
+    assert removed.status_code == 200
+    remaining = client.get("/api/notifications", headers=headers).get_json()
+    assert all(row["id"] != note_id for row in remaining["notifications"])
+
+
+def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_auth):
+    stranger = onboard(client, "9000000944", "Quiet Stranger")
+    aarav_note = client.get("/api/notifications", headers=demo_auth["headers"]).get_json()[
+        "notifications"
+    ][0]["id"]
+
+    assert client.get("/api/notifications").status_code == 401
+    assert client.get("/api/rewards").status_code == 401
+    assert client.get("/api/limits").status_code == 401
+
+    # The stranger's inbox holds only their own security notes — signing in, then
+    # setting a PIN — and none of Aarav's ledger activity leaks across.
+    stranger_inbox = client.get("/api/notifications", headers=stranger["headers"]).get_json()
+    assert {row["kind"] for row in stranger_inbox["notifications"]} == {"security"}
+    assert all(row["id"] != aarav_note for row in stranger_inbox["notifications"])
+
+    # 404 rather than 403: a stranger can't confirm which ids are real.
+    assert (
+        client.post(
+            f"/api/notifications/{aarav_note}/read", headers=stranger["headers"]
+        ).status_code
+        == 404
+    )
+    assert (
+        client.delete(
+            f"/api/notifications/{aarav_note}", headers=stranger["headers"]
+        ).status_code
+        == 404
+    )
+
+
+def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth):
+    headers = demo_auth["headers"]
+    user_id = demo_auth["user_id"]
+
+    rewards = {item["code"]: item for item in client.get("/api/rewards", headers=headers).get_json()}
+    assert set(rewards) == {"first_topup", "three_payments", "first_money_in"}
+    # Seeded history predates the offers, so nothing is pre-earned: progress is
+    # counted from the moment the offer started, not from the account's birth.
+    assert rewards["first_topup"]["progress"] == 0
+    assert rewards["three_payments"]["target"] == 3
+    assert rewards["first_topup"]["status"] == "active"
+    assert rewards["first_topup"]["expires_at"]
+
+    # A top-up below the qualifying size doesn't count towards the welcome offer.
+    client.post(
+        "/api/topup", json={"user_id": user_id, "amount": 50, "pin": PIN}, headers=headers
+    )
+    assert (
+        client.get("/api/rewards", headers=headers).get_json()[0]["progress"] == 0
+    )
+
+    qualifying = client.post(
+        "/api/topup", json={"user_id": user_id, "amount": 100, "pin": PIN}, headers=headers
+    )
+    # 5000 + the ₹50 that didn't qualify + this ₹100 + the ₹25 it unlocked.
+    assert qualifying.get_json()["new_balance"] == 5175.0
+    assert qualifying.get_json()["rewards"][0]["amount"] == 25.0
+
+    after = {item["code"]: item for item in client.get("/api/rewards", headers=headers).get_json()}
+    assert after["first_topup"]["status"] == "credited"
+    assert after["first_topup"]["credited_at"]
+
+    # A cashback is real money: it is a ledger row like any other.
+    ledger = client.get(f"/api/transactions/{user_id}", headers=headers).get_json()
+    assert ledger[0]["type"] == "cashback"
+    assert ledger[0]["amount"] == 25.0
+    assert ledger[0]["sender"] is None
+
+    # And it cannot be paid twice — a credited offer is skipped, not re-earned.
+    client.post(
+        "/api/topup", json={"user_id": user_id, "amount": 100, "pin": PIN}, headers=headers
+    )
+    assert (
+        client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
+        == 5275.0
+    )
+
+
+def test_the_third_payment_credits_fifty_and_a_refusal_credits_nothing(client, demo_auth):
+    headers = demo_auth["headers"]
+    user_id = demo_auth["user_id"]
+    payee = onboard(client, "9000000933", "Offer Payee")
+
+    client.post(
+        "/api/topup", json={"user_id": user_id, "amount": 1000, "pin": PIN}, headers=headers
+    )
+    # Over the daily cap: refused, so it must not count towards any offer either.
+    assert (
+        client.post(
+            "/api/transfer",
+            json={"receiver_id": payee["user_id"], "amount": 200000, "pin": PIN},
+            headers=headers,
+        ).status_code
+        == 400
+    )
+
+    answers = []
+    for amount in (10, 20, 30):
+        answers.append(
+            client.post(
+                "/api/transfer",
+                json={"receiver_id": payee["user_id"], "amount": amount, "pin": PIN},
+                headers=headers,
+            ).get_json()
+        )
+
+    assert "rewards" not in answers[0]
+    assert "rewards" not in answers[1]
+    # 5000 + 1000 top-up + 25 welcome cashback - 60 paid + 50 payments cashback.
+    assert answers[2]["rewards"] == [
+        {"code": "three_payments", "title": "₹50 cashback", "amount": 50.0}
+    ]
+    assert (
+        client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
+        == 6015.0
+    )
+
+
+def test_the_daily_cap_is_reported_and_enforced_by_the_same_numbers(client, demo_auth):
+    headers = demo_auth["headers"]
+    user_id = demo_auth["user_id"]
+    payee = onboard(client, "9000000922", "Cap Payee")
+
+    client.post(
+        "/api/topup", json={"user_id": user_id, "amount": 100000, "pin": PIN}, headers=headers
+    )
+
+    before = client.get("/api/limits", headers=headers).get_json()
+    assert before["daily_limit"] == 100000.0
+    assert before["spent_today"] == 0.0
+    assert before["remaining"] == 100000.0
+    assert before["per_transaction"] == 100000
+    assert before["resets_at"]
+
+    assert (
+        client.post(
+            "/api/transfer",
+            json={"receiver_id": payee["user_id"], "amount": 60000, "pin": PIN},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    after = client.get("/api/limits", headers=headers).get_json()
+    assert after["spent_today"] == 60000.0
+    assert after["remaining"] == 40000.0
+    assert after["used_percent"] == 60.0
+
+    # One rupee past what's left is refused before anything is debited, and the
+    # message quotes the very number the limits endpoint reports.
+    refused = client.post(
+        "/api/transfer",
+        json={"receiver_id": payee["user_id"], "amount": 40001, "pin": PIN},
+        headers=headers,
+    )
+    assert refused.status_code == 400
+    assert "Only ₹40,000.00" in refused.get_json()["message"]
+    assert (
+        client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
+        == 45025.0
+    )
+    # A refused payment is not a notification-worthy event: nothing happened.
+    inbox = client.get("/api/notifications", headers=headers).get_json()
+    assert all(row["kind"] != "money_sent" or row["amount"] != 40001.0 for row in inbox["notifications"])
+
+
+def test_the_limit_day_starts_at_midnight_in_ist(app):
+    """A cap that resets at 05:30 local time would look arbitrary, so the window
+    is anchored to IST midnight rather than to UTC."""
+    with app.app_context():
+        start, end = day_window(datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc))
+        # 12:00 UTC is 17:30 IST on 1 October, so the day began at 18:30 UTC on
+        # 30 September and resets 24 hours later.
+        assert start == datetime(2026, 9, 30, 18, 30, tzinfo=timezone.utc)
+        assert end == datetime(2026, 10, 1, 18, 30, tzinfo=timezone.utc)
+        assert end - start == timedelta(days=1)
+
+        # Just after IST midnight the window has already rolled over.
+        late_start, _ = day_window(datetime(2026, 10, 1, 18, 31, tzinfo=timezone.utc))
+        assert late_start == datetime(2026, 10, 1, 18, 30, tzinfo=timezone.utc)

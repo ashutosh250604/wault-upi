@@ -3,7 +3,11 @@
  * session store and every screen agree on a single contract.
  */
 
-export type TransactionType = "topup" | "transfer";
+/**
+ * `cashback` is money the rewards engine credited: a real ledger row with no
+ * counterparty, because it comes from Wallet Pay rather than from a person.
+ */
+export type TransactionType = "topup" | "transfer" | "cashback";
 export type TransactionStatus = "success" | "pending" | "failed";
 
 /** What we persist in localStorage after a successful sign-in. */
@@ -53,7 +57,7 @@ export interface VerifyOtpResponse {
   ask_name: boolean;
 }
 
-export interface DemoLoginResponse {
+export interface SampleLoginResponse {
   message: string;
   token: string;
   user_id: number;
@@ -156,6 +160,14 @@ export interface Contact {
   last_paid_at: string | null;
 }
 
+/** A cashback credited inside the same commit as the payment that earned it. */
+export interface CreditedReward {
+  code: string;
+  title: string;
+  /** Rupees. */
+  amount: number;
+}
+
 export interface TransferResponse {
   message: string;
   from: number;
@@ -163,6 +175,8 @@ export interface TransferResponse {
   amount: number;
   txn_id: string;
   note: string | null;
+  /** Present only when this payment completed an offer. */
+  rewards?: CreditedReward[];
 }
 
 export interface TopUpResponse {
@@ -172,6 +186,72 @@ export interface TopUpResponse {
   txn_id: string;
   /** Present when the top-up was funded from a linked account. */
   account?: LinkedAccount;
+  /** Present when this top-up completed an offer. */
+  rewards?: CreditedReward[];
+}
+
+export type NotificationKind =
+  | "money_received"
+  | "money_sent"
+  | "topup"
+  | "request_received"
+  | "request_declined"
+  | "reward"
+  | "security";
+
+/** One row in the inbox. A note about something that happened, never the money itself. */
+export interface AppNotification {
+  id: number;
+  kind: NotificationKind;
+  title: string;
+  body: string | null;
+  /** Rupees, and only set for the money-shaped kinds. */
+  amount: number | null;
+  reference: string | null;
+  is_read: boolean;
+  created_at: string | null;
+}
+
+/**
+ * The inbox and its badge arrive together: every screen showing the bell needs
+ * the count, so asking for it twice would be a wasted round trip.
+ */
+export interface NotificationsResponse {
+  unread_count: number;
+  notifications: AppNotification[];
+}
+
+export type RewardStatus = "active" | "credited" | "expired";
+
+/** One offer, from the catalogue in `wallet/rewards.py` plus this user's progress. */
+export interface Reward {
+  code: string;
+  title: string;
+  headline: string;
+  detail: string;
+  /** Rupees the offer pays out. */
+  reward: number;
+  target: number;
+  progress: number;
+  /** What progress is counted in: "payment", "top-up", "incoming payment". */
+  unit: string;
+  status: RewardStatus;
+  started_at: string | null;
+  expires_at: string | null;
+  credited_at: string | null;
+  /** Target met but the payout hasn't settled yet. */
+  earned: boolean;
+}
+
+/** Today's spending cap, as the ledger enforces it. */
+export interface LimitsResponse {
+  daily_limit: number;
+  spent_today: number;
+  remaining: number;
+  per_transaction: number;
+  used_percent: number;
+  /** When the cap resets — midnight IST. */
+  resets_at: string;
 }
 
 export type RequestStatus = "pending" | "paid" | "declined" | "cancelled";
@@ -211,6 +291,8 @@ export interface RequestPaymentResponse {
   to: number;
   note: string | null;
   timestamp: string;
+  /** Present only when paying the request completed an offer. */
+  rewards?: CreditedReward[];
 }
 
 /** Everything the receipt screen needs, carried through router state. */
@@ -222,6 +304,8 @@ export interface Receipt {
   counterpartyVpa: string | null;
   note: string | null;
   timestamp: string;
+  /** Cashback credited alongside this payment, shown as the reward line. */
+  cashback?: CreditedReward[];
 }
 
 /** Router state for the amount-entry screen. */

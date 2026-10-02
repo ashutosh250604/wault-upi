@@ -20,6 +20,10 @@ from ..timeutils import as_utc, utcnow
 
 bp = Blueprint("accounts", __name__)
 
+# How each ledger row reads in the downloaded statement.
+_TYPE_LABELS = {"topup": "Top-up", "transfer": "Payment", "cashback": "Cashback"}
+_SELF_LABELS = {"topup": "Self", "cashback": "Wallet Pay rewards"}
+
 
 def _own_account(account_id: int) -> LinkedAccount | None:
     """Load an account only if it belongs to the caller."""
@@ -159,9 +163,11 @@ def statement_csv():
                 when.strftime("%Y-%m-%d"),
                 when.strftime("%H:%M:%S"),
                 row.reference,
-                "Top-up" if row.type == "topup" else "Payment",
+                _TYPE_LABELS.get(row.type, "Payment"),
                 "Debit" if outgoing else "Credit",
-                counterparty.name if counterparty else ("Self" if row.type == "topup" else ""),
+                counterparty.name
+                if counterparty
+                else _SELF_LABELS.get(row.type, ""),
                 counterparty.vpa if counterparty else "",
                 f"{'-' if outgoing else ''}{paise_to_rupees(row.amount_paise):.2f}",
                 row.status.capitalize(),
@@ -172,7 +178,7 @@ def statement_csv():
     # A minute-level timestamp keeps repeat downloads from overwriting each other.
     stamp = as_utc(utcnow()).strftime("%Y%m%d-%H%M")
     label = (me.vpa or f"user{me.id}").split("@")[0]
-    filename = f"pocketpay-statement-{label}-{stamp}.csv"
+    filename = f"walletpay-statement-{label}-{stamp}.csv"
 
     return Response(
         buffer.getvalue(),

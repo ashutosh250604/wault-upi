@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             Something broke on this screen
           </h1>
           <p className="mt-1.5 text-[13px] leading-relaxed text-slate-500">
-            The rest of the demo is unaffected. Reloading usually clears it.
+            The rest of the app is unaffected. Reloading usually clears it.
           </p>
           <pre className="mt-4 max-h-24 overflow-auto rounded-xl bg-slate-50 p-3 text-left text-[11px] break-words whitespace-pre-wrap text-slate-500">
             {this.state.error.message}

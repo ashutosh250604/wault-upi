@@ -90,6 +90,20 @@ export function TransactionSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
+/** A placeholder shaped like one of the offer cards while the strip loads. */
+export function SkeletonCard({ className }: { className?: string }) {
+  return (
+    <div
+      className={cx("animate-pulse rounded-2xl bg-slate-100 p-3.5", className)}
+      aria-hidden="true"
+    >
+      <Bar className="h-3.5 w-24" />
+      <Bar className="mt-2 h-3 w-32" />
+      <Bar className="mt-3.5 h-1.5 w-full" />
+    </div>
+  );
+}
+
 export function BalanceSkeleton() {
   return (
     <div className="animate-pulse space-y-3" aria-hidden="true">

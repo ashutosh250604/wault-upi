@@ -260,6 +260,13 @@ export const IconSound = (p: IconProps) => (
   </Base>
 );
 
+export const IconBell = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M18 15.5V10a6 6 0 1 0-12 0v5.5L4.5 18h15L18 15.5Z" />
+    <path d="M9.8 21a2.4 2.4 0 0 0 4.4 0" />
+  </Base>
+);
+
 export const IconSpark = (p: IconProps) => (
   <Base {...p}>
     <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.2l-1.8-5.6L4.5 10.8 10.2 9 12 3.5Z" />

@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
+import { cx } from "../lib/cx";
 import { feedback, isFeedbackEnabled, setFeedbackEnabled } from "../lib/feedback";
-import { formatCurrency, formatDateTime, formatMobile } from "../lib/format";
+import {
+  formatCurrency,
+  formatCurrencyShort,
+  formatDateTime,
+  formatMobile,
+} from "../lib/format";
 import { inspectToken } from "../lib/session";
-import type { HealthResponse } from "../types";
+import type { HealthResponse, LimitsResponse } from "../types";
 import { useAppSession } from "../session/context";
+import { useNotifications } from "../hooks/useNotifications";
 import { AppBar, AppShell } from "../components/AppShell";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
@@ -14,6 +21,7 @@ import { CopyButton } from "../components/ui/CopyButton";
 import { DetailRow } from "../components/ui/DetailRow";
 import { Sheet } from "../components/ui/Sheet";
 import {
+  IconBell,
   IconChevronRight,
   IconInfo,
   IconLogout,
@@ -25,7 +33,6 @@ import {
   IconWallet,
   IconWarning,
 } from "../components/ui/Icons";
-import { cx } from "../lib/cx";
 
 const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
 
@@ -59,7 +66,9 @@ export default function ProfilePage() {
   const { session, profile, signOut } = useAppSession();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [limits, setLimits] = useState<LimitsResponse | null>(null);
   const [sound, setSound] = useState(isFeedbackEnabled);
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -73,6 +82,20 @@ export default function ProfilePage() {
     return () => controller.abort();
   }, []);
 
+  // The cap the ledger enforces, read from the endpoint the ledger itself uses
+  // rather than recomputed here — a limit shown must be a limit applied.
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        setLimits(await api.limits(controller.signal));
+      } catch {
+        setLimits(null);
+      }
+    })();
+    return () => controller.abort();
+  }, [profile?.balance]);
+
   const token = inspectToken(session?.token ?? null);
 
   return (
@@ -82,7 +105,7 @@ export default function ProfilePage() {
           <Avatar name={profile?.name} size="xl" tone="gradient" />
           <div className="min-w-0">
             <p className="truncate text-[17px] font-bold tracking-tight text-slate-900">
-              {profile?.name ?? "PocketPay user"}
+              {profile?.name ?? "Wallet Pay user"}
             </p>
             <p className="truncate text-[13px] text-slate-500 tabular-nums">
               {profile?.vpa ?? formatMobile(session?.mobile)}
@@ -128,7 +151,51 @@ export default function ProfilePage() {
           </DetailRow>
         </Card>
 
+        <Card>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[13.5px] font-semibold text-slate-800">Today's sending limit</p>
+            {limits ? (
+              <p className="text-[13px] font-bold text-slate-900 tabular-nums">
+                {formatCurrencyShort(limits.remaining)}{" "}
+                <span className="text-[11.5px] font-medium text-slate-400">
+                  of {formatCurrencyShort(limits.daily_limit)} left
+                </span>
+              </p>
+            ) : null}
+          </div>
+
+          {limits ? (
+            <>
+              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                <span
+                  className={cx(
+                    "block h-full rounded-full transition-all",
+                    limits.used_percent >= 90 ? "bg-rose-500" : "bg-brand-500",
+                  )}
+                  style={{ width: `${Math.min(100, Math.max(0, limits.used_percent))}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+                {formatCurrency(limits.spent_today)} sent today. The cap is enforced on every
+                debit, not just shown here, and it resets at midnight.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-[12px] text-slate-400">Checking your limit…</p>
+          )}
+        </Card>
+
         <Card padded={false} className="divide-y divide-slate-100 px-4">
+          <LinkRow
+            to="/notifications"
+            icon={<IconBell size={17} />}
+            title="Notifications"
+            subtitle={
+              unreadCount > 0
+                ? `${unreadCount} unread — payments, requests and cashback`
+                : "Payments, requests and cashback"
+            }
+          />
           <LinkRow
             to="/accounts"
             icon={<IconWallet size={17} />}
@@ -228,21 +295,21 @@ export default function ProfilePage() {
         </Button>
 
         <Card tone="muted" className="space-y-3">
-          <p className="text-[13px] font-semibold text-slate-700">About this demo</p>
+          <p className="text-[13px] font-semibold text-slate-700">About Wallet Pay</p>
           <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-slate-600">
             <li className="flex gap-2">
               <IconWarning size={14} className="mt-0.5 shrink-0 text-amber-500" />
-              A portfolio project, not a payment product. No NPCI/UPI integration, no bank
-              rails, no real money.
+              A portfolio project, not a payment product. There is no NPCI/UPI
+              integration and no connection to a real bank.
             </li>
             <li className="flex gap-2">
               <IconInfo size={14} className="mt-0.5 shrink-0 text-slate-400" />
-              Balances live in this app's own database and only move between accounts
+              Balances live in Wallet Pay's own database and move only between accounts
               created here.
             </li>
             <li className="flex gap-2">
               <IconInfo size={14} className="mt-0.5 shrink-0 text-slate-400" />
-              Seeded accounts: <span className="font-mono">9000000001</span> and{" "}
+              Sample accounts: <span className="font-mono">9000000001</span> and{" "}
               <span className="font-mono">9000000002</span> — PIN{" "}
               <span className="font-mono">1234</span>.
             </li>
@@ -253,7 +320,7 @@ export default function ProfilePage() {
               API healthy · database{" "}
               <span className="font-mono font-semibold">{health.db}</span> · driver{" "}
               <span className="font-mono font-semibold">{health.driver}</span>
-              {health.demo_mode ? " · demo mode on" : ""}
+
             </p>
           ) : null}
 
@@ -271,7 +338,7 @@ export default function ProfilePage() {
       <Sheet
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        title="Sign out of PocketPay?"
+        title="Sign out of Wallet Pay?"
         description="Your session token will be discarded on this device. Balances stay untouched."
         footer={
           <div className="flex gap-2">
@@ -292,7 +359,7 @@ export default function ProfilePage() {
         }
       >
         <p className="text-[13px] leading-relaxed text-slate-600">
-          You can sign back in with your mobile number and OTP, or with the one-tap demo
+          You can sign back in with your mobile number and OTP, or with the one-tap sample
           account.
         </p>
       </Sheet>

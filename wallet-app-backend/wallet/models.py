@@ -227,12 +227,102 @@ class PaymentRequest(db.Model):
         }
 
 
+class Notification(db.Model):
+    """One line in the inbox.
+
+    A projection of something that already happened, never a source of truth:
+    the money lives in `transactions`, and this row only points at it
+    (`transaction_id`) plus enough text to render without a join. A notification
+    is therefore safe to delete — nothing about the wallet changes.
+    """
+
+    __tablename__ = "notifications"
+
+    MONEY_RECEIVED = "money_received"
+    MONEY_SENT = "money_sent"
+    TOPUP = "topup"
+    REQUEST_RECEIVED = "request_received"
+    REQUEST_DECLINED = "request_declined"
+    REWARD = "reward"
+    SECURITY = "security"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    kind = db.Column(db.String(24), nullable=False)
+    title = db.Column(db.String(120), nullable=False)
+    body = db.Column(db.String(200))
+    # Set only for the money-shaped kinds, so the inbox can right-align an amount.
+    amount_paise = db.Column(db.BigInteger)
+    reference = db.Column(db.String(24))
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
+    is_read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "title": self.title,
+            "body": self.body,
+            "amount": paise_to_rupees(self.amount_paise)
+            if self.amount_paise is not None
+            else None,
+            "reference": self.reference,
+            "is_read": self.is_read,
+            "created_at": as_utc(self.created_at).isoformat() if self.created_at else None,
+        }
+
+
+class Reward(db.Model):
+    """A user's progress against one offer.
+
+    Only per-user state is stored here — status and dates. The offer itself
+    (title, terms, target, payout) lives in `wallet/rewards.py`, so the promise
+    the user is being held to has exactly one definition and can't drift from a
+    row somebody edited.
+    """
+
+    __tablename__ = "rewards"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "code", name="uq_rewards_user_code"),
+    )
+
+    ACTIVE = "active"
+    CREDITED = "credited"
+    EXPIRED = "expired"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    code = db.Column(db.String(40), nullable=False)
+    status = db.Column(db.String(16), nullable=False, default=ACTIVE)
+    # Progress is counted from here, so an offer activated today never counts
+    # payments the user made last week towards a promise made now.
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    expires_at = db.Column(db.DateTime(timezone=True))
+    credited_at = db.Column(db.DateTime(timezone=True))
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
+
+
 class Transaction(db.Model):
     __tablename__ = "transactions"
 
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(24), unique=True, index=True)
-    type = db.Column(db.String(16), nullable=False)  # 'topup' | 'transfer'
+    # 'topup' | 'transfer' | 'cashback'. A cashback credit has no sender — the
+    # money comes from the rewards engine, not from another wallet.
+    type = db.Column(db.String(16), nullable=False)
     status = db.Column(db.String(16), nullable=False, default="success")
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     receiver_id = db.Column(db.Integer, db.ForeignKey("users.id"))

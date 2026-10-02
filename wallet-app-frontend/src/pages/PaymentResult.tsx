@@ -12,7 +12,7 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { CopyButton } from "../components/ui/CopyButton";
 import { DetailRow } from "../components/ui/DetailRow";
-import { IconCheck, IconShare } from "../components/ui/Icons";
+import { IconCheck, IconShare, IconSpark } from "../components/ui/Icons";
 
 export default function PaymentResultPage() {
   const location = useLocation();
@@ -31,6 +31,8 @@ export default function PaymentResultPage() {
 
   const isTopUp = receipt.kind === "topup";
   const headline = isTopUp ? "Money added" : "Payment successful";
+  // Cashback that this very payment unlocked, credited in the same commit.
+  const cashbackTotal = (receipt.cashback ?? []).reduce((sum, item) => sum + item.amount, 0);
   const shareBody = buildReceiptText({
     headline,
     amount: receipt.amount,
@@ -41,7 +43,7 @@ export default function PaymentResultPage() {
   });
 
   const onShare = async () => {
-    const result = await shareText({ title: "PocketPay receipt", text: shareBody });
+    const result = await shareText({ title: "Wallet Pay receipt", text: shareBody });
     if (result === "copied") toast.success("Receipt copied to clipboard");
     if (result === "failed") toast.error("Couldn't share the receipt");
   };
@@ -69,6 +71,23 @@ export default function PaymentResultPage() {
         <p className="mt-2 text-[13.5px] text-slate-500">
           {isTopUp ? "Added to your wallet" : `Paid to ${receipt.counterpartyName}`}
         </p>
+
+        {receipt.cashback && receipt.cashback.length > 0 ? (
+          <div className="mt-5 flex w-full items-start gap-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 ring-1 ring-amber-200">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm">
+              <IconSpark size={17} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-semibold text-amber-900">
+                {formatCurrency(cashbackTotal)} cashback credited
+              </p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-amber-900/70">
+                {receipt.cashback.map((item) => item.title).join(" · ")} — already in your
+                balance and your history, not a pending reward.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <Card className="mt-7 w-full">
           <DetailRow label="Reference">
@@ -134,8 +153,7 @@ export default function PaymentResultPage() {
         </div>
 
         <p className="mt-8 text-center text-[11.5px] leading-relaxed text-slate-400">
-          Saved to your transaction history. This receipt is demo data — no real money
-          moved.
+          Saved to your transaction history. Keep the reference number for your records.
         </p>
       </div>
     </AppShell>

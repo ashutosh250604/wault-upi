@@ -5,9 +5,11 @@ import { firstName } from "../lib/format";
 import { usePayeeResolution } from "../hooks/usePayeeResolution";
 import { useRecentPeople } from "../hooks/useRecentPeople";
 import { useMoneyRequests } from "../hooks/useMoneyRequests";
+import { useNotifications } from "../hooks/useNotifications";
 import { useAppSession } from "../session/context";
 import { AppShell, BrandMark } from "../components/AppShell";
 import { BalanceCard } from "../components/BalanceCard";
+import { NotificationBell } from "../components/NotificationBell";
 import { OffersStrip } from "../components/OffersStrip";
 import { PeopleSection } from "../components/People";
 import { RequestsBanner } from "../components/Requests";
@@ -27,7 +29,7 @@ import {
   IconSpark,
 } from "../components/ui/Icons";
 
-const TIP_KEY = "pocketpay.tipDismissed";
+const TIP_KEY = "walletpay.tipDismissed";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -88,6 +90,10 @@ export default function HomePage() {
   // Same reload key as the people strip: a settled request also mints a
   // transaction, so both views refresh off the newest ledger row.
   const { requests } = useMoneyRequests(transactions?.[0]?.id ?? null);
+  // The newest ledger row is equally the signal for new notifications and for
+  // offers that may have just been earned.
+  const { unreadCount } = useNotifications(transactions?.[0]?.id ?? null);
+  const latestTransactionId = transactions?.[0]?.id ?? null;
 
   const loading = status === "loading" && profile === null;
   // Fall back to the session name until /me lands, so a just-onboarded user
@@ -123,6 +129,7 @@ export default function HomePage() {
           <div className="relative flex items-center gap-2">
             <BrandMark invert />
             <div className="flex-1" />
+            <NotificationBell unreadCount={unreadCount} invert />
             <Link
               to="/profile"
               aria-label="Open profile"
@@ -222,7 +229,7 @@ export default function HomePage() {
           </Card>
         ) : null}
 
-        <OffersStrip />
+        <OffersStrip reloadKey={latestTransactionId} />
 
         <section>
           <div className="mb-1 flex items-baseline justify-between px-1">
@@ -259,12 +266,22 @@ export default function HomePage() {
               <IconSpark size={17} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-semibold text-brand-900">Try a real transfer</p>
+              <p className="text-[13px] font-semibold text-brand-900">Get paid in one tap</p>
               <p className="mt-0.5 text-[12.5px] leading-relaxed text-brand-900/70">
-                Pay <span className="font-mono font-semibold">9000000002@demoupi</span> (Meera
-                Iyer) and approve it with PIN{" "}
-                <span className="font-mono font-semibold">1234</span>.
+                Share your UPI ID{" "}
+                {profile?.vpa ? (
+                  <span className="font-mono font-semibold">{profile.vpa}</span>
+                ) : (
+                  "or QR code"
+                )}{" "}
+                and anyone can pay you without typing a number.
               </p>
+              <Link
+                to="/my-qr"
+                className="mt-1.5 inline-flex items-center gap-0.5 text-[12.5px] font-semibold text-brand-700"
+              >
+                Show my QR <IconArrowRight size={14} />
+              </Link>
             </div>
             <button
               type="button"

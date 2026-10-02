@@ -16,6 +16,6 @@ services:
       - key: DEMO_MODE
         value: "true"
       - key: VPA_SUFFIX
-        value: demoupi
+        value: okwalletpay
       - key: JWT_EXPIRES_HOURS
         value: "12"

@@ -18,7 +18,6 @@ import {
   IconInfo,
   IconLock,
   IconWallet,
-  IconWarning,
 } from "../components/ui/Icons";
 import { Sheet } from "../components/ui/Sheet";
 import { EmptyState, ErrorState } from "../components/ui/States";
@@ -243,14 +242,6 @@ export default function AccountsPage() {
             Balances stay hidden until you enter your PIN — the same server check that
             authorises a payment. Only the last four digits of an account number are ever
             stored.
-          </p>
-        </Card>
-
-        <Card tone="muted" className="flex gap-2.5">
-          <IconWarning size={16} className="mt-px shrink-0 text-amber-500" />
-          <p className="text-[12.5px] leading-relaxed text-slate-600">
-            These are demo accounts holding demo money. Nothing here is connected to a real
-            bank, and no statement is a real bank statement.
           </p>
         </Card>
 

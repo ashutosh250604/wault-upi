@@ -100,7 +100,7 @@ export default function SetPinPage() {
         <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-500">
           {isConfirm
             ? "Confirm the PIN you just chose so we know it wasn't a typo."
-            : "You'll enter this PIN to approve every payment. Keep it to yourself — it can't be recovered in this demo."}
+            : "You'll enter this PIN to approve every payment. Keep it private — you'll need it for every transfer."}
         </p>
 
         <div className="mt-6 space-y-3">

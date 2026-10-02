@@ -321,7 +321,7 @@ export default function ScanQrPage() {
               </span>
             ) : (
               <span className="text-[12.5px] text-white/70">
-                Point the camera at a PocketPay QR code
+                Point the camera at a Wallet Pay QR code
               </span>
             )}
           </div>
@@ -341,7 +341,7 @@ export default function ScanQrPage() {
           </div>
 
           <p className="text-center text-[11px] text-white/45">
-            Demo only — no NPCI/UPI integration and no real money.
+            Works with any <span className="font-mono">upi://pay</span> QR code.
           </p>
         </div>
 
@@ -364,14 +364,14 @@ export default function ScanQrPage() {
           <Field
             label="Mobile number or UPI ID"
             error={manualIssue}
-            hint="Try 9000000004, or 9000000002@demoupi"
+            hint="Try 9000000004, or 9000000002@okwalletpay"
           >
             {({ id, describedBy }) => (
               <TextInput
                 id={id}
                 aria-describedby={describedBy}
                 autoFocus
-                placeholder="9000000004 or name@demoupi"
+                placeholder="9000000004 or name@okwalletpay"
                 value={manualVpa}
                 invalid={Boolean(manualIssue)}
                 onChange={(event) => {

@@ -6,7 +6,7 @@
  * `unlock()` is called from the first pointer/key event.
  */
 
-const PREF_KEY = "pocketpay.feedback";
+const PREF_KEY = "walletpay.feedback";
 
 function readEnabled(): boolean {
   try {

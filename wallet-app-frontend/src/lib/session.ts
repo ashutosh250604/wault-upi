@@ -1,17 +1,17 @@
 /**
- * Session persistence. The JWT lives in localStorage because this is a
- * same-origin demo with no refresh-token endpoint; a production build handling
- * real money would use an httpOnly cookie instead.
+ * Session persistence. The JWT lives in localStorage because the API issues no
+ * refresh token and every call is same-origin; a client handling real money
+ * would keep it in an httpOnly cookie instead.
  */
 
 import type { Session } from "../types";
 
-const STORAGE_KEY = "pocketpay.session.v1";
+const STORAGE_KEY = "walletpay.session.v1";
 
 /** localStorage throws in some privacy modes — never let that crash the app. */
 function storage(): Storage | null {
   try {
-    const probe = "__pocketpay__";
+    const probe = "__walletpay__";
     window.localStorage.setItem(probe, "1");
     window.localStorage.removeItem(probe);
     return window.localStorage;

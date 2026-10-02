@@ -79,13 +79,13 @@ export function payeeIdentifierError(value: string): string | null {
 
   const local = normaliseMobile(text);
   if (!local || local.length !== 10) {
-    return "Enter a 10-digit mobile number, or a UPI ID like name@demoupi";
+    return "Enter a 10-digit mobile number, or a UPI ID like name@okwalletpay";
   }
   if (!MOBILE_RE.test(local)) return "Indian mobile numbers start with 6-9";
   return null;
 }
 
-/** "9000000001@demoupi" -> { handle: "9000000001", suffix: "demoupi" } */
+/** "9000000001@okwalletpay" -> { handle: "9000000001", suffix: "okwalletpay" } */
 export function splitVpa(vpa: string | null | undefined): {
   handle: string;
   suffix: string;
@@ -115,6 +115,12 @@ export interface AmountRules {
   max?: number;
   /** Sender's balance, so we can pre-empt an "Insufficient funds" round trip. */
   available?: number;
+  /**
+   * What's left of today's spending cap. Reported separately from the balance
+   * because "you don't have the money" and "you can't send that much today"
+   * are different problems with different fixes.
+   */
+  dailyRemaining?: number;
 }
 
 /**
@@ -131,6 +137,9 @@ export function amountError(raw: string, rules: AmountRules = {}): string | null
   }
   if (rules.available !== undefined && value > rules.available) {
     return `That's more than your balance of ${formatCurrency(rules.available)}`;
+  }
+  if (rules.dailyRemaining !== undefined && value > rules.dailyRemaining) {
+    return `That's over today's remaining limit of ${formatCurrency(rules.dailyRemaining)}`;
   }
   return null;
 }

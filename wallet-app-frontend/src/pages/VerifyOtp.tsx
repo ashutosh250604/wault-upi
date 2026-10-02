@@ -22,7 +22,7 @@ export default function VerifyOtpPage() {
   const routeState = location.state as { mobile?: string; devOtp?: string | null } | null;
 
   const [mobile] = useState(
-    () => routeState?.mobile ?? sessionStorage.getItem("pocketpay.pendingMobile") ?? "",
+    () => routeState?.mobile ?? sessionStorage.getItem("walletpay.pendingMobile") ?? "",
   );
   const [digits, setDigits] = useState<string[]>(() =>
     Array.from({ length: OTP_LENGTH }, () => ""),
@@ -142,7 +142,7 @@ export default function VerifyOtpPage() {
           <button
             type="button"
             onClick={() => {
-              sessionStorage.removeItem("pocketpay.pendingMobile");
+              sessionStorage.removeItem("walletpay.pendingMobile");
               navigate("/login");
             }}
             className="ml-2 font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2"
@@ -158,10 +158,10 @@ export default function VerifyOtpPage() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-semibold tracking-wide text-amber-800 uppercase">
-                Demo mode
+                Preview code
               </p>
               <p className="text-[13px] text-amber-900">
-                No SMS is sent — your OTP is{" "}
+                SMS delivery is off in this environment — use{" "}
                 <span className="font-mono font-bold tracking-widest">{devOtp}</span>
               </p>
             </div>
@@ -248,8 +248,9 @@ export default function VerifyOtpPage() {
         </div>
 
         <p className="mt-8 text-center text-[11.5px] leading-relaxed text-slate-400">
-          Any real deployment would deliver this over SMS. This demo returns the code in
-          the API response and, after 3 wrong attempts, requires a fresh one.
+          Codes normally arrive by SMS. Without an SMS gateway configured, this
+          environment returns the code in the API response instead — and after three wrong
+          attempts you'll need a fresh one.
         </p>
       </div>
     </AppShell>

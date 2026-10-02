@@ -15,7 +15,7 @@ import { Avatar, Badge } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Field, TextArea, TextInput } from "./ui/Field";
-import { IconCheck, IconChevronRight, IconInfo, IconNote, IconWarning } from "./ui/Icons";
+import { IconCheck, IconChevronRight, IconInfo, IconNote } from "./ui/Icons";
 import { Sheet } from "./ui/Sheet";
 
 const QUICK_AMOUNTS = [100, 250, 500, 1000];
@@ -47,7 +47,7 @@ export function RequestRow({
   className,
 }: RequestRowProps) {
   const other = request.counterparty;
-  const label = other.name ?? "PocketPay user";
+  const label = other.name ?? "Wallet Pay user";
   const isOpen = request.status === "pending";
 
   return (
@@ -307,7 +307,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
           <Field
             label="Or a mobile number / UPI ID"
             error={lookupIssue}
-            hint="Try 9000000004, or 9000000002@demoupi"
+            hint="Try 9000000004, or 9000000002@okwalletpay"
           >
             {({ id, describedBy }) => (
               <div className="flex gap-2">
@@ -315,7 +315,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
                   id={id}
                   aria-describedby={describedBy}
                   inputMode="tel"
-                  placeholder="9000000004 or name@demoupi"
+                  placeholder="9000000004 or name@okwalletpay"
                   value={identifier}
                   invalid={Boolean(lookupIssue)}
                   onChange={(event) => {
@@ -391,9 +391,9 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
           touch your balance.
         </p>
 
-        <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[11.5px] leading-relaxed text-amber-800">
-          <IconWarning size={14} className="mt-px shrink-0" />
-          Demo network: only numbers seeded in this app can be found.
+        <p className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[11.5px] leading-relaxed text-slate-600">
+          <IconInfo size={14} className="mt-px shrink-0 text-slate-400" />
+          Only mobile numbers and UPI IDs already registered with Wallet Pay can be found.
         </p>
       </div>
     </Sheet>

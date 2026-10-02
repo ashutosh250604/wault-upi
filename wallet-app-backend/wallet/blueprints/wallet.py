@@ -3,10 +3,13 @@ from sqlalchemy import or_, update
 from sqlalchemy.orm import aliased
 
 from ..directory import classify_identifier, find_payee
+from ..events import notify
 from ..extensions import db
-from ..ledger import TransferRefused, settle_transfer
-from ..models import LinkedAccount, Transaction, User, Wallet
-from ..money import make_reference, paise_to_rupees, rupees_to_paise
+from ..ledger import TransferRefused, credit_wallet, settle_transfer
+from ..limits import snapshot
+from ..models import LinkedAccount, Notification, Transaction, User, Wallet
+from ..money import paise_to_rupees, rupees_to_paise
+from ..rewards import credited_summary, settle_due
 from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
 
@@ -82,23 +85,24 @@ def topup():
                 400,
             )
 
-    updated = db.session.execute(
-        update(Wallet)
-        .where(Wallet.user_id == user_id)
-        .values(balance_paise=Wallet.balance_paise + paise, updated_at=utcnow())
-    )
-    if updated.rowcount == 0:
-        db.session.rollback()
-        return jsonify({"message": "Wallet not found!"}), 404
+    try:
+        txn = credit_wallet(user_id, paise, txn_type="topup")
+    except TransferRefused as refusal:
+        return jsonify({"message": refusal.message}), refusal.status
 
-    txn = Transaction(
-        reference=make_reference(),
-        type="topup",
-        sender_id=None,
-        receiver_id=user_id,
-        amount_paise=paise,
+    notify(
+        user_id,
+        Notification.TOPUP,
+        "Money added to your wallet",
+        f"From {account.bank_name} {account.masked_number}"
+        if account is not None
+        else "From a linked source",
+        transaction=txn,
     )
-    db.session.add(txn)
+    # A top-up can be the very event that completes an offer, so the cashback is
+    # credited in the same commit as the money that earned it rather than in a
+    # later, best-effort sweep.
+    credited = settle_due(user_id)
     db.session.commit()
 
     wallet = Wallet.query.filter_by(user_id=user_id).first()
@@ -108,6 +112,8 @@ def topup():
         "user_id": user_id,
         "txn_id": txn.reference,
     }
+    if credited:
+        payload["rewards"] = credited_summary(credited)
     if account is not None:
         payload["account"] = account.to_dict(include_balance=True)
     return jsonify(payload), 200
@@ -147,18 +153,36 @@ def transfer():
     except TransferRefused as refusal:
         return jsonify({"message": refusal.message}), refusal.status
 
+    # Settle the payer's offers (this transfer may be their third), then the
+    # payee's: being paid for the first time is an offer of its own. Only the
+    # payer's are reported back, because only the payer is reading this response.
+    credited = settle_due(sender_id)
+    settle_due(receiver_id)
     db.session.commit()
 
-    return jsonify(
-        {
-            "message": "Transfer successful!",
-            "from": sender_id,
-            "to": receiver_id,
-            "amount": paise_to_rupees(paise),
-            "txn_id": txn.reference,
-            "note": note,
-        }
-    ), 200
+    payload = {
+        "message": "Transfer successful!",
+        "from": sender_id,
+        "to": receiver_id,
+        "amount": paise_to_rupees(paise),
+        "txn_id": txn.reference,
+        "note": note,
+    }
+    if credited:
+        payload["rewards"] = credited_summary(credited)
+    return jsonify(payload), 200
+
+
+@bp.get("/limits")
+@require_auth
+def daily_limits():
+    """What is left of today's cap — the same numbers the ledger enforces.
+
+    Deliberately not a client-side calculation: the amount screen and the debit
+    itself read this one function, so a limit that is shown can't differ from
+    the limit that is applied.
+    """
+    return jsonify(snapshot(g.user_id)), 200
 
 
 @bp.post("/vpas/resolve")

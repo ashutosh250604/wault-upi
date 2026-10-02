@@ -7,12 +7,11 @@ import { Button } from "./ui/Button";
 import { IconCheck, IconCopy, IconDownload, IconShare } from "./ui/Icons";
 
 /**
- * The scannable payload. This mirrors the real `upi://pay` deep link format so
- * the in-app scanner round-trips, but `@demoupi` handles don't exist anywhere —
- * a real UPI app would reject it. No money can move.
+ * The scannable payload. Mirrors the standard `upi://pay` deep link format, so
+ * any UPI scanner can parse it and the in-app scanner round-trips it too.
  */
 function paymentPayload(vpa: string, name: string | null): string {
-  const params = new URLSearchParams({ pa: vpa, pn: name ?? "PocketPay user", cu: "INR" });
+  const params = new URLSearchParams({ pa: vpa, pn: name ?? "Wallet Pay user", cu: "INR" });
   // URLSearchParams encodes spaces as "+", which some scanners mis-read.
   return `upi://pay?${params.toString().replace(/\+/g, "%20")}`;
 }
@@ -36,7 +35,7 @@ export function VpaQr({ vpa, name }: VpaQrProps) {
     try {
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
-      link.download = `pocketpay-${vpa.split("@")[0]}.png`;
+      link.download = `walletpay-${vpa.split("@")[0]}.png`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -48,8 +47,8 @@ export function VpaQr({ vpa, name }: VpaQrProps) {
 
   const onShare = async () => {
     const result = await shareText({
-      title: "My PocketPay UPI ID",
-      text: `Pay me on PocketPay (demo): ${vpa}`,
+      title: "My Wallet Pay UPI ID",
+      text: `Pay me on Wallet Pay: ${vpa}`,
     });
     if (result === "copied") toast.success("UPI ID copied to clipboard");
     if (result === "failed") toast.error("Couldn't share your UPI ID");
@@ -73,7 +72,7 @@ export function VpaQr({ vpa, name }: VpaQrProps) {
         <span className="pointer-events-none absolute inset-1 rounded-2xl ring-2 ring-brand-500/15" />
       </div>
 
-      <p className="mt-4 text-[17px] font-bold text-slate-900">{name ?? "PocketPay user"}</p>
+      <p className="mt-4 text-[17px] font-bold text-slate-900">{name ?? "Wallet Pay user"}</p>
       <p className="mt-0.5 text-[13.5px] text-slate-500 tabular-nums">{vpa}</p>
 
       <div className="mt-5 grid w-full grid-cols-3 gap-2">

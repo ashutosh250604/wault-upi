@@ -6,7 +6,7 @@ import { BalanceSkeleton } from "./ui/States";
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconRefresh } from "./ui/Icons";
 import { Spinner } from "./ui/Spinner";
 
-const HIDE_KEY = "pocketpay.hideBalance";
+const HIDE_KEY = "walletpay.hideBalance";
 
 function readHidden(): boolean {
   try {

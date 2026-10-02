@@ -61,6 +61,7 @@ export default function RequestsPage() {
     try {
       const result = await api.payRequest(payTarget.id, enteredPin);
       feedback.success();
+      for (const reward of result.rewards ?? []) toast.success(`${reward.title} credited`);
       replace(result.request);
       if (profile) {
         patchProfile({ balance: Math.max(0, profile.balance - result.amount) });
@@ -78,6 +79,7 @@ export default function RequestsPage() {
             counterpartyVpa: result.request.counterparty.vpa,
             note: result.note,
             timestamp: result.timestamp,
+            cashback: result.rewards,
           },
         },
       });

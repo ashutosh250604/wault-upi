@@ -10,7 +10,7 @@ import { useToast } from "../hooks/toast";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { Field, TextInput } from "./ui/Field";
-import { IconCheck, IconInfo, IconPhone, IconWarning } from "./ui/Icons";
+import { IconCheck, IconInfo, IconPhone } from "./ui/Icons";
 import { Sheet } from "./ui/Sheet";
 
 export interface AddContactSheetProps {
@@ -125,7 +125,7 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
       <Field
         label="Mobile number or UPI ID"
         error={issue}
-        hint="Try 9000000004, or 9000000002@demoupi"
+        hint="Try 9000000004, or 9000000002@okwalletpay"
       >
         {({ id, describedBy }) => (
           <TextInput
@@ -133,7 +133,7 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
             aria-describedby={describedBy}
             data-autofocus
             inputMode="tel"
-            placeholder="9000000004 or name@demoupi"
+            placeholder="9000000004 or name@okwalletpay"
             value={identifier}
             invalid={Boolean(issue)}
             onChange={(event) => {
@@ -159,7 +159,7 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-bold text-slate-900">
-                {preview.name ?? "PocketPay user"}
+                {preview.name ?? "Wallet Pay user"}
               </p>
               <p className="truncate font-mono text-[12px] text-slate-500">
                 {personHandle(preview)}
@@ -231,9 +231,9 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
         </p>
       )}
 
-      <p className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[11.5px] leading-relaxed text-amber-800">
-        <IconWarning size={14} className="mt-px shrink-0" />
-        Demo network: only numbers seeded in this app can be found.
+      <p className="mt-4 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[11.5px] leading-relaxed text-slate-600">
+        <IconInfo size={14} className="mt-px shrink-0 text-slate-400" />
+        Only mobile numbers and UPI IDs already registered with Wallet Pay can be found.
       </p>
     </Sheet>
   );

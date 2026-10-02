@@ -11,8 +11,10 @@ import { CopyButton } from "../components/ui/CopyButton";
 import { Field, TextInput } from "../components/ui/Field";
 import { IconPhone, IconSpark, IconWarning } from "../components/ui/Icons";
 
-const DEMO_MOBILE = "9000000001";
-const DEMO_PIN = "1234";
+const SAMPLE_MOBILE = "9000000001";
+const SAMPLE_PIN = "1234";
+// The second seeded user, so a visitor can pay a real counterparty immediately.
+const SAMPLE_PAYEE = "9000000002@okwalletpay";
 const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
 
 export default function LoginPage() {
@@ -23,20 +25,20 @@ export default function LoginPage() {
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [demoAvailable, setDemoAvailable] = useState<boolean | null>(null);
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleAccount, setSampleAccount] = useState(false);
   const [asleep, setAsleep] = useState(false);
 
-  // Render's free tier sleeps, so the first request can take ~30s. Warn early.
+  // The free tier sleeps, so the first request can take ~30s. Warn early.
   useEffect(() => {
     const timer = window.setTimeout(() => setAsleep(true), 3500);
     const controller = new AbortController();
     void (async () => {
       try {
         const health = await api.health(controller.signal);
-        setDemoAvailable(health.demo_mode);
+        setSampleAccount(health.demo_mode);
       } catch {
-        setDemoAvailable(false);
+        setSampleAccount(false);
       } finally {
         window.clearTimeout(timer);
         setAsleep(false);
@@ -63,7 +65,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const result = await api.startLogin(mobile);
-      sessionStorage.setItem("pocketpay.pendingMobile", mobile);
+      sessionStorage.setItem("walletpay.pendingMobile", mobile);
       navigate("/verify-otp", {
         state: { mobile, devOtp: result.dev_otp ?? null },
       });
@@ -74,11 +76,11 @@ export default function LoginPage() {
     }
   };
 
-  const demoLogin = async () => {
+  const signInToSample = async () => {
     setError(null);
-    setDemoBusy(true);
+    setSampleBusy(true);
     try {
-      const data = await api.demoLogin();
+      const data = await api.sampleLogin();
       signIn({
         token: data.token,
         userId: data.user_id,
@@ -86,12 +88,12 @@ export default function LoginPage() {
         name: data.name,
         vpa: data.vpa,
       });
-      toast.success(`Signed in as ${data.name ?? "the demo user"}`);
+      toast.success(`Welcome, ${data.name ?? "there"}!`);
       navigate("/home", { replace: true });
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
-      setDemoBusy(false);
+      setSampleBusy(false);
     }
   };
 
@@ -110,7 +112,7 @@ export default function LoginPage() {
           </h1>
           <p className="mt-2 max-w-[19rem] text-[13.5px] leading-relaxed text-white/80">
             Sign in with your mobile number, set a 4-digit PIN, and pay anyone by
-            their <span className="font-semibold text-white">@demoupi</span> handle or QR
+            their <span className="font-semibold text-white">@okwalletpay</span> handle or QR
             code.
           </p>
         </div>
@@ -161,14 +163,14 @@ export default function LoginPage() {
             {asleep ? (
               <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-[12.5px] text-amber-800">
                 <IconWarning size={15} className="mt-px shrink-0" />
-                The free demo server may be waking up — the first request can take up
-                to 30 seconds.
+                Still connecting — the server may be waking up, so the first request
+                can take up to 30 seconds.
               </p>
             ) : null}
           </div>
         </Card>
 
-        {demoAvailable ? (
+        {sampleAccount ? (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <span className="h-px flex-1 bg-slate-200" />
@@ -182,35 +184,35 @@ export default function LoginPage() {
               variant="secondary"
               fullWidth
               size="lg"
-              loading={demoBusy}
-              onClick={() => void demoLogin()}
+              loading={sampleBusy}
+              onClick={() => void signInToSample()}
               leftIcon={<IconSpark size={18} className="text-brand-600" />}
             >
-              Explore with the demo account
+              Explore with a ready-made account
             </Button>
 
             <Card tone="muted" className="text-[12.5px] text-slate-600">
-              <p className="font-semibold text-slate-700">Demo credentials</p>
+              <p className="font-semibold text-slate-700">Sample sign-in details</p>
               <div className="mt-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span>
-                    Mobile <span className="font-mono font-semibold">{DEMO_MOBILE}</span>
+                    Mobile <span className="font-mono font-semibold">{SAMPLE_MOBILE}</span>
                   </span>
                   <CopyButton
-                    value={DEMO_MOBILE}
-                    label="Copy demo mobile number"
+                    value={SAMPLE_MOBILE}
+                    label="Copy mobile number"
                     size={14}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span>
-                    PIN <span className="font-mono font-semibold">{DEMO_PIN}</span>
+                    PIN <span className="font-mono font-semibold">{SAMPLE_PIN}</span>
                   </span>
-                  <CopyButton value={DEMO_PIN} label="Copy demo PIN" size={14} />
+                  <CopyButton value={SAMPLE_PIN} label="Copy PIN" size={14} />
                 </div>
                 <p className="pt-1 text-slate-500">
-                  Second account to pay:{" "}
-                  <span className="font-mono font-semibold">9000000002@demoupi</span>
+                  Someone to pay:{" "}
+                  <span className="font-mono font-semibold">{SAMPLE_PAYEE}</span>
                 </p>
               </div>
             </Card>
@@ -218,9 +220,7 @@ export default function LoginPage() {
         ) : null}
 
         <p className="px-1 text-center text-[11.5px] leading-relaxed text-slate-500">
-          PocketPay is a portfolio demo. There is no NPCI/UPI integration, no real
-          payment rail and no real money — balances only move inside this app's own
-          database.{" "}
+          Wallet Pay is an open-source portfolio project — Flask, React and PostgreSQL.{" "}
           <a
             href={REPO_URL}
             target="_blank"

@@ -20,7 +20,7 @@ export function buildPaymentPayload(
 ): string {
   const params = new URLSearchParams({
     pa: vpa,
-    pn: name?.trim() || "PocketPay user",
+    pn: name?.trim() || "Wallet Pay user",
     cu: "INR",
   });
   if (amount && amount > 0) params.set("am", amount.toFixed(2));

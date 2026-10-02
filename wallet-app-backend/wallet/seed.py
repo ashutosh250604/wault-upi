@@ -9,9 +9,11 @@ from datetime import timedelta
 
 from flask import current_app
 
+from .events import notify
 from .extensions import db
-from .models import Contact, LinkedAccount, Transaction, User, Wallet
+from .models import Contact, LinkedAccount, Notification, Transaction, User, Wallet
 from .money import make_reference
+from .rewards import ensure_rewards
 from .security import hash_secret
 from .timeutils import utcnow
 
@@ -22,35 +24,35 @@ DEMO_USERS = [
     {
         "mobile": "9000000001",
         "name": "Aarav Sharma",
-        "email": "aarav@demowallet.app",
+        "email": "aarav@walletpay.app",
         "pin": "1234",
         "balance_paise": 500000,  # ₹5,000
     },
     {
         "mobile": "9000000002",
         "name": "Meera Iyer",
-        "email": "meera@demowallet.app",
+        "email": "meera@walletpay.app",
         "pin": "1234",
         "balance_paise": 250000,  # ₹2,500
     },
     {
         "mobile": "9000000004",
         "name": "Rohan Verma",
-        "email": "rohan@demowallet.app",
+        "email": "rohan@walletpay.app",
         "pin": "1234",
         "balance_paise": 180000,  # ₹1,800
     },
     {
         "mobile": "9000000005",
         "name": "Ananya Desai",
-        "email": "ananya@demowallet.app",
+        "email": "ananya@walletpay.app",
         "pin": "1234",
         "balance_paise": 95000,  # ₹950
     },
     {
         "mobile": "9000000006",
         "name": "Gupta Kirana Store",
-        "email": "kirana@demowallet.app",
+        "email": "kirana@walletpay.app",
         "pin": "1234",
         "balance_paise": 420000,  # ₹4,200
     },
@@ -94,6 +96,8 @@ def seed_demo():
     _seed_history()
     _seed_contacts()
     _seed_accounts()
+    _seed_notifications()
+    _seed_rewards()
 
 
 def _seed_history():
@@ -182,6 +186,88 @@ def _seed_accounts():
                 is_default=is_default,
             )
         )
+    db.session.commit()
+
+
+def _seed_notifications():
+    """Turn the seeded ledger into an inbox, so the bell has history on day one.
+
+    Derived from real transactions rather than hand-written rows: the inbox then
+    cannot claim something the ledger doesn't show, and a change to the seeder
+    flows into both for free.
+    """
+    if Notification.query.count() > 0:
+        return
+
+    people = {user.id: user for user in User.query.all()}
+    rows = (
+        Transaction.query.order_by(Transaction.timestamp.asc(), Transaction.id.asc())
+        .limit(50)
+        .all()
+    )
+
+    for txn in rows:
+        if txn.type == "topup":
+            notify(
+                txn.receiver_id,
+                Notification.TOPUP,
+                "Money added to your wallet",
+                "From a linked account",
+                transaction=txn,
+                when=txn.timestamp,
+            )
+            continue
+
+        sender = people.get(txn.sender_id)
+        receiver = people.get(txn.receiver_id)
+        notify(
+            txn.receiver_id,
+            Notification.MONEY_RECEIVED,
+            f"Money received from {sender.name if sender else 'another account'}",
+            txn.note or "Tap to see the reference",
+            transaction=txn,
+            when=txn.timestamp,
+        )
+        notify(
+            txn.sender_id,
+            Notification.MONEY_SENT,
+            f"Money sent to {receiver.name if receiver else 'another account'}",
+            txn.note or "Tap to see the reference",
+            transaction=txn,
+            when=txn.timestamp,
+        )
+    db.session.commit()
+
+    # A fresh install shouldn't look like it ignored a fortnight of alerts, so
+    # everything backfilled counts as read — except the two most recent, which
+    # give the bell a real badge to point at.
+    Notification.query.update({"is_read": True})
+    db.session.flush()
+
+    showcase = User.query.filter_by(mobile=DEMO_USERS[0]["mobile"]).first()
+    if showcase is not None:
+        recent = (
+            Notification.query.filter_by(user_id=showcase.id)
+            .order_by(Notification.created_at.desc(), Notification.id.desc())
+            .limit(2)
+            .all()
+        )
+        for note in recent:
+            note.is_read = False
+    db.session.commit()
+
+
+def _seed_rewards():
+    """Activate the offers for every seeded account.
+
+    Starting the clock now, not at sign-up, is the honest choice: the offers are
+    promises about payments made *after* they are taken up, so the demo account
+    starts at 0 of 3 rather than pretending last week's history earned it.
+    """
+    for spec in DEMO_USERS:
+        user = User.query.filter_by(mobile=spec["mobile"]).first()
+        if user is not None:
+            ensure_rewards(user.id)
     db.session.commit()
 
 

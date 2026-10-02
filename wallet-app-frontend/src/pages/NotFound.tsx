@@ -15,7 +15,7 @@ export default function NotFoundPage() {
           Page not found
         </p>
         <p className="mt-1.5 max-w-xs text-[13.5px] leading-relaxed text-slate-500">
-          That link doesn't exist in PocketPay. It may have been a typo, or the screen was
+          That link doesn't exist in Wallet Pay. It may have been a typo, or the screen was
           renamed.
         </p>
         <Card className="mt-6 w-full max-w-xs" tone="muted">

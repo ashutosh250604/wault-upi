@@ -15,6 +15,7 @@ import HomePage from "./pages/Home";
 import HistoryPage from "./pages/History";
 import ContactsPage from "./pages/Contacts";
 import RequestsPage from "./pages/Requests";
+import NotificationsPage from "./pages/Notifications";
 import AccountsPage from "./pages/Accounts";
 import AmountEntryPage from "./pages/AmountEntry";
 import PaymentResultPage from "./pages/PaymentResult";
@@ -112,6 +113,14 @@ export default function App() {
                 }
               />
               <Route
+                path="/notifications"
+                element={
+                  <RequireSession>
+                    <NotificationsPage />
+                  </RequireSession>
+                }
+              />
+              <Route
                 path="/accounts"
                 element={
                   <RequireSession>
@@ -183,6 +192,7 @@ export default function App() {
               <Route path="/set-name" element={<Navigate to="/onboarding/name" replace />} />
               <Route path="/set-pin" element={<Navigate to="/onboarding/pin" replace />} />
               <Route path="/amount-entry" element={<Navigate to="/pay/amount" replace />} />
+              <Route path="/alerts" element={<Navigate to="/notifications" replace />} />
               <Route
                 path="/payment-result"
                 element={<Navigate to="/pay/result" replace />}

@@ -11,8 +11,10 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 
 from .directory import stamp_last_paid
+from .events import notify
 from .extensions import db
-from .models import Transaction, Wallet
+from .limits import limit_error
+from .models import Notification, Transaction, User, Wallet
 from .money import make_reference
 from .timeutils import utcnow
 
@@ -53,6 +55,12 @@ def settle_transfer(
 
     settled_at = utcnow()
 
+    # The day's cap is enforced here rather than on the client, for the same
+    # reason the PIN is: otherwise the limit is a label, not a limit.
+    refused = limit_error(sender_id, paise, settled_at)
+    if refused:
+        raise TransferRefused(refused)
+
     debited = db.session.execute(
         update(Wallet)
         .where(Wallet.user_id == sender_id, Wallet.balance_paise >= paise)
@@ -91,4 +99,84 @@ def settle_transfer(
         db.session.rollback()
         raise TransferRefused("Transfer failed, please retry.", 500) from error
 
+    _announce(txn, sender_id, receiver_id, settled_at)
     return txn
+
+
+def credit_wallet(
+    user_id: int,
+    paise: int,
+    *,
+    txn_type: str = "topup",
+    note: str | None = None,
+    when=None,
+) -> Transaction:
+    """Add money to a wallet and record it, atomically.
+
+    Shared by top-ups and cashback credits so "money arrives" has one
+    implementation: a reward that credits the balance through a second, subtly
+    different code path is exactly how a reward ends up not appearing in the
+    history.
+
+    The caller owns the commit, as with `settle_transfer`.
+    """
+    settled_at = when or utcnow()
+
+    credited = db.session.execute(
+        update(Wallet)
+        .where(Wallet.user_id == user_id)
+        .values(balance_paise=Wallet.balance_paise + paise, updated_at=settled_at)
+    )
+    if credited.rowcount == 0:
+        db.session.rollback()
+        raise TransferRefused("Wallet not found!", 404)
+
+    txn = Transaction(
+        reference=make_reference(settled_at),
+        type=txn_type,
+        sender_id=None,
+        receiver_id=user_id,
+        amount_paise=paise,
+        note=note,
+        timestamp=settled_at,
+    )
+    db.session.add(txn)
+    # Flush so the caller (and any notification) can use `txn.id` and
+    # `txn.reference` without triggering a lazy load.
+    db.session.flush()
+    return txn
+
+
+def _announce(txn: Transaction, sender_id: int, receiver_id: int, settled_at) -> None:
+    """Tell both sides about a payment, once, for every path that moves money.
+
+    Done here rather than in the transfer endpoint so that paying off a money
+    request produces the same two inbox rows as a direct payment — the payer
+    shouldn't get a different paper trail depending on who typed the amount.
+    """
+    people = {
+        user.id: user
+        for user in db.session.query(User)
+        .filter(User.id.in_((sender_id, receiver_id)))
+        .all()
+    }
+    sender_name = people[sender_id].name if people.get(sender_id) else None
+    receiver_name = people[receiver_id].name if people.get(receiver_id) else None
+    fallback = txn.note or "Tap to see the reference"
+
+    notify(
+        receiver_id,
+        Notification.MONEY_RECEIVED,
+        f"Money received from {sender_name or 'another account'}",
+        fallback,
+        transaction=txn,
+        when=settled_at,
+    )
+    notify(
+        sender_id,
+        Notification.MONEY_SENT,
+        f"Money sent to {receiver_name or 'another account'}",
+        fallback,
+        transaction=txn,
+        when=settled_at,
+    )

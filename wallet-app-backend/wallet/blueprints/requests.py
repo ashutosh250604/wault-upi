@@ -10,10 +10,12 @@ from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import or_
 
 from ..directory import classify_identifier, find_payee
+from ..events import notify
 from ..extensions import db
 from ..ledger import TransferRefused, settle_transfer
-from ..models import PaymentRequest, User
+from ..models import Notification, PaymentRequest, User
 from ..money import paise_to_rupees, rupees_to_paise
+from ..rewards import credited_summary, settle_due
 from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
 
@@ -126,6 +128,17 @@ def create_request():
         status=PaymentRequest.PENDING,
     )
     db.session.add(payment_request)
+    db.session.flush()
+    # The ask is news for the person being asked, so it earns a place in their
+    # inbox. Refreshing a duplicate above deliberately does *not* notify again —
+    # a double tap must not look like two people asking.
+    notify(
+        payer.id,
+        Notification.REQUEST_RECEIVED,
+        f"{requester.name or 'Someone'} asked you for money",
+        note or "Open Requests to pay or decline",
+        amount_paise=paise,
+    )
     db.session.commit()
 
     payload = payment_request.to_dict(requester.id)
@@ -205,27 +218,30 @@ def pay_request(request_id):
     payment_request.status = PaymentRequest.PAID
     payment_request.transfer_id = txn.id
     payment_request.resolved_at = utcnow()
+    # Settle offers for both sides before the single commit below: the payer may
+    # have just completed their third payment, and the requester may have just
+    # been paid for the first time.
+    credited = settle_due(payer.id)
+    settle_due(payment_request.requester_id)
     # One commit for the ledger row and the request's new state: they can never
     # disagree about whether the money moved.
     db.session.commit()
 
     requester = payment_request.requester
-    return (
-        jsonify(
-            {
-                "message": f"₹{paise_to_rupees(payment_request.amount_paise):,.2f} paid to "
-                f"{requester.name if requester else 'the requester'}",
-                "request": payment_request.to_dict(g.user_id),
-                "txn_id": txn.reference,
-                "amount": paise_to_rupees(payment_request.amount_paise),
-                "from": payer.id,
-                "to": payment_request.requester_id,
-                "note": payment_request.note,
-                "timestamp": as_utc(txn.timestamp).isoformat(),
-            }
-        ),
-        200,
-    )
+    payload = {
+        "message": f"₹{paise_to_rupees(payment_request.amount_paise):,.2f} paid to "
+        f"{requester.name if requester else 'the requester'}",
+        "request": payment_request.to_dict(g.user_id),
+        "txn_id": txn.reference,
+        "amount": paise_to_rupees(payment_request.amount_paise),
+        "from": payer.id,
+        "to": payment_request.requester_id,
+        "note": payment_request.note,
+        "timestamp": as_utc(txn.timestamp).isoformat(),
+    }
+    if credited:
+        payload["rewards"] = credited_summary(credited)
+    return jsonify(payload), 200
 
 
 @bp.post("/requests/<int:request_id>/decline")
@@ -270,6 +286,22 @@ def _settle_without_money(payment_request: PaymentRequest, status: str, label: s
 
     payment_request.status = status
     payment_request.resolved_at = utcnow()
+
+    # Whoever didn't press the button gets told. A request that quietly
+    # disappears is the thing people complain about in payment apps.
+    actor = current_user()
+    actor_name = (actor.name if actor else None) or "They"
+    other = payment_request.counterparty_for(g.user_id)
+    if other is not None:
+        notify(
+            other.id,
+            Notification.REQUEST_DECLINED,
+            f"{actor_name} declined your request"
+            if status == PaymentRequest.DECLINED
+            else f"{actor_name} cancelled their request",
+            payment_request.note or "No money moved",
+            amount_paise=payment_request.amount_paise,
+        )
     db.session.commit()
 
     payload = payment_request.to_dict(g.user_id)
