@@ -16,6 +16,12 @@ class User(db.Model):
     pin_hash = db.Column(db.String(255))
     pin_attempts = db.Column(db.Integer, nullable=False, default=0)
     pin_locked_until = db.Column(db.DateTime(timezone=True))
+    # The IST day `pin_attempts` belongs to. Wrong PINs are counted per day: five
+    # a day, and the slate is clean again at midnight in India, so a mistyped
+    # PIN on Monday cannot lock somebody out on Friday. The date is stored
+    # rather than inferred so the reset happens at an Indian midnight and not at
+    # whatever midnight the server happens to have.
+    pin_attempts_date = db.Column(db.Date)
 
     otp_hash = db.Column(db.String(255))
     otp_expiry = db.Column(db.DateTime(timezone=True))

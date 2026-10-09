@@ -181,13 +181,10 @@ export default function AmountEntryPage() {
             counterpartyVpa: intent.receiverVpa ?? null,
             note: result.note,
             timestamp: new Date().toISOString(),
-            // The draw this payment made, carried to the result screen so the
-            // scratch card has something to hide.
+            // The draw this payment made, so the receipt can say what the
+            // payment earned and send the user to the card hiding it.
             coinsEarned: result.coins_earned,
             cashback: result.rewards,
-            // The card itself, so scratching it on the receipt closes the same
-            // card on the collection screen.
-            cardId: result.coin_card_id,
           },
         },
       });

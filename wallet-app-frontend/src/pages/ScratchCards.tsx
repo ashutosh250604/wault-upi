@@ -2,30 +2,32 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ScratchCard as ScratchCardModel } from "../types";
 import { api, errorMessage } from "../lib/api";
+import { cx } from "../lib/cx";
 import { feedback } from "../lib/feedback";
-import { formatCurrency, formatDateTime } from "../lib/format";
+import { formatCurrency, formatDateTime, formatDayLabel } from "../lib/format";
 import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
 import { useToast } from "../hooks/toast";
 import { AppBar, AppShell } from "../components/AppShell";
 import { ScratchCard } from "../components/ScratchCard";
 import { Button } from "../components/ui/Button";
-import { Coin } from "../components/ui/Coin";
 import { IconSpark } from "../components/ui/Icons";
 import { EmptyState, ErrorState, SkeletonCard } from "../components/ui/States";
 
 /**
- * The scratch card collection: every card the wallet has won, newest first.
+ * The scratch card collection: every card the wallet has won, newest first, two
+ * to a row.
  *
- * The receipt hands over a payment's card at the moment the draw is won — and
- * this is where the cards live afterwards. An unscratched one is drawn covered,
- * exactly as it was handed over, and can be scratched here instead; a scratched
- * one keeps what it paid, so the screen reads as a history of what the wallet
- * has given back rather than as a pile of unopened envelopes.
+ * A card is handed over covered and stays here afterwards, so the screen reads
+ * as a record of what the wallet has given back rather than as a pile of
+ * unopened envelopes. A covered card is scratchable right here; a card that has
+ * been scratched shows what it paid. Nothing is ever opened for the user: the
+ * coins are in the balance the moment they are won, and the cover is theirs to
+ * lift whenever they want to.
  *
- * Every coin award is here, not only the draws: an offer's payout and the
- * welcome bonus are the same kind of thing — coins that landed the moment they
- * were earned — so they arrive as cards too. Those have no payment behind them
- * and are named by their reason instead.
+ * Every coin award is here, not only the payment draws: an offer's payout and
+ * the welcome bonus are the same kind of thing — coins that landed the moment
+ * they were earned — so they arrive as cards too. Those have no payment behind
+ * them and are named by what paid them instead.
  */
 
 /** "₹25 to Meera Iyer" for a payment's card, the reason's own line for the rest. */
@@ -101,7 +103,8 @@ export default function ScratchCardsPage() {
             }}
           />
         ) : cards === null ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
@@ -122,12 +125,12 @@ export default function ScratchCardsPage() {
           <>
             <div className="flex items-start gap-2.5 rounded-[10px] border border-dashed border-pending-300 bg-pending-50 px-3.5 py-3">
               <IconSpark size={16} className="mt-0.5 shrink-0 text-pending-600" />
-              <p className="text-[12px] leading-relaxed text-pending-900">
+              <p className="text-[12px] leading-relaxed text-pending-800">
                 {waiting === 0
                   ? "Every card has been scratched. There is nothing left under a cover."
                   : `${waiting} ${waiting === 1 ? "card is" : "cards are"} still under the cover — scratch ${
                       waiting === 1 ? "it" : "them"
-                    } here or open the receipt it came on.`}
+                    } here whenever you like. The coins are already yours.`}
               </p>
             </div>
 
@@ -135,47 +138,48 @@ export default function ScratchCardsPage() {
               Newest first
             </p>
 
-            <ul className="mt-2.5 space-y-4">
-              {list.map((card) => (
-                <li key={card.id}>
-                  {card.scratched ? (
-                    <div className="flex items-center gap-3 rounded-[12px] border-[1.5px] border-ink-900/20 bg-paper-100 px-4 py-3">
-                      <Coin size={36} className="shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13.5px] font-semibold text-ink-900 tabular-nums">
-                          {card.coins === null
-                            ? "Coins added"
-                            : `${card.coins} ${card.coins === 1 ? "coin" : "coins"} won`}
-                        </p>
-                        <p className="mt-0.5 truncate text-[11.5px] text-ink-500">
-                          {cardLine(card)} · {formatDateTime(card.at)}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-[11px] font-semibold text-credit-600">
-                        Scratched
+            {/* Two to a row: a card is a small object, and a list of them reads
+                faster side by side than one per screen-width. */}
+            <ul className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-6">
+              {list.map((card) => {
+                const line = cardLine(card);
+                const at = formatDateTime(card.at);
+                return (
+                  <li key={card.id} className="min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={cx(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-[0.04em] uppercase",
+                          card.scratched
+                            ? "bg-credit-50 text-credit-700"
+                            : "bg-pending-50 text-pending-800",
+                        )}
+                      >
+                        {card.scratched ? "Scratched" : "Waiting"}
+                      </span>
+                      <span className="truncate text-[10.5px] text-ink-400" title={at}>
+                        {formatDayLabel(card.at)}
                       </span>
                     </div>
-                  ) : (
-                    // The caption sits at the card's own width, so the two read
-                    // as one object rather than a label beside a box.
-                    <div className="mx-auto w-full max-w-[17rem] space-y-2">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <p className="min-w-0 truncate text-[12.5px] font-semibold text-ink-700">
-                          {cardLine(card)}
-                        </p>
-                        <span className="shrink-0 text-[11px] text-ink-400 tabular-nums">
-                          {formatDateTime(card.at)}
-                        </span>
-                      </div>
+
+                    <div className="mt-1.5">
                       <ScratchCard
+                        compact
                         coins={card.coins ?? 0}
-                        revealed={false}
+                        revealed={card.scratched}
                         onRevealed={() => void openCard(card)}
                       />
                     </div>
-                  )}
-                </li>
-              ))}
+
+                    <p
+                      className="mt-1.5 truncate text-[11.5px] font-semibold text-ink-700"
+                      title={line}
+                    >
+                      {line}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}

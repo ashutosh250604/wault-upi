@@ -7,9 +7,11 @@ the same facts the Transactions screen shows, so the file is readable without th
 app.
 
 The faces: reportlab's built-in Helvetica has no ₹ glyph, so the builder looks
-for a Unicode system font (and lets a deployment drop one into
-`wallet/assets/fonts/`). When none is found the statement falls back to
-Helvetica with "INR" in place of the rupee sign — the layout is unchanged.
+for a Unicode font — a licensed face dropped into `wallet/assets/fonts/` first,
+then the system's (the Docker image installs `fonts-dejavu-core` for exactly
+this). When none is found the statement falls back to Helvetica with "INR" in
+place of the rupee sign, and says so in the log, because a statement printed in
+INR is a visible symptom rather than a quiet degradation.
 """
 
 from __future__ import annotations
@@ -113,8 +115,19 @@ def _fonts() -> _Fonts:
             continue
         glyphs = getattr(pdfmetrics.getFont("WAULTSans").face, "charToGlyph", {})
         if ord("₹") in glyphs:
+            log.info("Statement font %s carries the rupee sign", regular)
             return _Fonts("WAULTSans", "WAULTSans-Bold", "Courier", "₹")
+        log.warning(
+            "Statement font %s has no ₹ glyph — amounts will print as INR", regular
+        )
         return _Fonts("WAULTSans", "WAULTSans-Bold", "Courier", "INR ")
+    # Worth a warning rather than a silent fallback: "INR" on every line of a
+    # downloaded statement is the visible symptom, and this is the cause.
+    log.warning(
+        "No Unicode font found for statements — amounts will print as INR. "
+        "Install fonts-dejavu-core (the Docker image does) or drop a TTF into %s",
+        _FONT_DIR,
+    )
     return _Fonts("Helvetica", "Helvetica-Bold", "Courier", "INR ")
 
 

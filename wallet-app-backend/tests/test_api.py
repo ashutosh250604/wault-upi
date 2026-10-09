@@ -1,6 +1,7 @@
+import pathlib
 from datetime import datetime, timedelta, timezone
 
-from pytest import mark
+from pytest import mark, skip
 
 from wallet import coins
 from wallet.coins import (
@@ -13,7 +14,7 @@ from wallet.config import _database_uri
 from wallet.extensions import db
 from wallet.limits import day_window
 from wallet.models import CoinAward, User
-from wallet.timeutils import utcnow
+from wallet.timeutils import ist_date, utcnow
 
 
 PIN = "1234"
@@ -1965,3 +1966,201 @@ def test_the_limit_day_starts_at_midnight_in_ist(app):
         # Just after IST midnight the window has already rolled over.
         late_start, _ = day_window(datetime(2026, 10, 1, 18, 31, tzinfo=timezone.utc))
         assert late_start == datetime(2026, 10, 1, 18, 30, tzinfo=timezone.utc)
+
+
+def test_a_wrong_pin_is_counted_per_ist_day(client, app, demo_auth):
+    """Five wrong attempts a day, and midnight in India starts the count over.
+
+    The counter used to be permanent: three mistyped PINs on Monday were still
+    three on Friday, and the only way back was to run out of attempts and wait
+    out the lockout. The count now belongs to an IST calendar day, so it is
+    written down rather than inferred — a count with no date cannot tell you
+    whether it was this morning or last week.
+    """
+    headers = demo_auth["headers"]
+    receiver = client.post(
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
+    ).get_json()["user_id"]
+
+    def wrong() -> dict:
+        return client.post(
+            "/api/transfer",
+            json={"receiver_id": receiver, "amount": 10, "pin": "9999"},
+            headers=headers,
+        ).get_json()
+
+    assert "4 attempt(s) left" in wrong()["message"]
+    assert "3 attempt(s) left" in wrong()["message"]
+
+    # The same count, carried over from yesterday: the day it belongs to is not
+    # today, so today starts from zero.
+    with app.app_context():
+        user = db.session.get(User, demo_auth["user_id"])
+        user.pin_attempts = 3
+        user.pin_attempts_date = ist_date() - timedelta(days=1)
+        db.session.commit()
+
+    assert "4 attempt(s) left" in wrong()["message"]
+
+    with app.app_context():
+        user = db.session.get(User, demo_auth["user_id"])
+        assert user.pin_attempts == 1
+        assert user.pin_attempts_date == ist_date()
+
+
+def test_a_forgotten_pin_is_replaced_with_the_registered_number(client):
+    """The full recovery: code to the number, then a new PIN, and no sign-in.
+
+    The old PIN must stop authenticating the moment the new one is written —
+    otherwise "reset" would mean "add a second PIN", which is the opposite of
+    what someone who fears their PIN leaked is asking for.
+    """
+    mobile = "9000000005"
+    headers = login_as(client, mobile)["headers"]
+    assert client.post("/api/verify_pin", json={"pin": PIN}, headers=headers).status_code == 200
+
+    started = client.post("/api/forgot_pin", json={"mobile": mobile})
+    assert started.status_code == 200
+    otp = started.get_json()["dev_otp"]
+
+    verified = client.post("/api/verify_reset_otp", json={"mobile": mobile, "otp": otp})
+    assert verified.status_code == 200
+    token = verified.get_json()["reset_token"]
+
+    # A reset token proves the phone, not the wallet: it is not a Bearer token.
+    assert (
+        client.get("/api/coins", headers={"Authorization": f"Bearer {token}"}).status_code
+        == 401
+    )
+
+    reset = client.post("/api/reset_pin", json={"reset_token": token, "pin": "4321"})
+    assert reset.status_code == 200
+
+    fresh = login_as(client, mobile)["headers"]
+    stale = client.post("/api/verify_pin", json={"pin": PIN}, headers=fresh)
+    assert stale.status_code == 403
+    assert "Incorrect PIN" in stale.get_json()["message"]
+    assert client.post("/api/verify_pin", json={"pin": "4321"}, headers=fresh).status_code == 200
+
+    # And the reset is a security event the owner can see.
+    notes = client.get("/api/notifications", headers=fresh).get_json()["notifications"]
+    assert any("PIN reset" in note["title"] for note in notes)
+
+
+def test_a_session_token_cannot_be_used_to_reset_a_pin(client, demo_auth):
+    """Two kinds of token, told apart by the claim that says which is which."""
+    refused = client.post(
+        "/api/reset_pin",
+        json={"reset_token": demo_auth["headers"]["Authorization"].split(" ", 1)[1], "pin": "4321"},
+    )
+    assert refused.status_code == 401
+    # Same answer for a token that never existed, and for an empty one.
+    assert client.post("/api/reset_pin", json={"pin": "4321"}).status_code == 401
+
+
+def test_forgot_pin_does_not_say_whether_a_number_is_registered(client):
+    """The answer is the same sentence either way, and nothing is sent twice.
+
+    A screen that says "no wallet with that number" is a screen that tells a
+    stranger which numbers bank here. The only difference is the code, and the
+    demo hands that back for the numbers that have an account — which is the
+    same bargain the sign-in flow already makes.
+    """
+    unknown = client.post("/api/forgot_pin", json={"mobile": "9111111111"})
+    assert unknown.status_code == 200
+    body = unknown.get_json()
+    assert "dev_otp" not in body
+
+    known = client.post("/api/forgot_pin", json={"mobile": "9000000001"})
+    assert known.status_code == 200
+    assert known.get_json()["message"] == body["message"]
+    assert len(known.get_json()["dev_otp"]) == 6
+
+    # A wrong code is refused without saying anything about registration.
+    assert (
+        client.post(
+            "/api/verify_reset_otp", json={"mobile": "9111111111", "otp": "000000"}
+        ).status_code
+        == 400
+    )
+    assert (
+        client.post(
+            "/api/verify_reset_otp", json={"mobile": "9000000001", "otp": "000000"}
+        ).status_code
+        == 400
+    )
+
+
+def test_signing_in_again_does_not_repeat_the_first_login_note(client):
+    """One welcome, in the life of the account, and nothing on later sign-ins."""
+    mobile = "9000000009"
+    headers = login_as(client, mobile)["headers"]  # creates the account
+    for _ in range(3):
+        headers = login_as(client, mobile)["headers"]
+
+    notes = client.get("/api/notifications", headers=headers).get_json()["notifications"]
+    titles = [note["title"] for note in notes]
+    assert sum(1 for title in titles if "welcome" in title.lower()) == 1
+    assert not any("sign-in" in title.lower() for title in titles)
+
+
+def test_the_statement_image_installs_a_font_the_rupee_sign_needs():
+    """₹ in a downloaded statement depends on a face the image actually ships.
+
+    reportlab's built-in Helvetica has no ₹ glyph, so a statement printed
+    without a Unicode face says "INR" on every line. That is what a slim Python
+    image looks like, which is why the Dockerfile installs one — and this is the
+    test that keeps it installed.
+    """
+    from wallet import statement
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    assert "fonts-dejavu-core" in dockerfile
+
+    # And the statement must look where that package installs to. (`as_posix`
+    # so the assertion is about the container's paths, not this host's
+    # separator — the same list is checked on Windows.)
+    assert any(
+        regular.as_posix().startswith("/usr/share/fonts/")
+        for regular, _ in statement._FONT_CANDIDATES
+    )
+
+
+def test_the_statement_falls_back_to_inr_rather_than_failing(app, monkeypatch):
+    """No Unicode face is a degraded statement, never a broken download."""
+    from wallet import statement
+
+    monkeypatch.setattr(statement, "_FONT_CANDIDATES", [])
+    statement._fonts.cache_clear()
+    try:
+        fonts = statement._fonts()
+        assert fonts.body == "Helvetica"
+        assert fonts.currency == "INR "
+    finally:
+        statement._fonts.cache_clear()
+
+
+def test_the_statement_prints_the_rupee_sign_when_the_host_has_a_face(app):
+    """On a machine with any of the candidate faces, the money is ₹.
+
+    Skipped rather than failed where the host has none: this is a fact about the
+    environment, and the environment that matters (the container) is covered by
+    the Dockerfile test above.
+    """
+    from wallet import statement
+
+    available = [
+        (regular, bold)
+        for regular, bold in statement._FONT_CANDIDATES
+        if regular.is_file() and bold.is_file()
+    ]
+    if not available:
+        skip("no Unicode face on this host — see the Dockerfile test")
+
+    statement._fonts.cache_clear()
+    try:
+        fonts = statement._fonts()
+    finally:
+        statement._fonts.cache_clear()
+    assert fonts.currency == "₹"

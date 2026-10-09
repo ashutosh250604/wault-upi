@@ -64,8 +64,14 @@
   --color-credit-700: #145c39;
   --color-pending-50: #f9e3c0;
   --color-pending-100: #f4d49c;
+  /* A mid amber for the hairlines on the pending notes: pending-100 is too
+     close to its own background to read as a rule, and the dark pair is too
+     heavy for a dashed edge. */
+  --color-pending-300: #dfa955;
   --color-pending-600: #a3630f;
   --color-pending-700: #834d0c;
+  /* The darkest amber — body copy on a pending-50/100 note. */
+  --color-pending-800: #6b3f0a;
 
   /* Press inks for avatars: muted pigment that encodes *who*, so it is
      deliberately kept away from the seal accent and the money semantics. */

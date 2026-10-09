@@ -58,9 +58,10 @@ numbers and UPI IDs work with or without a camera.
 - **The PIN is verified by the server on every debit** (payments, request approvals and
   top-ups), sharing one attempt counter and lockout, so a stolen token alone can't move money
 - **Notification inbox** with an unread badge on the home screen: every payment, top-up, money
-  request, reward and sign-in writes a line, derived from the ledger rather than typed by hand,
-  and each line links through to the screen that owns the detail — including a note when a
-  payment leaves a scratch card waiting, which opens the collection rather than the receipt
+  request and reward writes a line, derived from the ledger rather than typed by hand, and each
+  line links through to the screen that owns the detail — including a note when a payment leaves
+  a scratch card waiting, which opens the collection rather than the receipt. One line per event
+  and one welcome in the life of an account: signing in again says nothing, because it is not news
 - **Coins, and one currency for every reward.** Each successful payment draws 1–50 coins from a
   server-side, weighted draw (mostly 1–5, a big number is genuinely rare), recorded against the
   transaction that earned it; a coin is worth **₹1**, and 10 coins is the floor to clear — above
@@ -70,14 +71,17 @@ numbers and UPI IDs work with or without a camera.
   and every offer pays in coins too — so the balance chip is the only number to watch, and it is
   the sum of one award log rather than a total anybody maintains
 - **A scratch card for the coins a payment wins.** A square card, the cover is the app's own icon
-  artwork on a canvas, scratched with the finger, and a twelfth of it is enough to lift by itself — the coins
-  underneath are visible from the first stroke. The draw, the reveal and the balance are the
-  server's; the card only decides how the number is told
-- **Every card you have won, in one place.** Every coin award is a card — a payment's
-  draw, an offer's payout and the 50-coin welcome bonus — and the collection screen lists
-  them newest first: the ones still under their cover drawn covered and scratchable
-  again, the scratched ones keeping what they paid, what won them and the date. The cover
-  is remembered server-side, so a card opened on a receipt does not come back covered,
+  artwork on a canvas, scratched with the finger, and a twelfth of it is enough to lift by itself.
+  Nothing is opened for you: a payment ends on its receipt with a **Scratch Card** button, and the
+  card waits in the collection until you go and open it. The draw, the reveal and the balance are
+  the server's; the card only decides how the number is told
+- **Every card you have won, in one place.** Every coin award is a card — a payment's draw, an
+  offer's payout and the 50-coin welcome bonus — and the collection screen lists them newest
+  first, **two to a row**, with each card's state on it (`Waiting` under its cover, `Scratched`
+  once it has been lifted), what won it and the date. A covered card does not carry its number at
+  all: the prize is absent from the page until the cover comes off, so an unscratched card cannot
+  be read out of a screenshot, a screen reader or a canvas that failed to paint. Once lifted, the
+  reveal is written down server-side, so it comes back open — never twice, and never re-covered —
   and `/api/scratch-cards` is reachable from the coins sheet as well as from the receipt
 - **Offers that actually pay out.** Progress towards each offer is counted from the ledger, and
   the coins land *in the same commit as the payment that earned them* — no window where a payment
@@ -86,7 +90,10 @@ numbers and UPI IDs work with or without a camera.
   midnight, checked by the ledger on every debit and reported to the amount screen from the same
   function — the limit a user is shown and the limit that is applied can't disagree
 - Linked bank accounts with a default, **PIN-gated "check balance"**, and top-ups that debit the
-  chosen account in the same transaction that credits the wallet
+  chosen account in the same transaction that credits the wallet. They are **sample accounts**:
+  the app never connects to a bank, each top-up moves money between the two sides of this demo
+  ledger, and the Accounts screen says so on the screen rather than only here. The sample logins
+  in the table above are wallets of their own, not bank accounts of Araav's
 - Statement export: a real CSV download built from the ledger, with signed amounts from the
   account owner's point of view
 - QR scanner (camera, torch, lazy-loaded) plus manual number/UPI ID entry as a camera-free
@@ -95,8 +102,15 @@ numbers and UPI IDs work with or without a camera.
 - History with money-in/out filters, day grouping and tap-through receipts
 - Money stored as **integer paise**; transfers use an **atomic conditional debit** so
   concurrent requests cannot overdraw a wallet
-- JWT sessions capped at 30 minutes, scrypt-hashed PINs/OTPs, PIN lockout after 5 wrong attempts,
+- **Forgot PIN**: the registered number gets a one-time code, the code buys a ten-minute token,
+  and the token writes one new PIN — no step signs anybody in, and the old PIN stops working the
+  moment the new one is saved. The answer to "is this number registered?" is the same sentence
+  either way
+- JWT sessions capped at 30 minutes, scrypt-hashed PINs/OTPs, PIN lockout after **5 wrong
+  attempts a day** (the count is kept against an IST date, so an Indian midnight clears it),
   ownership checks on every wallet endpoint
+- Session tokens and PIN-reset tokens are different kinds, told apart by a `typ` claim: a reset
+  token cannot be used as a `Bearer` token, and a session cannot write a PIN
 
 ## Frontend notes
 
@@ -343,6 +357,24 @@ Notes: on Render's free plan the service sleeps after ~15 minutes idle, so the f
 after a pause takes a few seconds to wake up. Camera QR scanning works because Render serves
 HTTPS.
 
+### Renaming the service, and the URL
+
+The app's name and its URL are two separate things on Render, and neither is set by this
+repository once the service exists:
+
+- **The service name** — Render's dashboard → the service → *Settings* → *Name* → Save. That
+  changes the name shown in the dashboard and the default `*.onrender.com` host, so the URL
+  changes with it (old links stop working; Render does not redirect them). `render.yaml`
+  carries the name this blueprint was first created with, and editing it in a live service is
+  a no-op — the blueprint is a creation-time description, not a setting.
+- **A custom domain** — *Settings* → *Custom Domains* → add `okvault.example`, then point a
+  `CNAME` at the service's `onrender.com` host at your DNS provider. Render issues the TLS
+  certificate. Custom domains need a paid instance type; on the free plan the `onrender.com`
+  URL is the only one.
+- **Nothing in the app hard-codes the host.** The frontend talks to the same origin it was
+  served from, so a rename needs no rebuild and no environment variable — the only thing to
+  update is the *Live demo* link at the top of this README.
+
 Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 `Referrer-Policy: no-referrer`, a camera-only `Permissions-Policy` and HSTS, so put the
 container behind TLS (Render terminates it for you) — over plain HTTP the HSTS header is
@@ -356,7 +388,8 @@ like a file.
 ## Roadmap
 
 - [ ] Double-entry ledger for every money movement + idempotency keys on transfers
-- [ ] PIN change, active sessions, "log out everywhere", delete account
+- [ ] Active sessions, "log out everywhere", delete account
+- [x] Forgot PIN: a one-time code on the registered number, a new PIN, no sign-in
 - [x] Address book: saved contacts, favourites, nicknames, recent-payer ranking
 - [x] Money requests: ask, pay with PIN, decline, cancel
 - [x] Linked accounts, PIN-gated balance check, CSV statements

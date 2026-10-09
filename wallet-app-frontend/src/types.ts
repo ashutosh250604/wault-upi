@@ -382,17 +382,16 @@ export interface Receipt {
   coinsEarned?: number;
   /** Offers paid alongside this payment, shown as the reward line. */
   cashback?: CreditedReward[];
-  /** The scratch card this payment drew, so scratching it here closes it there. */
-  cardId?: number;
 }
 
 /**
- * One scratch card: a payment's draw, and whether its cover has been lifted.
+ * One scratch card: a coin award, and whether its cover has been lifted.
  *
- * The coins are the user's own — credited with the payment that drew them — so
- * they travel with the card rather than being withheld: the cover is the
- * screen's device, not a secret. `scratched` is what the collection remembers,
- * so a card opened on the receipt does not come back covered.
+ * The coins are the user's own — credited the moment they were won — so they
+ * travel with the card rather than being withheld: the cover is the screen's
+ * device, not a secret, and the card never shows them until it is lifted.
+ * `scratched` is what the collection remembers, so a card that has been opened
+ * comes back open.
  */
 export interface ScratchCard {
   id: number;

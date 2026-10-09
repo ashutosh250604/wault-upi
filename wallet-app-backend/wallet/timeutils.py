@@ -12,7 +12,7 @@ no daylight saving since 1945, so the offset is a constant and the app does not
 need `zoneinfo` (or its tzdata) to be installed on the host.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 # Asia/Kolkata. Fixed offset, no DST — see the module docstring.
 IST = timezone(timedelta(minutes=330), "IST")
@@ -48,6 +48,15 @@ def to_ist(value):
     if value is None:
         return None
     return as_utc(value).astimezone(IST)
+
+
+def ist_date(value=None) -> date:
+    """The IST calendar day of an instant — now, by default.
+
+    Day boundaries in this app are Indian ones: a counter that resets "tomorrow"
+    resets at midnight in Asia/Kolkata, which is 18:30 UTC the evening before.
+    """
+    return to_ist(value or utcnow()).date()
 
 
 def format_date(value) -> str:

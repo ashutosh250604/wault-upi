@@ -1,10 +1,7 @@
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { formatCurrency, formatDateTime } from "../lib/format";
-import { feedback } from "../lib/feedback";
 import { parseReceipt } from "../lib/routing";
-import { api } from "../lib/api";
-import { useMemo } from "react";
 import { useToast } from "../hooks/toast";
 import { useAppSession } from "../session/context";
 import { AppShell } from "../components/AppShell";
@@ -15,7 +12,6 @@ import { Coin } from "../components/ui/Coin";
 import { TILE_GLYPH } from "../lib/tiles";
 import { IconTile } from "../components/ui/IconTile";
 import { IconCheck, IconSpark } from "../components/ui/Icons";
-import { ScratchSheet } from "../components/ScratchCard";
 
 export default function PaymentResultPage() {
   const location = useLocation();
@@ -36,20 +32,6 @@ export default function PaymentResultPage() {
     ? (receipt.coinsEarned ?? 0) +
       (receipt.cashback ?? []).reduce((sum, item) => sum + item.coins, 0)
     : 0;
-  // The card is handed over covered, as soon as the receipt is up.
-  const [scratching, setScratching] = useState(coinsWon > 0);
-
-  // The celebration belongs to the moment the tick lands, and only to the first
-  // render of a receipt — a re-render must not re-play it.
-  const sounded = useRef(false);
-  useEffect(() => {
-    if (!receipt || sounded.current) return;
-    sounded.current = true;
-    // The coin drop belongs to the reveal when there is a card to scratch;
-    // `ScratchSheet` plays it as the cover comes off.
-    if (coinsWon === 0) feedback.coins();
-  }, [receipt, coinsWon]);
-
   if (!receipt) return <Navigate to="/home" replace />;
 
   const isTopUp = receipt.kind === "topup";
@@ -69,21 +51,6 @@ export default function PaymentResultPage() {
         (receipt.coinsEarned ?? 0) > 0 ? ", plus this payment's own draw" : ""
       }.`
     : "This payment's draw.";
-
-  /**
-   * The card has been opened on this screen, so say so.
-   *
-   * The reveal is local and instant; this only writes the fact down, which is
-   * what stops the card from coming back covered on the collection screen. A
-   * refusal is reported rather than swallowed — the user should know their
-   * scratch was not remembered — but it never blocks the receipt.
-   */
-  const onCardScratched = () => {
-    if (!receipt.cardId) return;
-    void api
-      .scratchCard(receipt.cardId)
-      .catch(() => toast.error("Couldn't save that scratch card"));
-  };
 
   return (
     <AppShell>
@@ -175,8 +142,9 @@ export default function PaymentResultPage() {
                 {coinsWon === 1 ? "1 coin earned" : `${coinsWon} coins earned`}
               </p>
               <p className="mt-0.5 text-[12px] leading-relaxed text-seal-800/80">
-                {rewardLine}{" "}
-                Coins sit in your coin balance, not your wallet — 10 redeem for ₹10.
+                {rewardLine} It is still under its cover — open your scratch cards to
+                lift it. Coins sit in your coin balance, not your wallet — 10 redeem
+                for ₹10.
               </p>
             </div>
           </div>
@@ -220,14 +188,6 @@ export default function PaymentResultPage() {
         </p>
       </div>
 
-      {/* Over the receipt, not instead of it: the coins are a footnote to the
-          payment, and the payment is the thing that has to stay legible. */}
-      <ScratchSheet
-        open={scratching}
-        coins={coinsWon}
-        onClose={() => setScratching(false)}
-        onScratched={onCardScratched}
-      />
     </AppShell>
   );
 }

@@ -15,12 +15,14 @@ from ..security import (
     PIN_RE,
     check_pin,
     current_user,
+    decode_reset_token,
     hash_secret,
+    issue_reset_token,
     require_auth,
     session_payload,
     verify_secret,
 )
-from ..timeutils import as_utc, utcnow
+from ..timeutils import as_utc, ist_date, utcnow
 
 bp = Blueprint("auth", __name__)
 
@@ -184,14 +186,12 @@ def verify_otp():
     # starts with its free requests again.
     user.otp_requests = 0
     user.updated_at = utcnow()
-    # Every real payment app mails you about a sign-in. Ours writes it to the
-    # inbox instead, which is where the rest of the wallet's news lives.
-    notify(
-        user.id,
-        Notification.SECURITY,
-        "New sign-in to your wallet",
-        f"Verified with a one-time code on {user.mobile}",
-    )
+    # Deliberately no "new sign-in" note. It used to be written on every
+    # verification, so the same person signing in twice was told the same thing
+    # twice — news to nobody, and the quickest way to teach someone that the
+    # bell can be ignored. The first login is the one with something to say, and
+    # it already says it: the welcome bonus below writes its own note, once in
+    # the life of the account.
     # The welcome bonus, in the same commit as the sign-in. Verifying a code is
     # the moment an account becomes real — it is the first thing a new number
     # does and the only thing every returning user does — and the grant is
@@ -278,6 +278,7 @@ def set_pin():
 
     user.pin_hash = hash_secret(pin)
     user.pin_attempts = 0
+    user.pin_attempts_date = ist_date()
     user.pin_locked_until = None
     user.updated_at = utcnow()
     notify(
@@ -350,3 +351,185 @@ def me():
     # if it never learns that from the sign-in response.
     payload["has_pin"] = bool(user.pin_hash)
     return jsonify(payload), 200
+
+
+# --------------------------------------------------------------------------- #
+# Forgot PIN
+#
+# The PIN is the last gate before money moves, and it used to be the one
+# credential a user could not replace: chosen once during onboarding, and a
+# forgotten one left the wallet unusable for good. Recovery is the standard
+# shape — the registered number, a one-time code, a new PIN — in three steps
+# rather than one, so that passing the code check buys nothing on its own:
+#
+#   /forgot_pin        asks for a code, throttled exactly like a sign-in code
+#   /verify_reset_otp  checks the code and mints a short-lived reset token
+#   /reset_pin         writes the new PIN against that token
+#
+# No step here signs anybody in. Being able to read a text message is enough to
+# choose a new PIN and nothing more, so the reset token is not a session and
+# `require_auth` will not take it. Existing sessions are left alone: the owner
+# is changing a credential, not revoking access, and signing them out of their
+# own phone would be a punishment rather than a protection.
+# --------------------------------------------------------------------------- #
+
+
+@bp.post("/forgot_pin")
+def forgot_pin():
+    """Start a PIN reset: one code to the number on the wallet, if there is one.
+
+    The answer is the same whether or not the number is registered. A screen
+    that says "no wallet with that number" is a screen that tells a stranger
+    which numbers bank here, and this endpoint is reachable by anyone.
+    """
+    data = request.get_json(silent=True) or {}
+    mobile = (data.get("mobile") or "").strip()
+    if not MOBILE_RE.match(mobile):
+        return jsonify({"message": "Invalid mobile number"}), 400
+
+    answer = {"message": "If that number has a wallet, a code is on its way."}
+
+    user = User.query.filter_by(mobile=mobile).first()
+    if user is None:
+        # Nothing to send and nothing to throttle: no row to count requests
+        # against, and no message was queued, so there is nothing to abuse.
+        return jsonify(answer), 200
+
+    now = utcnow()
+    run = _request_run(user, now)
+    wait, available_at = _cooldown_state(user, now, run)
+    if wait > 0:
+        return jsonify(_throttle_payload(wait, available_at, run)), 429
+
+    otp = _generate_otp()
+    run += 1
+    # The same columns the sign-in code uses, deliberately. One number has one
+    # code in flight: a reset asked for in the middle of a sign-in replaces that
+    # code rather than giving the phone two live ones, which is also what makes
+    # the free-request counter above cover both flows at once.
+    user.otp_hash = hash_secret(otp)
+    user.otp_expiry = now + timedelta(minutes=current_app.config["OTP_TTL_MINUTES"])
+    user.otp_attempts = 0
+    user.otp_is_used = False
+    user.last_otp_sent_at = now
+    user.otp_requests = run
+    user.updated_at = now
+    db.session.commit()
+
+    free = current_app.config["OTP_FREE_REQUESTS"]
+    next_available_at = (
+        now + timedelta(seconds=current_app.config["OTP_RESEND_SECONDS"])
+        if run >= free and current_app.config["OTP_RESEND_SECONDS"] > 0
+        else None
+    )
+    payload = {
+        **answer,
+        "requests_remaining": max(0, free - run),
+        "resend_available_at": next_available_at.isoformat()
+        if next_available_at
+        else None,
+    }
+    if not deliver_otp(mobile, otp):
+        if current_app.config["DEMO_MODE"]:
+            # The demo has no SMS gateway, so the code is handed to the screen
+            # that asked for it — the same bargain the sign-in flow makes, and
+            # the same reason it is refused outside demo mode.
+            payload["dev_otp"] = otp
+        else:
+            current_app.logger.info("PIN reset OTP for %s: %s", mobile, otp)
+
+    return jsonify(payload), 200
+
+
+@bp.post("/verify_reset_otp")
+def verify_reset_otp():
+    """Check the reset code and mint the token that allows one new PIN."""
+    data = request.get_json(silent=True) or {}
+    mobile = (data.get("mobile") or "").strip()
+    otp = (data.get("otp") or "").strip()
+
+    if not MOBILE_RE.match(mobile):
+        return jsonify({"message": "Invalid mobile number"}), 400
+    if not otp:
+        return jsonify({"message": "Enter the code we sent"}), 400
+
+    user = User.query.filter_by(mobile=mobile).first()
+    # An unregistered number is refused exactly like a wrong code: whether the
+    # number has a wallet is not this endpoint's to reveal either.
+    if user is None:
+        return jsonify({"message": "Invalid or expired code. Please request a new one."}), 400
+    if user.otp_is_used:
+        return jsonify({"message": "That code has already been used. Please request a new one."}), 400
+    if user.otp_attempts >= current_app.config["OTP_MAX_ATTEMPTS"]:
+        return jsonify(
+            {"message": "Too many wrong attempts. Please request a new code."}
+        ), 403
+
+    expiry = as_utc(user.otp_expiry)
+    if not user.otp_hash or not expiry or utcnow() > expiry:
+        return jsonify({"message": "Code expired. Please request a new one."}), 400
+
+    if not verify_secret(user.otp_hash, otp):
+        user.otp_attempts += 1
+        db.session.commit()
+        remaining = max(0, current_app.config["OTP_MAX_ATTEMPTS"] - user.otp_attempts)
+        return jsonify({"message": f"Invalid code. {remaining} attempt(s) left."}), 400
+
+    user.otp_is_used = True
+    # The run is over — the code has done its job, so the next request starts
+    # from the free ones again, exactly as a verified sign-in does.
+    user.otp_requests = 0
+    user.updated_at = utcnow()
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "message": "Code verified. Choose a new PIN.",
+                "reset_token": issue_reset_token(user.id),
+                "expires_in_seconds": current_app.config["PIN_RESET_TTL_MINUTES"] * 60,
+            }
+        ),
+        200,
+    )
+
+
+@bp.post("/reset_pin")
+def reset_pin():
+    """Write a new PIN, against the token from a verified reset code.
+
+    Unauthenticated by design — the whole point is that the user cannot get in —
+    so the token is the credential, and it is the only thing that can open this
+    door. The lockout goes with the old PIN: the person holding the phone has
+    just proved the phone is theirs, and staying locked out would only punish
+    the owner.
+    """
+    data = request.get_json(silent=True) or {}
+    token = (data.get("reset_token") or "").strip()
+    pin = (data.get("pin") or "").strip()
+
+    if not PIN_RE.match(pin):
+        return jsonify({"message": "PIN must be exactly 4 digits"}), 400
+
+    user_id = decode_reset_token(token)
+    user = db.session.get(User, user_id) if user_id else None
+    if user is None:
+        # Expired, tampered with, or a session token presented as a reset one:
+        # all three are the same refusal.
+        return jsonify({"message": "This reset has expired. Please request a new code."}), 401
+
+    user.pin_hash = hash_secret(pin)
+    user.pin_attempts = 0
+    user.pin_attempts_date = ist_date()
+    user.pin_locked_until = None
+    user.updated_at = utcnow()
+    notify(
+        user.id,
+        Notification.SECURITY,
+        "Payment PIN reset",
+        "Your PIN was replaced after a one-time code on your number. If this "
+        "wasn't you, contact support.",
+    )
+    db.session.commit()
+
+    return jsonify({"message": "PIN reset. Sign in and use your new PIN."}), 200

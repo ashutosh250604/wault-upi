@@ -320,6 +320,9 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
                 <TextInput
                   id={id}
                   aria-describedby={describedBy}
+                  // The field the sheet exists for: the caret starts here, and
+                  // only here — the sheet focuses once per opening.
+                  data-autofocus
                   inputMode="tel"
                   placeholder="9000000004 or name@okwault"
                   value={identifier}

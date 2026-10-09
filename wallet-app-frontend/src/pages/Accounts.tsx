@@ -137,6 +137,21 @@ export default function AccountsPage() {
       }
     >
       <div className="space-y-4 px-5 pt-4 pb-6">
+        {/* What these actually are, said before the first account is read.
+            Nothing here is a real bank connection, and a screen that looks
+            like one without saying so is the sort of thing a payments app
+            should not do. */}
+        <Card tone="muted" className="flex gap-2.5">
+          <IconInfo size={16} className="mt-px shrink-0 text-ink-500" />
+          <p className="text-[12.5px] leading-relaxed text-ink-600">
+            <span className="font-semibold text-ink-800">Sample accounts, not real ones.</span>{" "}
+            OK Vault never connects to a bank: these stand in for the accounts a
+            top-up could come from. Your <span className="font-semibold text-ink-700">wallet</span>{" "}
+            is the balance you pay from — adding money moves it from the account
+            you pick here into the wallet, inside this demo.
+          </p>
+        </Card>
+
         {accounts === null && error === null ? (
           <Card className="space-y-3" aria-hidden="true">
             {Array.from({ length: 2 }).map((_, index) => (

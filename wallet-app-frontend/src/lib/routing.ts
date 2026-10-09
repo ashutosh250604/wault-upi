@@ -85,9 +85,5 @@ export function parseReceipt(state: unknown): Receipt | null {
         ? Math.floor(receipt.coinsEarned)
         : undefined,
     cashback: parseCreditedRewards(receipt.cashback),
-    // The card this payment drew. Rebuilt like every other field, so a card
-    // that reaches the receipt can still be opened from the collection screen.
-    cardId:
-      typeof receipt.cardId === "number" && receipt.cardId > 0 ? receipt.cardId : undefined,
   };
 }

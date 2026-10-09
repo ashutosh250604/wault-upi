@@ -287,8 +287,14 @@ export default function VerifyOtpPage() {
           </div>
         </div>
 
+        {/* The preview sits a step deeper in the amber than it used to
+            (`pending-50`): on a lit phone that cream read as white, which made
+            the one panel that is *not* part of the app look like the brightest
+            thing on the screen. Same family, one step further in — and the
+            Fill control is a warm slip rather than a second ink button, so the
+            screen keeps one primary action — the Verify button below. */}
         {notice.previewCode ? (
-          <div className="mt-5 flex items-center gap-3 rounded-[10px] border border-dashed border-pending-300 bg-pending-50 p-3.5">
+          <div className="mt-5 flex items-center gap-3 rounded-[10px] border border-dashed border-pending-300 bg-pending-100 p-3.5">
             <IconTile tone="pending" scale="sm">
               <IconSpark size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />
             </IconTile>
@@ -303,6 +309,7 @@ export default function VerifyOtpPage() {
             </div>
             <Button
               size="sm"
+              variant="secondary"
               onClick={() => {
                 applyDigits(notice.previewCode ?? "", 0);
                 inputs.current[OTP_LENGTH - 1]?.focus();

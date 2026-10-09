@@ -194,6 +194,34 @@ export const api = {
       signal,
     }),
 
+  /**
+   * Forgot PIN, in its three steps.
+   *
+   * None of them is authenticated — the user cannot get in, which is the whole
+   * problem — so the code they receive is the proof, and the token it buys is
+   * good for one new PIN. The answer to the first call says the same thing
+   * whether or not the number has a wallet: see the endpoint's own note.
+   */
+  forgotPin: (mobile: string, signal?: AbortSignal) =>
+    request<StartLoginResponse>("/forgot_pin", {
+      method: "POST",
+      body: { mobile },
+      signal,
+    }),
+
+  verifyResetOtp: (mobile: string, otp: string, signal?: AbortSignal) =>
+    request<{ message: string; reset_token: string; expires_in_seconds: number }>(
+      "/verify_reset_otp",
+      { method: "POST", body: { mobile, otp }, signal },
+    ),
+
+  resetPin: (resetToken: string, pin: string, signal?: AbortSignal) =>
+    request<{ message: string }>("/reset_pin", {
+      method: "POST",
+      body: { reset_token: resetToken, pin },
+      signal,
+    }),
+
   verifyPin: (pin: string, signal?: AbortSignal) =>
     request<{ message: string }>("/verify_pin", {
       method: "POST",

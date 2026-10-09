@@ -8,6 +8,7 @@ import { ToastProvider } from "./components/Toast";
 import { SessionProvider } from "./session/SessionProvider";
 import { useAppSession } from "./session/context";
 import LoginPage from "./pages/Login";
+import ForgotPinPage from "./pages/ForgotPin";
 import VerifyOtpPage from "./pages/VerifyOtp";
 import SetNamePage from "./pages/SetName";
 import SetPinPage from "./pages/SetPin";
@@ -68,6 +69,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<LoginPage />} />
+              {/* Signed out on purpose: a reset proves the phone, not the wallet */}
+              <Route path="/forgot-pin" element={<ForgotPinPage />} />
               <Route path="/verify-otp" element={<VerifyOtpPage />} />
 
               {/* Onboarding: signed in, but not yet able to pay */}
@@ -198,6 +201,8 @@ export default function App() {
               <Route path="/people" element={<Navigate to="/contacts" replace />} />
               <Route path="/scan-qr" element={<Navigate to="/scan" replace />} />
               <Route path="/show-qr" element={<Navigate to="/my-qr" replace />} />
+              <Route path="/forgot-pin/*" element={<Navigate to="/forgot-pin" replace />} />
+              <Route path="/reset-pin" element={<Navigate to="/forgot-pin" replace />} />
               <Route path="/set-name" element={<Navigate to="/onboarding/name" replace />} />
               <Route path="/set-pin" element={<Navigate to="/onboarding/pin" replace />} />
               <Route path="/amount-entry" element={<Navigate to="/pay/amount" replace />} />

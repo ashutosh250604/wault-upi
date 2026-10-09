@@ -13,8 +13,8 @@
  *                     resolved). One quiet blip — it used to be the app's
  *                     loudest two-note chime, which is a lot of ceremony for
  *                     saving an address.
- *   `paid`            money left the wallet. The tick: two tight notes a beat
- *                     apart, high and short, the sound of a cheque clearing.
+ *   `paid`            money left the wallet. The supplied `payment-success.mp3`
+ *                     and nothing else — see "Supplied recordings" below.
  *   `received`        money arrived. A warmer, lower rise with a shimmer on top,
  *                     so arriving and leaving are different shapes rather than
  *                     the same noise at two pitches.
@@ -31,11 +31,12 @@
  *
  * ## Supplied recordings
  *
- * `SOUND_FILES` lets a supplied file stand in for any of the cues above without
- * touching the call sites. The path is set once here and the cue keeps working
- * before the file exists: a missing file rejects playback, which flips that cue
- * back to its synthesiser for the rest of the session rather than going silent.
- * See `public/sounds/README.md` for where to drop the recording.
+ * `SOUND_FILES` lets a supplied file *replace* a cue without touching the call
+ * sites. A cue with a file plays only the file — never the file and its
+ * synthesiser, which is what a payment used to sound like. The synthesiser is
+ * kept for the cues nobody has recorded yet; for a recorded cue it is the
+ * fallback for a file that fails to load, and it never plays underneath the
+ * recording. See `public/sounds/README.md` for where the files live.
  *
  * ## One voice per cue
  *
@@ -63,14 +64,21 @@ export type SoundCue =
  * Recordings, by cue. Anything not listed here is always synthesised.
  *
  * `paid` covers every way money leaves the wallet — a payment, a top-up, a
- * request settled. `redeemed` covers coins being paid out into the wallet. A
- * cue whose file is missing falls back to its synthesiser and stays there, so
- * the app sounds right even if a recording is renamed or deleted.
+ * request settled. `redeemed` covers coins being paid out into the wallet.
+ *
+ * A cue with a recording is one voice: the file if it loads, its synthesiser if
+ * it does not. There is no path that plays both, because two sounds for one
+ * payment is exactly what a recorded cue must not do.
  */
 const SOUND_FILES: Partial<Record<SoundCue, string>> = {
   paid: "/sounds/payment-success.mp3",
   redeemed: "/sounds/coins-redeemed.mp3",
 };
+
+/** Every recording, so it can be warmed before the first payment needs it. */
+const SOUND_URLS = Object.values(SOUND_FILES).filter(
+  (url): url is string => typeof url === "string",
+);
 
 function readEnabled(): boolean {
   try {
@@ -187,31 +195,34 @@ function recordingFor(url: string): Recording | null {
 /**
  * Play the cue's recording, if it has one that loads.
  *
- * Returns false when the caller should synthesise instead — including the
- * first time a file turns out to be missing, which is why the fallback is
- * wired into the rejected `play()` promise rather than left to the next call.
+ * Returns false when the caller should synthesise instead. A failed `play()`
+ * is not the end of the file — a browser may refuse the very first call until
+ * it has seen a gesture — so a rejected playback stays retryable; only a load
+ * *error* takes the recording out of service for the session.
  */
-function playRecording(url: string, fallback: () => void): boolean {
+function playRecording(url: string): boolean {
   const recording = recordingFor(url);
   if (!recording || recording.broken) return false;
   try {
     // Rewind rather than layer: a payment landing on top of the last tick
     // restarts the file instead of doubling it.
     recording.element.currentTime = 0;
-    const started = recording.element.play();
-    if (started) {
-      started.catch(() => {
-        recording.broken = true;
-        fallback();
-      });
-    }
+    void recording.element.play().catch(() => {
+      // Refused (usually autoplay policy) — the next cue tries again. Nothing
+      // is synthesised on top, so a payment never sounds twice.
+    });
     return true;
   } catch {
     return false;
   }
 }
 
-/** Say one cue: at most once per `CUE_GAP_MS`, from its file if it has one. */
+/**
+ * Say one cue: at most once per `CUE_GAP_MS`, from its recording if it has one.
+ *
+ * A recorded cue is the recording, full stop: if the file is missing the cue is
+ * silent rather than doubled up with the synthesiser it replaced.
+ */
 function cue(name: SoundCue, synthesise: () => void): void {
   if (!enabled) return;
   const now = Date.now();
@@ -220,7 +231,10 @@ function cue(name: SoundCue, synthesise: () => void): void {
   lastCueAt.set(name, now);
 
   const file = SOUND_FILES[name];
-  if (file && playRecording(file, synthesise)) return;
+  if (file) {
+    playRecording(file);
+    return;
+  }
   synthesise();
 }
 
@@ -252,10 +266,9 @@ export const feedback = {
   /**
    * Money left the wallet — a payment, a top-up, a request settled.
    *
-   * The tick: two tight notes, the second a fifth above the first, on top of
-   * each other so they read as one gesture rather than a melody. Short, clean
-   * and bright, with nothing in the low end to rumble on a phone speaker — the
-   * sound of the receipt printing, not of a casino paying out.
+   * The supplied recording is the sound. The synthesiser under it — two tight
+   * notes, the second a fifth above the first — is used only where
+   * `payment-success.mp3` is missing, so a paid cue is one voice either way.
    */
   paid(): void {
     buzz([14, 42, 18]);
@@ -354,5 +367,10 @@ export const feedback = {
   /** Call once from a real gesture so later audio isn't blocked. */
   unlock(): void {
     context();
+    // Warm the supplied recordings here rather than at the first payment: the
+    // clip is then ready to start the instant money moves, instead of fetching
+    // 100 kB while the receipt is already on screen.
+    if (!enabled) return;
+    for (const url of SOUND_URLS) recordingFor(url);
   },
 };

@@ -2,22 +2,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BRAND_ASSETS } from "../lib/brand";
 import { cx } from "../lib/cx";
-import { feedback } from "../lib/feedback";
-import { formatCurrency } from "../lib/format";
-import { useCoins } from "../hooks/useCoins";
-import { Button } from "./ui/Button";
 import { Coin } from "./ui/Coin";
-import { Sheet } from "./ui/Sheet";
 
 /**
- * The scratch card: a payment's coins, hidden under the logo.
+ * The scratch card: a reward, hidden under the logo.
  *
  * The point of a scratch card is that the prize is *under* something, so the
  * cover is real silver rather than an animation — a canvas painted with the
  * app-icon artwork, which the finger erases. Scratching a single pixel of it
- * shows a single pixel of the coin underneath, which is what makes scratching
+ * shows a single pixel of the card underneath, which is what makes scratching
  * little and often feel like getting somewhere; the cover also dissolves on its
  * own once enough of it is gone, so nobody has to rub the whole card out.
+ *
+ * The prize is not in the document until the cover is off. That is the whole
+ * difference between a covered card and a revealed one: an unscratched card
+ * that renders its number is a card whose number can be read without scratching
+ * it — out of a screenshot, out of the accessibility tree, or out of a cover
+ * that has not finished painting. So a covered card draws the paper face and
+ * the words "keep scratching", and the coins arrive on the reveal.
  *
  * The artwork is the supplied logo, not a redrawing of it: the field behind the
  * tile is the tile's own gradient, measured off the file, and the tile is drawn
@@ -27,6 +29,10 @@ import { Sheet } from "./ui/Sheet";
  * Reveal is deliberately cheap (`REVEAL_AT`): about an eighth of the card. A
  * scratch card that demands the whole surface is a chore, and the coins are
  * already in the balance either way — this is the telling, not the paying.
+ *
+ * "Reveal without scratching" is not a fallback for a broken canvas. A scratch
+ * card is a pointer gesture, and a card is not allowed to have a prize that a
+ * keyboard or a screen reader cannot get to.
  */
 
 /** How much of the cover has to be gone before it lifts by itself. */
@@ -102,15 +108,23 @@ function paintCover(canvas: HTMLCanvasElement, tile: HTMLImageElement | null) {
 }
 
 export interface ScratchCardProps {
-  /** The coins this card is hiding. */
+  /** The coins this card is hiding. Shown only once the cover is off. */
   coins: number;
-  /** True once the cover has lifted — owned by the sheet, which also needs it. */
+  /** True once the cover has lifted — owned by the caller, which also stores it. */
   revealed: boolean;
   onRevealed: () => void;
+  /** Tighter proportions, for the two-column collection. */
+  compact?: boolean;
   className?: string;
 }
 
-export function ScratchCard({ coins, revealed, onRevealed, className }: ScratchCardProps) {
+export function ScratchCard({
+  coins,
+  revealed,
+  onRevealed,
+  compact = false,
+  className,
+}: ScratchCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tileRef = useRef<HTMLImageElement | null>(null);
   const erasing = useRef(false);
@@ -278,176 +292,109 @@ export function ScratchCard({ coins, revealed, onRevealed, className }: ScratchC
   };
 
   return (
-    <div
-      className={cx(
-        // Square, and square on any screen: one width, `aspect-square`, and a
-        // cap so a wide sheet does not hand the card a block taller than the
-        // sheet itself. It used to be a 176px-tall rectangle with `w-full`,
-        // which meant a card that was wider than it was tall on a phone and
-        // absurdly wide on a desktop.
-        "relative mx-auto aspect-square w-full max-w-[17rem] overflow-hidden rounded-[16px] border-[1.5px] border-ink-900/75 bg-paper-100 shadow-[0_10px_24px_-18px_rgba(15,15,13,0.9)]",
-        className,
-      )}
-    >
-      {/* The prize, under the cover. Exposed to assistive tech from the start:
-          there is nothing to be gained from hiding it from someone who cannot
-          scratch. */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
-        {/* A warm pool of light behind the coins, so the reveal has a subject
-            rather than the coin floating on a flat sheet. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(244,212,156,0.85),rgba(249,227,192,0.35)_58%,transparent_78%)]"
-        />
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-2.5 rounded-[12px] border border-dashed border-ink-900/20"
-        />
-        <Coin
-          size={64}
-          className={cx(
-            "relative transition-transform",
-            revealed && "animate-pop",
-            !revealed && "opacity-70",
+    <div className={cx("mx-auto w-full", compact ? undefined : "max-w-[17rem]", className)}>
+      <div
+        className={cx(
+          // Square, and square on any screen: one width, `aspect-square`, and a
+          // cap so a wide sheet does not hand the card a block taller than the
+          // sheet itself. It used to be a 176px-tall rectangle with `w-full`,
+          // which meant a card that was wider than it was tall on a phone and
+          // absurdly wide on a desktop.
+          "relative aspect-square w-full overflow-hidden border-[1.5px] border-ink-900/75 bg-paper-100 shadow-[0_10px_24px_-18px_rgba(15,15,13,0.9)]",
+          compact ? "rounded-[12px]" : "rounded-[16px]",
+        )}
+      >
+        {/* The face of the card. The prize is deliberately absent while the
+            cover is on: nothing in the document means nothing to read out of
+            it, so a covered card cannot hand its number over early — not to a
+            screenshot, not to a screen reader, and not to a cover that failed
+            to paint. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+          {/* A warm pool of light behind the coins, so the reveal has a subject
+              rather than the coin floating on a flat sheet. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(244,212,156,0.85),rgba(249,227,192,0.35)_58%,transparent_78%)]"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-2.5 rounded-[12px] border border-dashed border-ink-900/20"
+          />
+          {revealed ? (
+            <>
+              <Coin size={compact ? 44 : 64} className="relative animate-pop" />
+              <p
+                className={cx(
+                  "relative font-display leading-none font-extrabold tracking-[-0.03em] text-ink-900 tabular-nums",
+                  compact ? "text-[1.6rem]" : "text-[2.4rem]",
+                )}
+              >
+                +{coins}
+              </p>
+              <p
+                className={cx(
+                  "relative font-semibold tracking-[0.02em] text-ink-600",
+                  compact ? "text-[10.5px]" : "text-[12px]",
+                )}
+              >
+                {coins === 1 ? "coin added" : "coins added"}
+              </p>
+            </>
+          ) : (
+            <p
+              className={cx(
+                "relative font-display font-bold tracking-[0.14em] text-ink-400 uppercase",
+                compact ? "text-[10px]" : "text-[12px]",
+              )}
+            >
+              Keep scratching
+            </p>
           )}
+        </div>
+
+        {/* What to do, on the cover, until the finger arrives. It is an overlay
+            rather than a label beside the card because the gesture is the whole
+            interaction, and pointer-events-none keeps the stroke that dismisses
+            it from being eaten by it. */}
+        {!touched && !revealed ? (
+          <span
+            className={cx(
+              "pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full bg-ink-900/85 font-semibold whitespace-nowrap text-ink-25 shadow-[0_6px_14px_-8px_rgba(15,15,13,0.9)]",
+              compact
+                ? "bottom-2.5 px-2.5 py-1 text-[10px]"
+                : "bottom-3.5 px-3.5 py-1.5 text-[11.5px]",
+            )}
+          >
+            Scratch the logo
+          </span>
+        ) : null}
+
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          // `touch-none` keeps a stroke from scrolling the sheet instead.
+          className={cx(
+            "absolute inset-0 block h-full w-full cursor-pointer touch-none transition-opacity duration-500",
+            revealed && "pointer-events-none opacity-0",
+          )}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={stopErasing}
+          onPointerCancel={stopErasing}
         />
-        <p className="relative font-display text-[2.4rem] leading-none font-extrabold tracking-[-0.03em] text-ink-900 tabular-nums">
-          +{coins}
-        </p>
-        <p className="relative text-[12px] font-semibold tracking-[0.02em] text-ink-600">
-          {coins === 1 ? "coin added" : "coins added"}
-        </p>
       </div>
 
-      {/* What to do, on the cover, until the finger arrives. It is an overlay
-          rather than a label beside the card because the gesture is the whole
-          interaction, and pointer-events-none keeps the stroke that dismisses
-          it from being eaten by it. */}
-      {!touched && !revealed ? (
-        <span className="pointer-events-none absolute bottom-3.5 left-1/2 -translate-x-1/2 rounded-full bg-ink-900/85 px-3.5 py-1.5 text-[11.5px] font-semibold whitespace-nowrap text-ink-25 shadow-[0_6px_14px_-8px_rgba(15,15,13,0.9)]">
-          Scratch the logo
-        </span>
+      {/* The gesture is the interaction, but never the only way in: a keyboard
+          or a screen reader gets the same card with one press. */}
+      {!revealed ? (
+        <button
+          type="button"
+          onClick={onRevealed}
+          className="mt-2.5 w-full text-center text-[11.5px] font-semibold text-ink-500 underline decoration-ink-300 decoration-1 underline-offset-4 transition hover:text-ink-800"
+        >
+          Reveal without scratching
+        </button>
       ) : null}
-
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        // `touch-none` keeps a stroke from scrolling the sheet instead.
-        className={cx(
-          "absolute inset-0 block h-full w-full cursor-pointer touch-none transition-opacity duration-500",
-          revealed && "pointer-events-none opacity-0",
-        )}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={stopErasing}
-        onPointerCancel={stopErasing}
-      />
     </div>
-  );
-}
-
-/**
- * The card, in the sheet it is handed over in.
- *
- * Shown after a payment that drew coins — which is every successful payment, so
- * the sheet's job is to make the draw feel like a draw instead of a number
- * appearing in a receipt. The amount is never in the title or the description:
- * it is the thing under the cover, and the cover is the logo.
- *
- * "Reveal for me" is not a fallback for a broken canvas. A scratch card is a
- * pointer gesture, and a sheet is not allowed to have a prize that a keyboard or
- * a screen reader cannot get to.
- */
-export function ScratchSheet({
-  open,
-  coins,
-  onClose,
-  onScratched,
-}: {
-  open: boolean;
-  coins: number;
-  onClose: () => void;
-  /** Told once the cover is off, so the card can be marked as opened. */
-  onScratched?: () => void;
-}) {
-  const [revealed, setRevealed] = useState(false);
-  const alreadyRevealed = useRef(false);
-  // The balance the coins just landed in, pulled once the cover is off: the card
-  // says what this payment paid, and this says what the wallet holds now.
-  const { coins: balance } = useCoins(revealed);
-
-  // A second card in the same mount starts covered again.
-  useEffect(() => {
-    if (open) return;
-    alreadyRevealed.current = false;
-    setRevealed(false);
-  }, [open]);
-
-  const reveal = () => {
-    if (alreadyRevealed.current) return;
-    alreadyRevealed.current = true;
-    setRevealed(true);
-    // The coin drop belongs to the moment the cover comes off, not to the
-    // moment the payment landed.
-    feedback.coins();
-    // And the card is now open. Fire-and-forget on purpose: the coins are
-    // already in the balance, so the worst a failed call costs is a card that
-    // is still under its cover the next time the collection is read — which is
-    // the safe way round for a write whose only job is to remember.
-    onScratched?.();
-  };
-
-  const label = coins === 1 ? "1 coin" : `${coins} coins`;
-
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title="Your scratch card"
-      description="Every payment draws 1 to 50 coins."
-      footer={
-        <Button
-          fullWidth
-          size="lg"
-          variant={revealed ? "primary" : "secondary"}
-          onClick={revealed ? onClose : reveal}
-        >
-          {revealed ? "Done" : "Reveal for me"}
-        </Button>
-      }
-    >
-      <ScratchCard coins={coins} revealed={revealed} onRevealed={reveal} />
-
-      {/* The card is the flourish; this is the receipt for it — what this
-          payment paid, and what the balance says now that it has landed. */}
-      {revealed ? (
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center gap-3 rounded-[12px] border-[1.5px] border-ink-900/20 bg-paper-100 px-3.5 py-3">
-            <Coin size={34} />
-            <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-semibold text-ink-900">
-                {label} added to your balance
-              </p>
-              <p className="mt-0.5 text-[11.5px] text-ink-500">
-                {balance
-                  ? `You now hold ${balance.coins} ${balance.coins === 1 ? "coin" : "coins"}, worth ${formatCurrency(balance.value)}.`
-                  : "Every coin is worth ₹1."}
-              </p>
-            </div>
-          </div>
-          <p className="text-center text-[11.5px] leading-relaxed text-ink-500">
-            Redeem from {balance?.min_redeem ?? 10} coins — a redemption takes the whole
-            balance at ₹1 a coin.
-          </p>
-        </div>
-      ) : (
-        <p
-          aria-live="polite"
-          className="mt-4 text-center text-[12.5px] leading-relaxed text-ink-500"
-        >
-          Scratch anywhere on the card. A few strokes is enough.
-        </p>
-      )}
-    </Sheet>
   );
 }

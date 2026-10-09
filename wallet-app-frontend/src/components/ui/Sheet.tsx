@@ -34,33 +34,58 @@ export function Sheet({
   const titleId = useId();
   const descriptionId = useId();
 
-  // Escape to dismiss + lock background scrolling while open.
+  // Lock background scrolling while open.
+  //
+  // Keyed off `open` alone, so the unlock always restores the overflow the page
+  // really had. Sharing one effect with the two below meant a sheet that
+  // re-rendered while open captured "hidden" as its previous value and left the
+  // page unable to scroll after it closed.
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  // Escape dismisses. Re-registering per render is free and keeps the handler
+  // on the current props.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && dismissible) onClose();
     };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKeyDown);
-    // Move focus into the dialog for keyboard and screen-reader users.
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, dismissible, onClose]);
+
+  // Move focus into the dialog for keyboard and screen-reader users — once per
+  // opening.
+  //
+  // This used to share one effect with the two above, and to re-arm itself
+  // whenever the component re-rendered. Its target is the first control in the
+  // panel, which is the header's close button, so any re-render while a sheet
+  // was open pulled the caret out of whatever was being typed into and closed
+  // the on-screen keyboard — one disappearing keyboard per character.
+  useEffect(() => {
+    if (!open) return;
     const focusTimer = window.setTimeout(() => {
+      const panel = panelRef.current;
+      const active = document.activeElement;
+      // Whatever the user has already focused wins — this only runs on opening,
+      // but a control that took focus itself must not be moved.
+      if (panel && active instanceof HTMLElement && panel.contains(active)) return;
       // Prefer an explicit autofocus target over the header's close button.
       // (A combined selector wouldn't work: querySelector returns whichever
       // match comes first in document order, not the first selector listed.)
-      const panel = panelRef.current;
       const target =
         panel?.querySelector<HTMLElement>("[data-autofocus]") ??
         panel?.querySelector<HTMLElement>("input, button, [tabindex]:not([tabindex='-1'])");
       target?.focus();
     }, 30);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-      window.clearTimeout(focusTimer);
-    };
-  }, [open, dismissible, onClose]);
+    return () => window.clearTimeout(focusTimer);
+  }, [open]);
 
   if (!open) return null;
 

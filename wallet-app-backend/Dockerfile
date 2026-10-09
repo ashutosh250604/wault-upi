@@ -14,6 +14,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# DejaVu Sans is the statement's rupee sign. reportlab's built-in Helvetica has
+# no ₹ glyph, so `wallet/statement.py` looks for a Unicode face on the host and
+# prints "INR" when it cannot find one — which is exactly what a slim image
+# looks like. The font ships in `fonts-dejavu-core`, and the paths statement.py
+# checks are the ones this package installs to.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY wallet-app-backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

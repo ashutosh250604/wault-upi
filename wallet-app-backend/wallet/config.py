@@ -67,6 +67,10 @@ class Config:
     OTP_MAX_ATTEMPTS = 3
     PIN_MAX_ATTEMPTS = 5
     PIN_LOCK_MINUTES = 15
+    # How long a verified PIN-reset token stays usable. A reset is finished in
+    # the same sitting it starts in — the code has just been typed — so the
+    # window is minutes, not hours.
+    PIN_RESET_TTL_MINUTES = int(os.getenv("PIN_RESET_TTL_MINUTES", "10"))
 
     MAX_TOPUP_RUPEES = 100000
     # Ceiling for any single debit: a direct payment, or paying off a request.

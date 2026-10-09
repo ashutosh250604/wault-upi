@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
 import { MOBILE_RE, mobileError } from "../lib/validation";
@@ -265,6 +265,18 @@ export default function LoginPage() {
             >
               Get OTP
             </Button>
+
+            {/* The PIN is the one credential a hash cannot give back. Without
+                this door a forgotten PIN left the wallet unusable for good, so
+                it belongs beside the way in rather than buried in help. */}
+            <div className="flex justify-end">
+              <Link
+                to="/forgot-pin"
+                className="rounded-[6px] px-1 py-0.5 text-[12.5px] font-semibold text-seal-700 underline decoration-seal-300 decoration-1 underline-offset-4 transition hover:text-seal-800 focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none"
+              >
+                Forgot your PIN?
+              </Link>
+            </div>
 
             {asleep ? (
               <p className="flex items-start gap-2 rounded-[10px] bg-pending-50 p-3 text-[12.5px] leading-relaxed text-pending-700 ring-1 ring-pending-100 ring-inset">
