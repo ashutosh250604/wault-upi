@@ -4,7 +4,8 @@ import { avatarToneFor } from "../lib/avatar";
 import { firstName } from "../lib/format";
 import { personCaption, personLabel, type PeopleStatus } from "../lib/people";
 import { Avatar } from "./ui/Avatar";
-import { IconPlus, IconRefresh } from "./ui/Icons";
+import { SectionTitle, TextLink } from "./ui/Card";
+import { IconPlus, IconRefresh, IconStar } from "./ui/Icons";
 
 export interface PersonTileProps {
   name: string | null;
@@ -16,30 +17,30 @@ export interface PersonTileProps {
   favourite?: boolean;
 }
 
-/** A tappable face: avatar plus a first name, sized for a horizontal strip. */
+/** A tappable face: a stamp mark plus a first name, sized for a strip. */
 export function PersonTile({ name, seed, onClick, caption, favourite }: PersonTileProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5 rounded-2xl px-1 py-1 transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+      className="group flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-[8px] px-1 py-0.5 transition active:translate-y-px focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none"
     >
       <span className="relative">
         <Avatar name={name} size="lg" tone={avatarToneFor(seed)} />
         {favourite ? (
           <span
             aria-hidden="true"
-            className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full bg-white text-[9px] text-amber-400 shadow-sm ring-1 ring-slate-100"
+            className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-[4px] bg-seal-500 text-paper-25 ring-2 ring-paper-25"
           >
-            ★
+            <IconStar size={9} filled />
           </span>
         ) : null}
       </span>
-      <span className="w-full truncate text-center text-[11.5px] font-semibold text-slate-700">
+      <span className="w-full truncate text-center text-[11.5px] font-semibold text-ink-700">
         {firstName(name)}
       </span>
       {caption ? (
-        <span className="w-full truncate text-center text-[10px] text-slate-400">{caption}</span>
+        <span className="w-full truncate text-center text-[10px] text-ink-400">{caption}</span>
       ) : null}
     </button>
   );
@@ -51,12 +52,12 @@ export function AddPersonTile({ onClick, label = "New" }: { onClick: () => void;
     <button
       type="button"
       onClick={onClick}
-      className="flex w-[4.5rem] shrink-0 flex-col items-center gap-1.5 rounded-2xl px-1 py-1 transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+      className="flex w-[4.5rem] shrink-0 flex-col items-center gap-1 rounded-[8px] px-1 py-0.5 transition active:translate-y-px focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none"
     >
-      <span className="flex size-12 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-slate-400">
+      <span className="flex size-12 items-center justify-center rounded-[10px] border border-dashed border-ink-300 text-ink-500">
         <IconPlus size={20} />
       </span>
-      <span className="w-full truncate text-center text-[11.5px] font-semibold text-slate-500">
+      <span className="w-full truncate text-center text-[11.5px] font-semibold text-ink-500">
         {label}
       </span>
     </button>
@@ -69,8 +70,8 @@ export function PeopleStripSkeleton({ count = 6 }: { count?: number }) {
     <div className="flex gap-1" aria-hidden="true">
       {Array.from({ length: count }).map((_, index) => (
         <div key={index} className="flex w-[4.5rem] shrink-0 flex-col items-center gap-2 py-1">
-          <div className="size-12 animate-pulse rounded-full bg-slate-200/80" />
-          <div className="h-2.5 w-12 animate-pulse rounded bg-slate-200/80" />
+          <div className="size-12 animate-pulse rounded-[10px] bg-ink-200/70" />
+          <div className="h-2.5 w-12 animate-pulse rounded-[4px] bg-ink-200/70" />
         </div>
       ))}
     </div>
@@ -104,7 +105,7 @@ export function PeopleStrip({
       <button
         type="button"
         onClick={onRetry}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 py-4 text-[12.5px] font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+        className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-ink-300 py-4 text-[12.5px] font-semibold text-ink-500 transition hover:border-ink-400 hover:text-ink-700"
       >
         <IconRefresh size={15} /> Couldn&apos;t load your contacts — tap to retry
       </button>
@@ -127,7 +128,7 @@ export function PeopleStrip({
         />
       ))}
       {list.length === 0 && !onAdd ? (
-        <p className="py-3 text-[12.5px] text-slate-500">
+        <p className="py-3 text-[12.5px] text-ink-500">
           Nobody here yet — add a contact to pay them in one tap.
         </p>
       ) : null}
@@ -157,18 +158,23 @@ export function PeopleSection({
 }: PeopleSectionProps) {
   return (
     <section aria-label="Send money to" className={cx("space-y-1", className)}>
-      <div className="flex items-baseline justify-between px-1">
-        <h2 className="text-[15px] font-bold tracking-tight text-slate-900">Send money to</h2>
-        {onSeeAll ? (
-          <button
-            type="button"
-            onClick={onSeeAll}
-            className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-[12.5px] font-semibold text-brand-700 transition hover:bg-brand-50"
-          >
-            All contacts
-          </button>
-        ) : null}
-      </div>
+      <SectionTitle
+        action={
+          onSeeAll ? (
+            <TextLink
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                onSeeAll();
+              }}
+            >
+              All contacts
+            </TextLink>
+          ) : undefined
+        }
+      >
+        Send money to
+      </SectionTitle>
       <PeopleStrip
         people={people}
         status={status}

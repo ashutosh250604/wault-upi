@@ -11,7 +11,16 @@ import { useToast } from "../hooks/toast";
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/ui/Button";
 import { Field, TextInput } from "../components/ui/Field";
-import { IconArrowLeft, IconTorch, IconWarning } from "../components/ui/Icons";
+import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { IconTile } from "../components/ui/IconTile";
+import {
+  IconArrowLeft,
+  IconAt,
+  IconChevronRight,
+  IconQr,
+  IconTorch,
+  IconWarning,
+} from "../components/ui/Icons";
 import { Sheet } from "../components/ui/Sheet";
 import { Spinner } from "../components/ui/Spinner";
 
@@ -203,9 +212,19 @@ export default function ScanQrPage() {
     setManualOpen(false);
   };
 
+  // One sentence for why the camera can't run — said where the camera would
+  // have been, rather than as a status line under the buttons.
+  const cameraReason = !secureContext
+    ? "Scanning needs a secure connection — HTTPS or localhost. Upload a photo of the code, or type the number instead."
+    : unsupported
+      ? "This browser has no camera API. Upload a photo of the code, or type the number instead."
+      : cameraError
+        ? cameraErrorMessage(cameraError)
+        : "The camera didn't start. Upload a photo of the code, or type the number instead.";
+
   return (
     <AppShell bare contentClassName="overflow-hidden">
-      <div className="relative flex h-full flex-col bg-slate-950">
+      <div className="relative flex h-full flex-col bg-ink-950">
         {/* Camera fills the surface; the chrome floats above it. */}
         <div className="absolute inset-0">
           {showCamera ? (
@@ -223,22 +242,21 @@ export default function ScanQrPage() {
               }}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-              <span className="flex size-12 items-center justify-center rounded-2xl bg-white/10 text-amber-300">
-                <IconWarning size={22} />
-              </span>
-              <p className="text-[13.5px] leading-relaxed text-white/90">
-                {!secureContext
-                  ? "Camera scanning needs HTTPS. Upload a QR image or type the UPI ID instead."
-                  : unsupported
-                    ? "This browser has no camera API. Upload a QR image or type the UPI ID instead."
-                    : cameraError
-                      ? cameraErrorMessage(cameraError)
-                      : "Camera unavailable."}
+            /* The fallback is a screen of its own, not a paragraph: a heading,
+               a reason, and the one thing to do next. */
+            <div className="flex h-full flex-col items-center justify-center gap-3.5 px-7 text-center">
+              <IconTile tone="seal" scale="lg" solid>
+                <IconWarning size={TILE_GLYPH.lg} strokeWidth={TILE_STROKE} />
+              </IconTile>
+              <p className="font-display text-[16px] font-bold tracking-tight text-ink-25">
+                The camera didn&apos;t start
+              </p>
+              <p className="max-w-[19rem] text-[13px] leading-relaxed text-ink-300">
+                {cameraReason}
               </p>
               {cameraError ? (
                 <Button
-                  variant="secondary"
+                  variant="onDark"
                   size="sm"
                   onClick={() => {
                     setCameraError(null);
@@ -254,32 +272,53 @@ export default function ScanQrPage() {
 
         {/* Framing hole: one huge shadow dims everything outside the square. */}
         {showCamera ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4 pb-24">
             {/* aspect-square + a width, so the cutout stays square on any screen
                 (a percentage height would stretch it into a rectangle). */}
-            <div className="relative aspect-square w-[68%] max-w-[19rem] rounded-3xl shadow-[0_0_0_9999px_rgba(2,6,23,0.62)]">
-              <span className="absolute -top-px -left-px size-8 rounded-tl-3xl border-t-4 border-l-4 border-white" />
-              <span className="absolute -top-px -right-px size-8 rounded-tr-3xl border-t-4 border-r-4 border-white" />
-              <span className="absolute -bottom-px -left-px size-8 rounded-bl-3xl border-b-4 border-l-4 border-white" />
-              <span className="absolute -right-px -bottom-px size-8 rounded-br-3xl border-r-4 border-b-4 border-white" />
-              <span className="absolute inset-x-3 h-0.5 animate-scan rounded-full bg-gradient-to-r from-transparent via-brand-300 to-transparent shadow-[0_0_12px_2px_rgba(112,72,251,0.65)]" />
+            <div className="relative aspect-square w-[68%] max-w-[19rem] rounded-[20px] shadow-[0_0_0_9999px_rgba(15,15,13,0.7)]">
+              {/* A hairline all the way round, with the four corners inked over
+                  it: the brackets say where to aim, the rule says the code has
+                  to fit inside them. */}
+              <span className="absolute inset-0 rounded-[20px] ring-1 ring-ink-25/20" />
+              <span className="absolute -top-px -left-px size-8 rounded-tl-[20px] border-t-[3px] border-l-[3px] border-ink-25" />
+              <span className="absolute -top-px -right-px size-8 rounded-tr-[20px] border-t-[3px] border-r-[3px] border-ink-25" />
+              <span className="absolute -bottom-px -left-px size-8 rounded-bl-[20px] border-b-[3px] border-l-[3px] border-ink-25" />
+              <span className="absolute -right-px -bottom-px size-8 rounded-br-[20px] border-r-[3px] border-b-[3px] border-ink-25" />
+              {/* The scan beam: a crisp seal hairline, no glow. */}
+              <span className="absolute inset-x-2 h-2 animate-scan">
+                <span className="absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 bg-seal-500/30 blur-[2px]" />
+                <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-seal-400" />
+              </span>
             </div>
+            {/* The instruction sits under the frame it is about, on a chip, so
+                it stays legible over whatever the camera is pointing at. */}
+            <p className="rounded-full bg-ink-950/65 px-3.5 py-1.5 text-[12px] font-medium text-ink-200 backdrop-blur">
+              Fill the frame with the code
+            </p>
           </div>
         ) : null}
 
-        {/* Floating chrome */}
-        <div className="relative z-10 flex items-center gap-1 px-2 pt-[max(0.6rem,env(safe-area-inset-top))]">
+        {/* Floating chrome, with a hierarchy: a titled head that says what this
+            screen is and what it accepts, then one control on the right. It was
+            a row of three equal objects — a button, a label and another button
+            — which left the title reading as a caption between two icons. */}
+        <header className="relative z-10 flex items-start gap-2 px-2.5 pt-[max(0.6rem,env(safe-area-inset-top))]">
           <button
             type="button"
             onClick={() => navigate(-1)}
             aria-label="Close scanner"
-            className="rounded-full bg-slate-950/45 p-2.5 text-white backdrop-blur transition hover:bg-slate-950/70"
+            className="rounded-[12px] bg-ink-950/55 p-2.5 text-ink-25 backdrop-blur transition hover:bg-ink-950/80 focus-visible:ring-2 focus-visible:ring-ink-25/60 focus-visible:outline-none"
           >
             <IconArrowLeft size={20} />
           </button>
-          <p className="flex-1 pl-1 text-[15px] font-semibold text-white drop-shadow">
-            Scan any QR
-          </p>
+          <div className="min-w-0 flex-1 pt-1">
+            <h1 className="truncate font-display text-[17px] leading-none font-bold tracking-tight text-ink-25 drop-shadow">
+              Scan &amp; pay
+            </h1>
+            <p className="mt-1.5 truncate text-[11.5px] leading-none text-ink-300">
+              Works with any app&apos;s UPI QR code
+            </p>
+          </div>
           {torchAvailable ? (
             <button
               type="button"
@@ -288,24 +327,34 @@ export default function ScanQrPage() {
               aria-label={torchOn ? "Turn torch off" : "Turn torch on"}
               className={
                 torchOn
-                  ? "rounded-full bg-amber-400/95 p-2.5 text-slate-900"
-                  : "rounded-full bg-slate-950/45 p-2.5 text-white backdrop-blur transition hover:bg-slate-950/70"
+                  ? "rounded-[12px] bg-seal-500 p-2.5 text-ink-25 focus-visible:ring-2 focus-visible:ring-ink-25/60 focus-visible:outline-none"
+                  : "rounded-[12px] bg-ink-950/55 p-2.5 text-ink-25 backdrop-blur transition hover:bg-ink-950/80 focus-visible:ring-2 focus-visible:ring-ink-25/60 focus-visible:outline-none"
               }
             >
               <IconTorch size={19} />
             </button>
           ) : null}
-        </div>
+        </header>
 
         <div className="relative z-10 flex-1" />
 
-        {/* Controls */}
-        <div className="relative z-10 space-y-3 rounded-t-3xl bg-slate-950/75 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md">
-          <div className="flex min-h-5 items-center justify-center gap-2 px-2 text-center" aria-live="polite">
+        {/* Controls.
+
+            Three tiers instead of two buttons of equal weight. The status line
+            is a live indicator while the camera is open (it used to sit as
+            static grey text saying what the header now says), the photo upload
+            is the primary action, and typing a handle is a quiet row under it —
+            which is the real order of preference when a camera is already
+            pointing at something. */}
+        <div className="relative z-10 space-y-2.5 rounded-t-[18px] border-t border-ink-800 bg-ink-950/85 px-4 pt-3.5 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md">
+          <div
+            className="flex min-h-5 items-center justify-center gap-2 px-2 text-center"
+            aria-live="polite"
+          >
             {resolving || galleryBusy ? (
               <>
-                <Spinner size={14} className="text-white/80" />
-                <span className="text-[12.5px] font-medium text-white/85">
+                <Spinner size={14} className="text-ink-300" />
+                <span className="text-[12.5px] font-medium text-ink-200">
                   {status ?? "Working…"}
                 </span>
               </>
@@ -313,36 +362,53 @@ export default function ScanQrPage() {
               <span
                 className={
                   errorStatus
-                    ? "text-[12.5px] font-medium text-rose-300"
-                    : "text-[12.5px] font-medium text-white/85"
+                    ? "text-[12.5px] font-medium text-seal-300"
+                    : "text-[12.5px] font-medium text-ink-200"
                 }
               >
                 {status}
               </span>
             ) : (
-              <span className="text-[12.5px] text-white/70">
-                Point the camera at a Wallet Pay QR code
+              <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-ink-300">
+                <span aria-hidden="true" className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-credit-600 opacity-70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-credit-600" />
+                </span>
+                Looking for a code
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => fileRef.current?.click()}
-              disabled={galleryBusy || resolving}
-            >
-              Upload QR
-            </Button>
-            <Button size="lg" onClick={() => setManualOpen(true)} disabled={resolving}>
-              Enter number
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
+            leftIcon={<IconQr size={18} />}
+            onClick={() => fileRef.current?.click()}
+            disabled={galleryBusy || resolving}
+          >
+            Upload a QR photo
+          </Button>
 
-          <p className="text-center text-[11px] text-white/45">
-            Works with any <span className="font-mono">upi://pay</span> QR code.
-          </p>
+          {/* The second way in, as a row rather than a button: same action as
+              before, one tier down, and with room to say when to use it. */}
+          <button
+            type="button"
+            onClick={() => setManualOpen(true)}
+            disabled={resolving}
+            className="flex w-full items-center gap-3 rounded-[12px] border-[1.5px] border-ink-800 bg-ink-900 px-4 py-2.5 text-left transition hover:border-ink-600 hover:bg-ink-800 active:bg-ink-950 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ink-25/60 focus-visible:outline-none"
+          >
+            <IconAt size={18} className="shrink-0 text-ink-300" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13.5px] leading-snug font-semibold text-ink-25">
+                Enter a number or UPI ID
+              </span>
+              <span className="mt-0.5 block truncate text-[11.5px] leading-snug text-ink-400">
+                If the code won&apos;t scan, type the handle instead
+              </span>
+            </span>
+            <IconChevronRight size={17} className="shrink-0 text-ink-500" />
+          </button>
         </div>
 
         <input
@@ -364,14 +430,14 @@ export default function ScanQrPage() {
           <Field
             label="Mobile number or UPI ID"
             error={manualIssue}
-            hint="Try 9000000004, or 9000000002@okwalletpay"
+            hint="Try 9000000004, or 9000000002@okwault"
           >
             {({ id, describedBy }) => (
               <TextInput
                 id={id}
                 aria-describedby={describedBy}
                 autoFocus
-                placeholder="9000000004 or name@okwalletpay"
+                placeholder="9000000004 or name@okwault"
                 value={manualVpa}
                 invalid={Boolean(manualIssue)}
                 onChange={(event) => {

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cx } from "../lib/cx";
+import { BrandSeal } from "./AppShell";
+import { type IconTone } from "../lib/tiles";
+import { IconTile } from "./ui/IconTile";
 import {
   IconCheck,
   IconClose,
@@ -14,31 +17,25 @@ import {
   type ToastTone,
 } from "../hooks/toast";
 
-const TONES: Record<ToastTone, { ring: string; icon: ReactNode }> = {
-  success: {
-    ring: "ring-emerald-200 bg-emerald-50 text-emerald-900",
-    icon: (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-        <IconCheck size={13} />
-      </span>
-    ),
-  },
-  error: {
-    ring: "ring-rose-200 bg-rose-50 text-rose-900",
-    icon: (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-rose-600 text-white">
-        <IconWarning size={13} />
-      </span>
-    ),
-  },
-  info: {
-    ring: "ring-slate-200 bg-white text-slate-800",
-    icon: (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-700 text-white">
-        <IconInfo size={13} />
-      </span>
-    ),
-  },
+/**
+ * A toast is a receipt that arrives on its own: the state stamped in a square,
+ * the message set large enough to be read at arm's length. It is deliberately
+ * the loudest small object in the app — everything else waits to be looked at,
+ * and this interrupts.
+ *
+ * The tone is said once, by the tile: a filled square of the tone's own ink with
+ * the cream paper knocked out of the glyph, which is louder than a tinted chip
+ * and reads even where the paper behind it does not. There used to be a 5px
+ * strip of the same ink down the toast's left edge as well. It was doing nothing
+ * the tile was not already doing, and where the toast sat on a surface of a
+ * similar colour it was the one part of the toast that vanished — which made a
+ * complete toast look clipped. It is gone, and the slip is now inset the same on
+ * both sides.
+ */
+const TONES: Record<ToastTone, { tone: IconTone; icon: ReactNode }> = {
+  success: { tone: "credit", icon: <IconCheck size={16} strokeWidth={2.4} /> },
+  error: { tone: "seal", icon: <IconWarning size={16} strokeWidth={2.2} /> },
+  info: { tone: "ink", icon: <IconInfo size={16} strokeWidth={2.2} /> },
 };
 
 /**
@@ -92,19 +89,37 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      {/* The toasts hang off the viewport rather than the app frame, so on a
+          laptop they used to start 12px from the top of the window while the
+          frame itself begins 20px down — the slip poked out above the surface it
+          belongs to and read as clipped. The desktop offset now clears the
+          frame's top edge with room to spare. */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2.5 px-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-9">
         {toasts.map((toast) => (
           <div
             key={toast.id}
             role={toast.tone === "error" ? "alert" : "status"}
             aria-live={toast.tone === "error" ? "assertive" : "polite"}
             className={cx(
-              "pointer-events-auto flex w-full max-w-sm animate-slide-up items-start gap-2.5 rounded-2xl px-3.5 py-3 shadow-lg ring-1 backdrop-blur",
-              TONES[toast.tone].ring,
+              "pointer-events-auto relative flex w-full max-w-[22rem] animate-slide-up items-start gap-3 overflow-hidden rounded-[13px] pl-3.5",
+              // A warm slip with an inked edge and a hard print shadow: it has to
+              // read as paper on the ink hero as well as on the page, and to sit
+              // above both rather than blend into either.
+              "border-[1.5px] border-ink-900 bg-paper-25 py-3.5 pr-2.5",
+              "shadow-[4px_4px_0_0_rgba(25,25,22,0.85)]",
             )}
           >
-            <span className="pt-0.5">{TONES[toast.tone].icon}</span>
-            <p className="flex-1 text-[13px] leading-snug font-medium">{toast.message}</p>
+            {/* A filled `IconTile`, not a bespoke square: the toast's mark and
+                the row's mark are the same tile, one speaking at full volume
+                and one saying it quietly. */}
+            <IconTile tone={TONES[toast.tone].tone} scale="xs" solid>
+              {TONES[toast.tone].icon}
+            </IconTile>
+            {/* The message is the whole toast: set at 14px semibold rather than
+                the 13px medium it used to be, which read as a tooltip. */}
+            <p className="flex-1 pt-0.5 text-[14px] leading-[1.4] font-semibold text-ink-900">
+              {toast.message}
+            </p>
             {toast.action ? (
               <button
                 type="button"
@@ -112,7 +127,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   dismiss(toast.id);
                   toast.action?.onClick();
                 }}
-                className="shrink-0 rounded-lg px-2 py-1 text-[13px] font-bold underline decoration-2 underline-offset-2 hover:bg-black/5"
+                className="shrink-0 rounded-[6px] border-[1.5px] border-ink-900/20 bg-paper-100 px-2.5 py-1.5 text-[12.5px] font-bold text-seal-700 transition hover:border-ink-900/50 hover:bg-paper-200 active:bg-paper-300"
               >
                 {toast.action.label}
               </button>
@@ -121,12 +136,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => dismiss(toast.id)}
               aria-label="Dismiss notification"
-              className="-mt-0.5 -mr-1 shrink-0 rounded-full p-1 opacity-60 transition hover:bg-black/5 hover:opacity-100"
+              className="-mt-0.5 -mr-1 shrink-0 rounded-[6px] p-1.5 text-ink-500 transition hover:bg-paper-100 hover:text-ink-900"
             >
-              <IconClose size={15} />
+              <IconClose size={16} />
             </button>
           </div>
         ))}
+
+        {/* The queue's own watermark: a hairline seal under the stack, so the
+            corner of the app that talks back to you is branded too. */}
+        {toasts.length > 1 ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none -mt-1 flex items-center gap-1.5 text-[10.5px] font-semibold text-ink-500"
+          >
+            <BrandSeal size={12} />
+            {toasts.length} notifications
+          </span>
+        ) : null}
       </div>
     </ToastContext.Provider>
   );

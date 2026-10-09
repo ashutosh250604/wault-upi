@@ -5,10 +5,13 @@ import { feedback } from "../../lib/feedback";
 export interface KeypadButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Secondary keys (00, backspace) read quieter than the digits. */
   muted?: boolean;
+  /** Wider key, e.g. the `00` on the amount pad. */
+  wide?: boolean;
 }
 
 export function KeypadButton({
   muted = false,
+  wide = false,
   className,
   type = "button",
   onClick,
@@ -24,12 +27,15 @@ export function KeypadButton({
         onClick?.(event);
       }}
       className={cx(
-        "flex h-12 items-center justify-center rounded-xl font-semibold transition select-none",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60",
-        "active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40",
+        "flex h-[3.4rem] items-center justify-center rounded-[6px] font-display font-semibold transition select-none",
+        "focus-visible:ring-2 focus-visible:ring-ink-900/35 focus-visible:outline-none",
+        // The key physically travels down, like a real till.
+        "active:translate-y-px active:bg-paper-200",
         muted
-          ? "text-slate-500 hover:bg-slate-100 active:bg-slate-200"
-          : "text-xl text-slate-900 hover:bg-slate-100 active:bg-slate-200",
+          ? "text-[15px] text-ink-500 hover:bg-paper-100"
+          : "text-[23px] text-ink-900 hover:bg-paper-100",
+        wide && "col-span-2",
+        "disabled:pointer-events-none disabled:opacity-35",
         className,
       )}
       {...rest}

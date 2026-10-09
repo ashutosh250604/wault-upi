@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, errorMessage, onAuthFailure } from "../lib/api";
-import { clearSession, patchSession, readSession, writeSession } from "../lib/session";
+import {
+  clearSession,
+  inspectToken,
+  patchSession,
+  readSession,
+  writeSession,
+} from "../lib/session";
 import type { MeResponse, Session, WalletTransaction } from "../types";
 import { useToast } from "../hooks/toast";
 import { AppSessionContext, type AppSessionValue, type LoadStatus } from "./context";
@@ -51,6 +57,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
     return () => onAuthFailure(null);
   }, [signOut]);
+
+  // A session lasts 30 minutes and the client counts the same window down.
+  //
+  // The token is the source of truth — the server refuses anything past `exp` —
+  // so waiting for a 401 would mean finding out mid-payment, with the screen
+  // half-rendered around a wallet that is already closed. Instead the app ends
+  // the session the moment it lapses and says why.
+  useEffect(() => {
+    if (!session) return;
+    const { expiresAt } = inspectToken(session.token);
+    // A token whose expiry can't be read is not evidence of a lapsed session;
+    // the 401 handler above is the backstop for those.
+    if (!expiresAt) return;
+
+    const lapse = () =>
+      signOut("Your 30-minute session has ended. Please sign in again.");
+    const msLeft = expiresAt.getTime() - Date.now();
+    if (msLeft <= 0) {
+      lapse();
+      return;
+    }
+    const timer = window.setTimeout(lapse, msLeft);
+    return () => window.clearTimeout(timer);
+  }, [session, signOut]);
 
   const refresh = useCallback<AppSessionValue["refresh"]>(async (options) => {
     const current = readSession();

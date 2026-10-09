@@ -19,6 +19,17 @@ def create_app(config_overrides=None):
     if not app.debug:
         logging.basicConfig(level=logging.INFO)
 
+    # A session token is only as trustworthy as the key that signed it. The
+    # fallback exists so a fresh clone runs with no setup, which also means a
+    # deploy that forgets SECRET_KEY signs every session with a value that is
+    # published in this repository. Say so in the log rather than failing the
+    # start: the local-dev flow deliberately runs without one.
+    if app.config["SECRET_KEY"] == Config.DEV_SECRET_KEY:
+        app.logger.warning(
+            "SECRET_KEY is unset and the development key is in use — set SECRET_KEY "
+            "before deploying (the hosting config generates one; see .env.example)."
+        )
+
     db.init_app(app)
     migrate.init_app(app, db)
     cors.init_app(
@@ -47,6 +58,37 @@ def create_app(config_overrides=None):
     app.register_blueprint(requests_bp, url_prefix=API_PREFIX)
     app.register_blueprint(accounts_bp, url_prefix=API_PREFIX)
     app.register_blueprint(inbox_bp, url_prefix=API_PREFIX)
+
+    @app.after_request
+    def security_headers(response):
+        """The browser-side protections the app can state about itself.
+
+        A payment app is a phishing target by nature, so four headers are set
+        on every response — JSON, statement download and the SPA alike:
+
+          - `nosniff` stops a browser from second-guessing a Content-Type, which
+            is how a JSON body gets treated as scriptable HTML.
+          - `DENY` framing: WAULT is never embedded, and an un-framable page
+            cannot be clickjacked into approving a payment.
+          - `no-referrer` keeps a UPI ID or a statement URL from leaking to a
+            third party through the `Referer` of an outbound link.
+          - `Permissions-Policy` allows the camera — the scanner needs it — and
+            switches off the sensors the app has no use for.
+
+        HSTS is sent unconditionally because it is only honoured on an HTTPS
+        response: over plain HTTP (local development) browsers ignore it, and
+        behind a TLS-terminating proxy it locks the domain to HTTPS for a year.
+        """
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(self), microphone=(), geolocation=()"
+        )
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+        return response
 
     @app.get("/healthz")
     def healthz():
@@ -106,4 +148,13 @@ def _register_frontend(app):
         candidate = os.path.join(static_dir, path)
         if os.path.isfile(candidate):
             return send_from_directory(static_dir, path)
+
+        # A request for a missing *file* — an image, a font, an audio cue — is a
+        # 404, not the app. Handing back index.html would have the browser try to
+        # decode an HTML document as a PNG or a sound, and would hide a renamed
+        # or deleted asset until someone noticed the silence. Client routes never
+        # carry an extension, so every extension-less path still reaches the SPA.
+        if "." in os.path.basename(path):
+            return jsonify({"message": "Not found"}), 404
+
         return send_from_directory(static_dir, "index.html")

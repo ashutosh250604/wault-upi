@@ -1,6 +1,6 @@
 /**
- * Inline SVG icon set — ~24 hand-rolled glyphs instead of an icon dependency,
- * which keeps the bundle small and the stroke weight consistent.
+ * Inline SVG icon set — one hand-rolled glyph per concept instead of an icon
+ * dependency, which keeps the bundle small and the stroke weight consistent.
  */
 
 import type { ReactNode, SVGProps } from "react";
@@ -34,22 +34,9 @@ export const IconArrowLeft = (p: IconProps) => (
   </Base>
 );
 
-export const IconArrowRight = (p: IconProps) => (
-  <Base {...p}>
-    <path d="M4.5 12h15" />
-    <path d="m13 5.5 6.5 6.5-6.5 6.5" />
-  </Base>
-);
-
 export const IconChevronRight = (p: IconProps) => (
   <Base {...p}>
     <path d="m9 18 6-6-6-6" />
-  </Base>
-);
-
-export const IconChevronDown = (p: IconProps) => (
-  <Base {...p}>
-    <path d="m6 9 6 6 6-6" />
   </Base>
 );
 
@@ -78,6 +65,22 @@ export const IconSent = (p: IconProps) => (
   </Base>
 );
 
+/**
+ * Money arriving: an arrow out of the top-right corner into the bottom-left one.
+ *
+ * The same shape `IconReceived` draws, under a second name because the payment
+ * sheet needs it for "ask for money" and that is a different sentence — what the
+ * payer is asking for is money coming in, so the arrow points inwards rather
+ * than at the sky. Sharing the geometry is the point: one direction means one
+ * direction everywhere in the app.
+ */
+export const IconRequest = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M17 7 7 17" />
+    <path d="M16 17H7V8" />
+  </Base>
+);
+
 export const IconReceived = (p: IconProps) => (
   <Base {...p}>
     <path d="M17 7 7 17" />
@@ -85,13 +88,50 @@ export const IconReceived = (p: IconProps) => (
   </Base>
 );
 
+/**
+ * A code being read: the four corners a camera locks onto, with the code itself
+ * between them.
+ *
+ * The reticle used to carry a full-width line through its middle — which, drawn
+ * at the 21px the payment sheet asks for, is the universal "no entry" slash
+ * laid across a QR frame. It read as "scanning is unavailable", on the one row
+ * whose whole job is to start a scan.
+ */
 export const IconScan = (p: IconProps) => (
   <Base {...p}>
-    <path d="M3 8V5.5A2.5 2.5 0 0 1 5.5 3H8" />
-    <path d="M16 3h2.5A2.5 2.5 0 0 1 21 5.5V8" />
-    <path d="M21 16v2.5A2.5 2.5 0 0 1 18.5 21H16" />
-    <path d="M8 21H5.5A2.5 2.5 0 0 1 3 18.5V16" />
-    <path d="M3 12h18" />
+    <path d="M3.5 8.5V6A2.5 2.5 0 0 1 6 3.5h2.5" />
+    <path d="M15.5 3.5H18A2.5 2.5 0 0 1 20.5 6v2.5" />
+    <path d="M20.5 15.5V18a2.5 2.5 0 0 1-2.5 2.5h-2.5" />
+    <path d="M8.5 20.5H6A2.5 2.5 0 0 1 3.5 18v-2.5" />
+    <rect x="9.25" y="9.25" width="5.5" height="5.5" rx="1.25" />
+  </Base>
+);
+
+/**
+ * A handle: the `@` every UPI ID is built on.
+ *
+ * "Pay to UPI ID" used to be a person, which is the glyph for a contact, not for
+ * the handle you type. The address and the person are different things on this
+ * screen — the mobile row already has the person's side of it.
+ */
+export const IconAt = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="3.6" />
+    <path d="M15.6 8.4v6.3a2.6 2.6 0 0 0 5.2 0V12a8.8 8.8 0 1 0-3.5 7" />
+  </Base>
+);
+
+/**
+ * Money going in: an arrow landing in the tray the balance sits on.
+ *
+ * "Add money" used to be a bare plus, which the app already uses for the raised
+ * Pay bubble in the nav — one glyph, two meanings, one tap apart.
+ */
+export const IconAddMoney = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 3.5V13" />
+    <path d="m8 9 4 4 4-4" />
+    <path d="M4.5 15.5V17A2.5 2.5 0 0 0 7 19.5h10a2.5 2.5 0 0 0 2.5-2.5v-1.5" />
   </Base>
 );
 
@@ -238,13 +278,6 @@ export const IconLogout = (p: IconProps) => (
   </Base>
 );
 
-export const IconClock = (p: IconProps) => (
-  <Base {...p}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5.2l3.2 2" />
-  </Base>
-);
-
 export const IconNote = (p: IconProps) => (
   <Base {...p}>
     <path d="M4.5 3.5h15v11l-5 5h-10v-16Z" />
@@ -267,9 +300,26 @@ export const IconBell = (p: IconProps) => (
   </Base>
 );
 
+/**
+ * There is no `IconCoin` any more.
+ *
+ * A coin drawn as a stroked disc sat next to the real coin artwork — one glyph
+ * standing in for money the app ships a picture of — and the two never quite
+ * agreed at small sizes. Everything that shows a coin now renders
+ * `ui/Coin`, so the header chip, the rewards sheet, a transaction row and the
+ * scratch card are all the supplied emblem at four sizes instead of a lookalike
+ * at three of them.
+ */
 export const IconSpark = (p: IconProps) => (
   <Base {...p}>
     <path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.2l-1.8-5.6L4.5 10.8 10.2 9 12 3.5Z" />
     <path d="M18.5 3v3M20 4.5h-3" />
+  </Base>
+);
+
+/** Star, in outline or pressed-ink fill, for favourites. */
+export const IconStar = ({ filled = false, ...p }: IconProps & { filled?: boolean }) => (
+  <Base {...p} fill={filled ? "currentColor" : "none"}>
+    <path d="m12 3.8 2.4 5 5.4.7-4 3.8 1 5.4-4.8-2.6-4.8 2.6 1-5.4-4-3.8 5.4-.7 2.4-5Z" />
   </Base>
 );

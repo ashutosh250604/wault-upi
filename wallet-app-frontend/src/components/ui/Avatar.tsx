@@ -2,61 +2,80 @@ import { cx } from "../../lib/cx";
 import { initials } from "../../lib/format";
 import type { AvatarTone } from "../../lib/avatar";
 
-const SIZES = {
-  sm: "size-8 text-[11px]",
-  md: "size-10 text-[13px]",
-  lg: "size-12 text-[15px]",
-  xl: "size-16 text-xl",
+// Stamps, not circles: a person reads as a small printed mark.
+const BOX = {
+  sm: "size-8 rounded-[6px]",
+  md: "size-10 rounded-[8px]",
+  lg: "size-12 rounded-[10px]",
+  xl: "size-16 rounded-[12px]",
+} as const;
+
+const TEXT = {
+  sm: "text-[11px]",
+  md: "text-[12.5px]",
+  lg: "text-[15px]",
+  xl: "text-[19px]",
+} as const;
+
+/** A bank mark can run to four characters; give it room to stay inside the box. */
+const TEXT_LONG = {
+  sm: "text-[8.5px]",
+  md: "text-[10px]",
+  lg: "text-[11.5px]",
+  xl: "text-[15px]",
 } as const;
 
 const TONES: Record<AvatarTone, string> = {
-  brand: "bg-brand-100 text-brand-700",
-  slate: "bg-slate-100 text-slate-600",
-  emerald: "bg-emerald-100 text-emerald-700",
-  gradient: "bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white",
-  // Solid gradients for contact avatars, so a row of people reads as a set of
-  // distinct faces the way it does in a real payments app.
-  ocean: "bg-gradient-to-br from-sky-400 to-blue-600 text-white",
-  meadow: "bg-gradient-to-br from-emerald-400 to-teal-600 text-white",
-  sunset: "bg-gradient-to-br from-amber-400 to-rose-500 text-white",
-  berry: "bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white",
-  dusk: "bg-gradient-to-br from-indigo-400 to-violet-600 text-white",
+  ink: "bg-ink-900 text-ink-25",
+  paper: "bg-paper-100 text-ink-800 ring-1 ring-paper-300 ring-inset",
+  cobalt: "bg-press-cobalt text-ink-25",
+  teal: "bg-press-teal text-ink-25",
+  olive: "bg-press-olive text-ink-25",
+  clay: "bg-press-clay text-ink-25",
+  plum: "bg-press-plum text-ink-25",
+  carbon: "bg-press-carbon text-ink-25",
 };
 
 export interface AvatarProps {
   name?: string | null;
-  size?: keyof typeof SIZES;
+  /** Overrides the derived initials — institutions stamp their own short code. */
+  label?: string;
+  size?: keyof typeof BOX;
   tone?: AvatarTone;
   className?: string;
 }
 
 export function Avatar({
   name,
+  label,
   size = "md",
-  tone = "brand",
+  tone = "ink",
   className,
 }: AvatarProps) {
+  const content = label ?? initials(name);
+
   return (
     <span
       aria-hidden="true"
       className={cx(
-        "inline-flex shrink-0 items-center justify-center rounded-full font-bold",
-        SIZES[size],
+        "inline-flex shrink-0 items-center justify-center font-display font-bold tracking-tight",
+        BOX[size],
+        content.length >= 4 ? TEXT_LONG[size] : TEXT[size],
         TONES[tone],
         className,
       )}
     >
-      {initials(name)}
+      {content}
     </span>
   );
 }
 
 const BADGE_TONES = {
-  success: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
-  pending: "bg-amber-50 text-amber-700 ring-amber-600/15",
-  failed: "bg-rose-50 text-rose-700 ring-rose-600/15",
-  neutral: "bg-slate-100 text-slate-600 ring-slate-500/15",
-  brand: "bg-brand-50 text-brand-700 ring-brand-600/15",
+  success: "bg-credit-50 text-credit-700 ring-credit-100",
+  pending: "bg-pending-50 text-pending-700 ring-pending-100",
+  failed: "bg-seal-50 text-seal-700 ring-seal-100",
+  neutral: "bg-paper-100 text-ink-600 ring-ink-200",
+  brand: "bg-ink-900 text-ink-25 ring-ink-900",
 } as const;
 
 export interface BadgeProps {
@@ -69,7 +88,7 @@ export function Badge({ tone = "neutral", className, children }: BadgeProps) {
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+        "inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
         BADGE_TONES[tone],
         className,
       )}

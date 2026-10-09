@@ -7,7 +7,7 @@ import { IconBell } from "./ui/Icons";
 /**
  * The inbox bell and its unread badge.
  *
- * Lives in the home hero (light-on-dark) and on the inbox header, hence the
+ * Lives in the home hero (light-on-ink) and on the inbox header, hence the
  * `invert` flag rather than two components that could drift apart.
  */
 export function NotificationBell({
@@ -33,18 +33,18 @@ export function NotificationBell({
           : "Notifications, none unread"
       }
       className={cx(
-        "relative rounded-full p-2 transition focus-visible:outline-none focus-visible:ring-2",
+        "relative rounded-[6px] p-2 transition focus-visible:ring-2 focus-visible:outline-none",
         invert
-          ? "text-white/90 hover:bg-white/15 hover:text-white focus-visible:ring-white"
-          : "text-slate-600 hover:bg-slate-100 focus-visible:ring-brand-500/50",
+          ? "text-ink-200 hover:bg-ink-700 hover:text-ink-25 focus-visible:ring-ink-25"
+          : "text-ink-600 hover:bg-paper-100 focus-visible:ring-ink-900/35",
       )}
     >
       <IconBell size={20} />
       {label ? (
         <span
           className={cx(
-            "absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9.5px] leading-none font-bold text-white",
-            invert && "ring-2 ring-brand-600",
+            "absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-seal-500 px-1 text-[9.5px] leading-none font-bold text-paper-25",
+            invert && "ring-2 ring-ink-800",
           )}
         >
           {label}

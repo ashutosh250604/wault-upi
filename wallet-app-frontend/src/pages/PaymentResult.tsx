@@ -1,6 +1,7 @@
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDateTime } from "../lib/format";
+import { feedback } from "../lib/feedback";
 import { buildReceiptText } from "../lib/transactions";
 import { parseReceipt } from "../lib/routing";
 import { shareText } from "../lib/clipboard";
@@ -9,10 +10,13 @@ import { useToast } from "../hooks/toast";
 import { useAppSession } from "../session/context";
 import { AppShell } from "../components/AppShell";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
 import { CopyButton } from "../components/ui/CopyButton";
 import { DetailRow } from "../components/ui/DetailRow";
-import { IconCheck, IconShare, IconSpark } from "../components/ui/Icons";
+import { Coin } from "../components/ui/Coin";
+import { TILE_GLYPH } from "../lib/tiles";
+import { IconTile } from "../components/ui/IconTile";
+import { IconCheck, IconShare } from "../components/ui/Icons";
+import { ScratchSheet } from "../components/ScratchCard";
 
 export default function PaymentResultPage() {
   const location = useLocation();
@@ -27,12 +31,30 @@ export default function PaymentResultPage() {
     void refresh({ silent: true });
   }, [refresh]);
 
+  // Coins this payment paid: its own draw plus anything an offer it completed
+  // paid alongside it — all written in the same commit as the payment.
+  const coinsWon = receipt
+    ? (receipt.coinsEarned ?? 0) +
+      (receipt.cashback ?? []).reduce((sum, item) => sum + item.coins, 0)
+    : 0;
+  // The card is handed over covered, as soon as the receipt is up.
+  const [scratching, setScratching] = useState(coinsWon > 0);
+
+  // The celebration belongs to the moment the tick lands, and only to the first
+  // render of a receipt — a re-render must not re-play it.
+  const sounded = useRef(false);
+  useEffect(() => {
+    if (!receipt || sounded.current) return;
+    sounded.current = true;
+    // The coin drop belongs to the reveal when there is a card to scratch;
+    // `ScratchSheet` plays it as the cover comes off.
+    if (coinsWon === 0) feedback.coins();
+  }, [receipt, coinsWon]);
+
   if (!receipt) return <Navigate to="/home" replace />;
 
   const isTopUp = receipt.kind === "topup";
   const headline = isTopUp ? "Money added" : "Payment successful";
-  // Cashback that this very payment unlocked, credited in the same commit.
-  const cashbackTotal = (receipt.cashback ?? []).reduce((sum, item) => sum + item.amount, 0);
   const shareBody = buildReceiptText({
     headline,
     amount: receipt.amount,
@@ -43,83 +65,109 @@ export default function PaymentResultPage() {
   });
 
   const onShare = async () => {
-    const result = await shareText({ title: "Wallet Pay receipt", text: shareBody });
+    const result = await shareText({ title: "WAULT receipt", text: shareBody });
     if (result === "copied") toast.success("Receipt copied to clipboard");
     if (result === "failed") toast.error("Couldn't share the receipt");
   };
 
   return (
     <AppShell>
-      <div className="flex flex-col items-center px-5 pt-10 pb-8">
-        <span className="relative flex size-20 items-center justify-center">
-          <span className="absolute inset-0 animate-pop rounded-full bg-emerald-100" />
-          <span className="absolute inset-2 animate-pop rounded-full bg-emerald-500/15" />
+      <div className="px-5 pt-9 pb-8">
+        {/* The receipt: the one place in the app that gets to make an entrance. */}
+        <div className="relative rounded-[12px] border-[1.5px] border-ink-900/75 bg-paper-25 p-5 pt-6">
           <span
-            className="relative flex size-14 animate-pop items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30"
-            style={{ animationDelay: "60ms" }}
+            aria-hidden="true"
+            className="animate-stamp absolute -top-3.5 right-5 rounded-[6px] border-[3px] border-seal-500 bg-seal-50 px-2.5 py-1 font-display text-[14px] font-extrabold tracking-[0.16em] text-seal-600 uppercase"
           >
-            <IconCheck size={30} />
+            {isTopUp ? "Added" : "Paid"}
           </span>
-        </span>
 
-        <h1 className="mt-6 text-[20px] font-bold tracking-tight text-slate-900">
-          {headline}
-        </h1>
-        <p className="mt-2 text-[2rem] leading-none font-bold tracking-tight tabular-nums text-slate-900">
-          {formatCurrency(receipt.amount)}
-        </p>
-        <p className="mt-2 text-[13.5px] text-slate-500">
-          {isTopUp ? "Added to your wallet" : `Paid to ${receipt.counterpartyName}`}
-        </p>
-
-        {receipt.cashback && receipt.cashback.length > 0 ? (
-          <div className="mt-5 flex w-full items-start gap-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-3 ring-1 ring-amber-200">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white text-amber-600 shadow-sm">
-              <IconSpark size={17} />
-            </span>
+          {/* The tick is the answer to the question the user actually asked:
+              did it go through? Everything else on this slip is detail. */}
+          <div className="flex items-center gap-3">
+            {/* The tick is the app's icon tile at its loudest: the same square
+                a transaction row wears, filled with the ink that means money
+                moved. A disc here and squares everywhere else is exactly the
+                inconsistency this round is about. */}
+            <IconTile tone="credit" scale="lg" solid className="animate-pop">
+              <IconCheck size={TILE_GLYPH.lg + 1} strokeWidth={3} />
+            </IconTile>
             <div className="min-w-0">
-              <p className="text-[13.5px] font-semibold text-amber-900">
-                {formatCurrency(cashbackTotal)} cashback credited
+              <p className="font-display text-[17px] font-extrabold tracking-tight text-ink-900">
+                {headline}
               </p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-amber-900/70">
-                {receipt.cashback.map((item) => item.title).join(" · ")} — already in your
-                balance and your history, not a pending reward.
+              <p className="mt-0.5 text-[12.5px] text-ink-500">
+                {isTopUp ? "Added to your wallet" : `Paid to ${receipt.counterpartyName}`}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-4 font-display text-[2.4rem] leading-none font-extrabold tracking-[-0.035em] tabular-nums text-ink-900">
+            <span className="text-ink-400">{isTopUp ? "+" : "−"}</span>
+            {formatCurrency(receipt.amount)}
+          </p>
+
+          <div className="mt-5 border-t border-dashed border-ink-200">
+            <DetailRow label="Reference">
+              <span className="inline-flex items-center gap-1 font-mono text-[12px] tabular-nums">
+                {receipt.reference}
+                <CopyButton
+                  value={receipt.reference}
+                  label="Copy reference number"
+                  size={14}
+                  onCopied={(ok) => ok && toast.success("Reference copied")}
+                />
+              </span>
+            </DetailRow>
+            {receipt.counterpartyVpa ? (
+              <DetailRow label={isTopUp ? "Credited to" : "UPI ID"}>
+                <span className="inline-flex items-center gap-1 font-mono text-[12px] tabular-nums">
+                  {receipt.counterpartyVpa}
+                  <CopyButton
+                    value={receipt.counterpartyVpa}
+                    label="Copy UPI ID"
+                    size={14}
+                    onCopied={(ok) => ok && toast.success("UPI ID copied")}
+                  />
+                </span>
+              </DetailRow>
+            ) : null}
+            <DetailRow label="Date">{formatDateTime(receipt.timestamp)}</DetailRow>
+            {receipt.note ? <DetailRow label="Note">{receipt.note}</DetailRow> : null}
+            <DetailRow label="Status">
+              <span className="font-semibold text-credit-600">Successful</span>
+            </DetailRow>
+          </div>
+
+          {/* Perforation marks, so the slip reads as something torn off. */}
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-[7px] left-4 h-3.5 w-3.5 rounded-full border border-ink-200 bg-paper-50"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-[7px] right-4 h-3.5 w-3.5 rounded-full border border-ink-200 bg-paper-50"
+          />
+        </div>
+
+        {coinsWon > 0 ? (
+          <div className="mt-6 flex items-start gap-3 rounded-[10px] border border-dashed border-seal-300 bg-seal-50 px-4 py-3">
+            {/* The coin itself, not a sparkle: the reward line should be about
+                the same object as the card the user just scratched. */}
+            <Coin size={36} className="mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-semibold text-seal-900">
+                {coinsWon === 1 ? "1 coin earned" : `${coinsWon} coins earned`}
+              </p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-seal-800/80">
+                {receipt.cashback && receipt.cashback.length > 0
+                  ? `${receipt.cashback.map((item) => item.title).join(", ")} from your offers, plus this payment's own draw.`
+                  : "This payment's draw."}{" "}
+                Coins sit in your coin balance, not your wallet — 10 redeem for ₹10.
               </p>
             </div>
           </div>
         ) : null}
-
-        <Card className="mt-7 w-full">
-          <DetailRow label="Reference">
-            <span className="inline-flex items-center gap-1 tabular-nums">
-              {receipt.reference}
-              <CopyButton
-                value={receipt.reference}
-                label="Copy reference number"
-                size={14}
-                onCopied={(ok) => ok && toast.success("Reference copied")}
-              />
-            </span>
-          </DetailRow>
-          {receipt.counterpartyVpa ? (
-            <DetailRow label={isTopUp ? "Credited to" : "UPI ID"}>
-              <span className="inline-flex items-center gap-1 tabular-nums">
-                {receipt.counterpartyVpa}
-                <CopyButton
-                  value={receipt.counterpartyVpa}
-                  label="Copy UPI ID"
-                  size={14}
-                  onCopied={(ok) => ok && toast.success("UPI ID copied")}
-                />
-              </span>
-            </DetailRow>
-          ) : null}
-          <DetailRow label="Date">{formatDateTime(receipt.timestamp)}</DetailRow>
-          {receipt.note ? <DetailRow label="Note">{receipt.note}</DetailRow> : null}
-          <DetailRow label="Status">
-            <span className="font-semibold text-emerald-600">Successful</span>
-          </DetailRow>
-        </Card>
 
         <div className="mt-6 grid w-full grid-cols-2 gap-2">
           <Button
@@ -140,22 +188,30 @@ export default function PaymentResultPage() {
         <div className="mt-5 flex items-center gap-4 text-[12.5px] font-semibold">
           <Link
             to="/scan"
-            className="text-brand-700 underline decoration-brand-300 underline-offset-2"
+            className="text-seal-700 underline decoration-seal-300 decoration-1 underline-offset-4"
           >
             Make another payment
           </Link>
           <Link
             to="/history"
-            className="text-slate-500 underline decoration-slate-300 underline-offset-2"
+            className="text-ink-500 underline decoration-ink-300 decoration-1 underline-offset-4"
           >
-            View history
+            View transactions
           </Link>
         </div>
 
-        <p className="mt-8 text-center text-[11.5px] leading-relaxed text-slate-400">
-          Saved to your transaction history. Keep the reference number for your records.
+        <p className="mt-8 text-center text-[11.5px] leading-relaxed text-ink-400">
+          Saved to your transactions. Keep the reference number for your records.
         </p>
       </div>
+
+      {/* Over the receipt, not instead of it: the coins are a footnote to the
+          payment, and the payment is the thing that has to stay legible. */}
+      <ScratchSheet
+        open={scratching}
+        coins={coinsWon}
+        onClose={() => setScratching(false)}
+      />
     </AppShell>
   );
 }

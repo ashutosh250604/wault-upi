@@ -15,6 +15,7 @@ from ..extensions import db
 from ..ledger import TransferRefused, settle_transfer
 from ..models import Notification, PaymentRequest, User
 from ..money import paise_to_rupees, rupees_to_paise
+from ..coins import announce_payment as announce_coins
 from ..rewards import credited_summary, settle_due
 from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
@@ -201,6 +202,8 @@ def pay_request(request_id):
         )
 
     payer = current_user()
+    if payer is None:
+        return jsonify({"message": "User not found"}), 404
     message, status = check_pin(payer, pin)
     if message:
         return jsonify({"message": message}), status
@@ -220,9 +223,13 @@ def pay_request(request_id):
     payment_request.resolved_at = utcnow()
     # Settle offers for both sides before the single commit below: the payer may
     # have just completed their third payment, and the requester may have just
-    # been paid for the first time.
-    credited = settle_due(payer.id)
-    settle_due(payment_request.requester_id)
+    # been paid for the first time. Timed at the transfer itself, as in the
+    # transfer blueprint — see `settle_due`.
+    credited = settle_due(payer.id, txn.timestamp)
+    settle_due(payment_request.requester_id, txn.timestamp)
+    # Settling a request is a payment, so it counts towards coins exactly as a
+    # direct transfer does.
+    coins = announce_coins(payer.id, txn.id, txn.timestamp)
     # One commit for the ledger row and the request's new state: they can never
     # disagree about whether the money moved.
     db.session.commit()
@@ -241,6 +248,8 @@ def pay_request(request_id):
     }
     if credited:
         payload["rewards"] = credited_summary(credited)
+    if coins:
+        payload["coins_earned"] = coins
     return jsonify(payload), 200
 
 

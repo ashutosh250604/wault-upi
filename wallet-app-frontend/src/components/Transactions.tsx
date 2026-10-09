@@ -1,6 +1,6 @@
 import type { WalletTransaction } from "../types";
 import { cx } from "../lib/cx";
-import { formatCurrency, formatDateTime, formatTime } from "../lib/format";
+import { formatDateTime, formatTime } from "../lib/format";
 import {
   buildReceiptText,
   classifyTransaction,
@@ -12,8 +12,11 @@ import { shareText } from "../lib/clipboard";
 import { useToast } from "../hooks/toast";
 import { Badge } from "./ui/Avatar";
 import { Button } from "./ui/Button";
+import { Coin } from "./ui/Coin";
 import { CopyButton } from "./ui/CopyButton";
 import { DetailRow } from "./ui/DetailRow";
+import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { IconTile } from "./ui/IconTile";
 import {
   IconNote,
   IconReceipt,
@@ -26,32 +29,53 @@ import {
 import { Sheet } from "./ui/Sheet";
 import { EmptyState, TransactionSkeleton } from "./ui/States";
 
+/**
+ * A small tile of press ink marking which way the money went.
+ *
+ * The same `IconTile` the inbox rows wear, at the same scale and with the same
+ * tone vocabulary — so a payment reads the same on the sheet that announces it
+ * and in the ledger that records it. It used to be a different size with a
+ * different radius and a black tile for top-ups, which meant the two lists of
+ * the same events looked like two different apps.
+ */
 function DirectionIcon({ direction, type }: { direction: "in" | "out"; type: string }) {
   const isTopUp = type === "topup";
+  const isCoins = type === "coins";
   const isCashback = type === "cashback";
+  const size = TILE_GLYPH.md;
+  const strokeWidth = TILE_STROKE;
+
+  // Cashback and coins are the same family — money WAULT itself handed over —
+  // so they share the warm glyph and differ only in the mark beside it.
+  if (isCoins) {
+    return (
+      <IconTile tone="pending" scale="md">
+        <Coin size={size + 2} />
+      </IconTile>
+    );
+  }
+  if (isCashback) {
+    return (
+      <IconTile tone="pending" scale="md">
+        <IconSpark size={size} strokeWidth={strokeWidth} />
+      </IconTile>
+    );
+  }
+  if (isTopUp) {
+    return (
+      <IconTile tone="ink" scale="md">
+        <IconWallet size={size} strokeWidth={strokeWidth} />
+      </IconTile>
+    );
+  }
   return (
-    <span
-      className={cx(
-        "flex size-10 shrink-0 items-center justify-center rounded-full",
-        isCashback
-          ? "bg-amber-50 text-amber-600"
-          : isTopUp
-            ? "bg-brand-50 text-brand-600"
-            : direction === "in"
-              ? "bg-emerald-50 text-emerald-600"
-              : "bg-slate-100 text-slate-500",
-      )}
-    >
-      {isCashback ? (
-        <IconSpark size={18} />
-      ) : isTopUp ? (
-        <IconWallet size={18} />
-      ) : direction === "in" ? (
-        <IconReceived size={18} />
+    <IconTile tone={direction === "in" ? "credit" : "ink"} scale="md">
+      {direction === "in" ? (
+        <IconReceived size={size} strokeWidth={strokeWidth} />
       ) : (
-        <IconSent size={18} />
+        <IconSent size={size} strokeWidth={strokeWidth} />
       )}
-    </span>
+    </IconTile>
   );
 }
 
@@ -69,28 +93,28 @@ export function TransactionRow({
       type="button"
       onClick={onClick}
       className={cx(
-        "flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left transition",
-        "hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50",
-        "active:bg-slate-100",
+        "flex w-full items-center gap-3 px-1 py-3.5 text-left transition",
+        "hover:bg-paper-100 focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none",
+        "active:bg-paper-200",
       )}
     >
       <DirectionIcon direction={direction} type={transaction.type} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-semibold text-slate-900">
+        <span className="block truncate text-[14.5px] font-semibold text-ink-900">
           {title}
         </span>
-        <span className="mt-0.5 block truncate text-[12.5px] text-slate-500">{subtitle}</span>
+        <span className="mt-0.5 block truncate text-[12.5px] text-ink-500">{subtitle}</span>
       </span>
       <span className="shrink-0 text-right">
         <span
           className={cx(
             "block text-[14.5px] font-bold tabular-nums",
-            direction === "in" ? "text-emerald-600" : "text-slate-900",
+            direction === "in" ? "text-credit-600" : "text-ink-900",
           )}
         >
           {signedAmount}
         </span>
-        <span className="mt-0.5 block text-[11.5px] text-slate-400">
+        <span className="mt-0.5 block text-[11.5px] text-ink-400">
           {formatTime(transaction.timestamp)}
         </span>
       </span>
@@ -123,7 +147,7 @@ export function TransactionList({
   if (transactions.length === 0) {
     return (
       <EmptyState
-        icon={<IconReceipt size={22} />}
+        icon={<IconReceipt size={TILE_GLYPH.lg} strokeWidth={TILE_STROKE} />}
         title={emptyTitle}
         description={emptyDescription}
         action={emptyAction}
@@ -135,47 +159,30 @@ export function TransactionList({
   let rendered = 0;
 
   return (
-    <div className="space-y-1">
+    <div>
       {days.map((day) => {
         if (limit !== undefined && rendered >= limit) return null;
         const items =
           limit === undefined ? day.items : day.items.slice(0, limit - rendered);
         rendered += items.length;
-        // Only summarise a day when the extra maths earns its place.
-        const shownNet =
-          items.length > 1
-            ? items.reduce(
-                (total, item) =>
-                  total +
-                  (item.direction === "in" ? item.transaction.amount : -item.transaction.amount),
-                0,
-              )
-            : 0;
         return (
           <div key={day.key}>
-            <div className="flex items-center justify-between px-2 pt-4 pb-1">
-              <h3 className="text-[11.5px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
-                {day.label}
-              </h3>
-              {shownNet !== 0 ? (
-                <span
-                  className={cx(
-                    "text-[11.5px] font-semibold tabular-nums",
-                    shownNet > 0 ? "text-emerald-600" : "text-slate-500",
-                  )}
-                >
-                  {shownNet > 0 ? "+" : "−"}
-                  {formatCurrency(Math.abs(shownNet))}
-                </span>
-              ) : null}
+            {/* Just the day. A running total used to sit on the right of this
+                rule — two figures from four different payments, added up and
+                offered as if it were one of them. The rows below are the
+                record; a sum of today is not. */}
+            <div className="flex items-center justify-between border-b border-ink-200 pb-1.5">
+              <h3 className="text-[12.5px] font-semibold text-ink-500">{day.label}</h3>
             </div>
-            {items.map((item) => (
-              <TransactionRow
-                key={item.transaction.id}
-                item={item}
-                onClick={onSelect ? () => onSelect(item.transaction) : undefined}
-              />
-            ))}
+            <div className="divide-y divide-ink-200/70 pt-1">
+              {items.map((item) => (
+                <TransactionRow
+                  key={item.transaction.id}
+                  item={item}
+                  onClick={onSelect ? () => onSelect(item.transaction) : undefined}
+                />
+              ))}
+            </div>
           </div>
         );
       })}
@@ -201,14 +208,15 @@ export function TransactionDetailSheet({
   if (!transaction) return null;
   const item = classifyTransaction(transaction, userId);
   const isCredit = item.direction === "in";
-  const isCashback = transaction.type === "cashback";
+  const isReward = transaction.type === "cashback" || transaction.type === "coins";
+  const headline = transaction.type === "coins" ? "Coins redeemed" : "Cashback credited";
 
   const onShare = async () => {
     const result = await shareText({
-      title: "Wallet Pay receipt",
+      title: "WAULT receipt",
       text: buildReceiptText({
-        headline: isCashback
-          ? "Cashback credited"
+        headline: isReward
+          ? headline
           : isCredit
             ? "Money received"
             : "Payment successful",
@@ -227,7 +235,7 @@ export function TransactionDetailSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title={isCashback ? "Cashback credited" : isCredit ? "Money received" : "Payment details"}
+      title={isReward ? headline : isCredit ? "Money received" : "Payment details"}
       footer={
         <div className="flex gap-2">
           <Button
@@ -248,13 +256,13 @@ export function TransactionDetailSheet({
         <DirectionIcon direction={item.direction} type={transaction.type} />
         <p
           className={cx(
-            "mt-3 text-3xl font-bold tracking-tight tabular-nums",
-            isCredit ? "text-emerald-600" : "text-slate-900",
+            "mt-3 font-display text-[2rem] leading-none font-extrabold tracking-[-0.02em] tabular-nums",
+            isCredit ? "text-credit-600" : "text-ink-900",
           )}
         >
           {item.signedAmount}
         </p>
-        <p className="mt-1 text-[13.5px] text-slate-500">{item.title}</p>
+        <p className="mt-1.5 text-[13px] text-ink-500">{item.title}</p>
         <Badge
           tone={
             transaction.status === "success"
@@ -263,7 +271,7 @@ export function TransactionDetailSheet({
                 ? "pending"
                 : "failed"
           }
-          className="mt-2"
+          className="mt-2.5"
         >
           {transaction.status === "success" ? "Successful" : transaction.status}
         </Badge>
@@ -271,7 +279,7 @@ export function TransactionDetailSheet({
 
       <div className="mt-2">
         <DetailRow label="Reference">
-          <span className="inline-flex items-center gap-1 tabular-nums">
+          <span className="inline-flex items-center gap-1 font-mono text-[12px] tabular-nums">
             {transaction.reference}
             <CopyButton
               value={transaction.reference}
@@ -286,7 +294,7 @@ export function TransactionDetailSheet({
         {transaction.note ? (
           <DetailRow label="Note">
             <span className="inline-flex items-start justify-end gap-1">
-              <IconNote size={14} className="mt-0.5 text-slate-400" />
+              <IconNote size={14} className="mt-0.5 text-ink-400" />
               {transaction.note}
             </span>
           </DetailRow>

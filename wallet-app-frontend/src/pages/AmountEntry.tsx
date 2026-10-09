@@ -108,10 +108,15 @@ export default function AmountEntryPage() {
   if (!intent || !userId) return <Navigate to="/home" replace />;
 
   const receiverLabel = isTopUp ? "your wallet" : (intent.receiverName ?? "recipient");
-  /** A payment can complete an offer; say so once, at the moment it lands. */
-  const announceCashback = (rewards?: CreditedReward[]) => {
+  /**
+   * A payment can complete an offer; say so once, at the moment it lands.
+   *
+   * "Earned", not "credited": an offer pays coins, and coins are not in the
+   * balance until they are redeemed.
+   */
+  const announceRewards = (rewards?: CreditedReward[]) => {
     for (const reward of rewards ?? []) {
-      toast.success(`${reward.title} credited`);
+      toast.success(`${reward.title} earned`);
     }
   };
   const closePin = () => {
@@ -131,9 +136,9 @@ export default function AmountEntryPage() {
         // The PIN is verified server-side with the debit, and the chosen account
         // is charged in the same transaction that credits the wallet.
         const result = await api.topUp(userId, value, enteredPin, sourceId ?? undefined);
-        feedback.success();
+        feedback.paid();
         patchProfile({ balance: result.new_balance });
-        announceCashback(result.rewards);
+        announceRewards(result.rewards);
         void refresh({ silent: true });
         navigate("/pay/result", {
           replace: true,
@@ -161,9 +166,9 @@ export default function AmountEntryPage() {
         note.trim() || null,
         enteredPin,
       );
-      feedback.success();
+      feedback.paid();
       if (available !== null) patchProfile({ balance: Math.max(0, available - value) });
-      announceCashback(result.rewards);
+      announceRewards(result.rewards);
       void refresh({ silent: true });
       navigate("/pay/result", {
         replace: true,
@@ -176,6 +181,9 @@ export default function AmountEntryPage() {
             counterpartyVpa: intent.receiverVpa ?? null,
             note: result.note,
             timestamp: new Date().toISOString(),
+            // The draw this payment made, carried to the result screen so the
+            // scratch card has something to hide.
+            coinsEarned: result.coins_earned,
             cashback: result.rewards,
           },
         },
@@ -203,14 +211,14 @@ export default function AmountEntryPage() {
           title={isTopUp ? "Add money" : "Pay"}
           showBack
           right={
-            <span className="pr-2 text-[12px] font-semibold text-slate-400">
+            <span className="pr-2 text-[12px] font-medium text-ink-500">
               {isTopUp ? "To your wallet" : "To a UPI ID"}
             </span>
           }
         />
       }
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {/* Disabled while the PIN sheet is open, so a hardware keyboard can't
               type into the amount behind the dialog. */}
           <AmountKeypad
@@ -238,21 +246,21 @@ export default function AmountEntryPage() {
       <div className="space-y-4 px-5 pt-4 pb-5">
         {isTopUp ? (
           <div className="space-y-2">
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-              <Avatar name={profile?.name} size="md" tone="gradient" />
+            <div className="flex items-center gap-3 rounded-[10px] border-[1.5px] border-ink-900/75 bg-paper-25 p-3.5">
+              <Avatar name={profile?.name} size="md" tone="ink" />
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-semibold text-slate-900">
+                <p className="truncate font-display text-[15.5px] font-bold tracking-tight text-ink-900">
                   {profile?.name ?? "Your wallet"}
                 </p>
-                <p className="truncate text-[12.5px] text-slate-500">
+                <p className="truncate font-mono text-[12px] text-ink-500">
                   Wallet balance {formatCurrency(available ?? 0)}
                 </p>
               </div>
             </div>
 
             {accounts && accounts.length > 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                <p className="px-1 pb-1.5 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+              <div className="rounded-[10px] border-[1.5px] border-ink-900/75 bg-paper-25 p-3">
+                <p className="px-1 pb-1.5 text-[12px] font-semibold text-ink-500">
                   Add money from
                 </p>
                 {accounts.map((account) => {
@@ -261,32 +269,41 @@ export default function AmountEntryPage() {
                     <button
                       key={account.id}
                       type="button"
-                      onClick={() => setSourceId(account.id)}
+                      onClick={() => {
+                        feedback.tap();
+                        setSourceId(account.id);
+                      }}
                       aria-pressed={selected}
                       className={cx(
-                        "flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition",
-                        selected ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50",
+                        "flex w-full items-center gap-3 rounded-[8px] p-2.5 text-left transition",
+                        selected
+                          ? "bg-paper-100 ring-[1.5px] ring-ink-900/80 ring-inset"
+                          : "hover:bg-paper-100 active:bg-paper-200",
                       )}
                     >
                       <span
                         className={cx(
-                          "flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition",
+                          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border-2 transition",
                           selected
-                            ? "border-brand-600 bg-brand-600 text-white"
-                            : "border-slate-300",
+                            ? "border-ink-900 bg-ink-900 text-paper-25"
+                            : "border-ink-300",
                         )}
                       >
                         {selected ? <IconCheck size={10} /> : null}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-semibold text-slate-800">
+                        <span className="block truncate text-[13.5px] font-semibold text-ink-800">
                           {account.bank_name}
                         </span>
-                        <span className="block truncate text-[11.5px] text-slate-500 tabular-nums">
+                        <span className="block truncate font-mono text-[11.5px] text-ink-500 tabular-nums">
                           {account.masked_number}
-                          {account.is_default ? " · default" : ""}
                         </span>
                       </span>
+                      {account.is_default ? (
+                        <span className="shrink-0 rounded-[5px] bg-ink-900 px-1.5 py-0.5 text-[10.5px] font-semibold text-ink-25">
+                          Default
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -300,10 +317,7 @@ export default function AmountEntryPage() {
               vpa={intent.receiverVpa ?? null}
             />
             <div className="flex justify-end px-1">
-              <Link
-                to="/scan"
-                className="text-[12.5px] font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2"
-              >
+              <Link to="/scan" className="text-[12.5px] font-semibold text-seal-700 underline decoration-seal-300 decoration-1 underline-offset-4">
                 Change recipient
               </Link>
             </div>
@@ -311,29 +325,29 @@ export default function AmountEntryPage() {
         )}
 
         <div className="pt-1 text-center">
-          <p className="text-[11.5px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+          <p className="text-[12px] font-medium text-ink-500">
             {isTopUp ? "Amount to add" : "Amount to pay"}
           </p>
           <p
             className={cx(
-              "mt-2 text-[2.75rem] leading-none font-bold tracking-tight tabular-nums",
-              amount ? "text-slate-900" : "text-slate-300",
+              "mt-2 font-display text-[3.1rem] leading-none font-extrabold tracking-[-0.04em] tabular-nums",
+              amount ? "text-ink-900" : "text-ink-300",
             )}
           >
             ₹{amount ? groupAmountInput(amount) : "0"}
           </p>
           <div className="mt-3 flex min-h-5 items-center justify-center" aria-live="polite">
             {shownIssue ? (
-              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-rose-600">
+              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-seal-700">
                 <IconWarning size={14} />
                 {shownIssue}
               </span>
             ) : isTopUp ? (
-              <span className="text-[12.5px] text-slate-500">
+              <span className="text-[12.5px] text-ink-500">
                 Limit {formatCurrency(MAX_TOPUP_RUPEES)} per top-up
               </span>
             ) : available !== null ? (
-              <span className="text-[12.5px] text-slate-500">
+              <span className="text-[12.5px] text-ink-500">
                 Available balance {formatCurrency(available)}
               </span>
             ) : null}
@@ -341,16 +355,18 @@ export default function AmountEntryPage() {
 
           {!isTopUp && limits ? (
             <div className="mt-1">
-              <div className="mx-auto h-1 w-44 overflow-hidden rounded-full bg-slate-100">
+              <div className="mx-auto h-1 w-44 overflow-hidden rounded-full bg-paper-200">
                 <span
                   className={cx(
-                    "block h-full rounded-full transition-all",
-                    limits.used_percent >= 90 ? "bg-rose-500" : "bg-brand-500",
+                    "block h-full origin-left rounded-full transition-transform",
+                    limits.used_percent >= 90 ? "bg-seal-500" : "bg-ink-900",
                   )}
-                  style={{ width: `${Math.min(100, Math.max(0, limits.used_percent))}%` }}
+                  style={{
+                    transform: `scaleX(${Math.min(1, Math.max(0, limits.used_percent / 100))})`,
+                  }}
                 />
               </div>
-              <p className="mt-1.5 text-[11.5px] text-slate-500">
+              <p className="mt-1.5 text-[11.5px] text-ink-500">
                 {formatCurrencyShort(limits.remaining)} of your{" "}
                 {formatCurrencyShort(limits.daily_limit)} daily limit left
               </p>
@@ -364,15 +380,16 @@ export default function AmountEntryPage() {
               key={preset}
               type="button"
               onClick={() => {
+                feedback.tap();
                 setAmount(String(preset));
                 setTouched(true);
               }}
               className={cx(
                 "rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50",
+                "focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none",
                 value === preset
-                  ? "bg-brand-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  ? "bg-ink-900 text-ink-25 ring-[1.5px] ring-ink-900 ring-inset"
+                  : "border-[1.5px] border-ink-900/40 bg-paper-100 text-ink-700 hover:bg-paper-200 active:bg-paper-300",
               )}
             >
               {formatCurrencyShort(preset)}
@@ -384,9 +401,9 @@ export default function AmountEntryPage() {
           <div className="space-y-1.5">
             <label
               htmlFor="payment-note"
-              className="flex items-center gap-1.5 px-1 text-[12.5px] font-medium text-slate-600"
+              className="flex items-center gap-1.5 px-1 text-[12.5px] font-semibold text-ink-700"
             >
-              <IconNote size={14} className="text-slate-400" /> Add a note (optional)
+              <IconNote size={14} className="text-ink-400" /> Add a note (optional)
             </label>
             <TextArea
               id="payment-note"
@@ -396,18 +413,18 @@ export default function AmountEntryPage() {
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
-            <p className="px-1 text-right text-[11.5px] text-slate-400">
+            <p className="px-1 text-right text-[11.5px] text-ink-400">
               {note.length}/140
             </p>
           </div>
         ) : null}
 
         <Card tone="muted" className="flex gap-2.5">
-          <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
-          <p className="text-[12.5px] leading-relaxed text-slate-600">
+          <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
+          <p className="text-[12.5px] leading-relaxed text-ink-600">
             {isTopUp
-              ? "The linked account is debited and the wallet credited in one transaction, so the two balances can never disagree about how much moved."
-              : "The debit and the balance check happen in a single atomic statement, so a repeated or racing transfer can never overdraw the wallet."}
+              ? "Your bank and your wallet update together, so both always show the same amount."
+              : "Your balance is checked and the money sent in the same step, so you can never send more than you have."}
           </p>
         </Card>
       </div>
@@ -435,7 +452,7 @@ export default function AmountEntryPage() {
         />
         {needsPinSetup ? (
           <Card tone="muted" className="mt-5 text-center">
-            <p className="text-[12.5px] text-slate-600">
+            <p className="text-[12.5px] text-ink-600">
               No PIN is set on this account yet.
             </p>
             <Button
@@ -448,7 +465,7 @@ export default function AmountEntryPage() {
             </Button>
           </Card>
         ) : (
-          <p className="mt-5 text-center text-[11.5px] leading-relaxed text-slate-400">
+          <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ink-400">
             Your PIN is sent over HTTPS, checked on the server before any money moves,
             and never stored in plain text.
           </p>

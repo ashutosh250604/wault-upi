@@ -10,7 +10,9 @@ import { useToast } from "../hooks/toast";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { Field, TextInput } from "./ui/Field";
-import { IconCheck, IconInfo, IconPhone } from "./ui/Icons";
+import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { IconTile } from "./ui/IconTile";
+import { IconCheck, IconInfo, IconPhone, IconStar } from "./ui/Icons";
 import { Sheet } from "./ui/Sheet";
 
 export interface AddContactSheetProps {
@@ -125,7 +127,7 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
       <Field
         label="Mobile number or UPI ID"
         error={issue}
-        hint="Try 9000000004, or 9000000002@okwalletpay"
+        hint="Try 9000000004, or 9000000002@okwault"
       >
         {({ id, describedBy }) => (
           <TextInput
@@ -133,7 +135,7 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
             aria-describedby={describedBy}
             data-autofocus
             inputMode="tel"
-            placeholder="9000000004 or name@okwalletpay"
+            placeholder="9000000004 or name@okwault"
             value={identifier}
             invalid={Boolean(issue)}
             onChange={(event) => {
@@ -151,28 +153,28 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
 
       {preview ? (
         <div className="mt-4 animate-enter space-y-3">
-          <div className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3.5">
+          <div className="flex items-center gap-3 rounded-[10px] bg-paper-100 p-3.5 ring-1 ring-ink-200/70 ring-inset">
             <Avatar
               name={preview.name}
               size="lg"
               tone={avatarToneFor(preview.vpa ?? preview.mobile ?? preview.name)}
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-bold text-slate-900">
-                {preview.name ?? "Wallet Pay user"}
+              <p className="truncate font-display text-[15.5px] font-bold tracking-tight text-ink-900">
+                {preview.name ?? "WAULT user"}
               </p>
-              <p className="truncate font-mono text-[12px] text-slate-500">
+              <p className="truncate font-mono text-[11.5px] text-ink-500">
                 {personHandle(preview)}
               </p>
             </div>
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-credit-50 text-credit-700">
               <IconCheck size={15} />
             </span>
           </div>
 
           {preview.is_saved ? (
-            <p className="flex items-start gap-2 rounded-xl bg-brand-50 p-3 text-[12px] leading-relaxed text-brand-900">
-              <IconInfo size={14} className="mt-px shrink-0" />
+            <p className="flex items-start gap-2 rounded-[10px] bg-paper-100 p-3 text-[12px] leading-relaxed text-ink-600 ring-1 ring-ink-200/70 ring-inset">
+              <IconInfo size={14} className="mt-px shrink-0 text-ink-400" />
               You already have this person in your contacts.
             </p>
           ) : (
@@ -194,27 +196,27 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
                 role="switch"
                 aria-checked={favourite}
                 onClick={() => setFavourite((value) => !value)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 p-3.5 text-left transition hover:bg-slate-50"
+                className="flex w-full items-center gap-3 rounded-[10px] border-[1.5px] border-ink-900/60 p-3.5 text-left transition hover:bg-paper-100"
               >
-                <span className="flex size-9 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
-                  ★
-                </span>
+                <IconTile tone="seal" scale="sm">
+                  <IconStar size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} filled={favourite} />
+                </IconTile>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13.5px] font-semibold text-slate-900">
+                  <span className="block text-[13.5px] font-semibold text-ink-900">
                     Add to favourites
                   </span>
-                  <span className="block text-[12px] text-slate-500">
+                  <span className="block text-[12px] text-ink-500">
                     Favourites appear first in your contact list
                   </span>
                 </span>
                 <span
                   aria-hidden="true"
                   className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                    favourite ? "bg-brand-600" : "bg-slate-300"
+                    favourite ? "bg-ink-900" : "bg-ink-300"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${
+                    className={`absolute top-0.5 size-5 rounded-full bg-paper-25 shadow transition-all ${
                       favourite ? "left-[1.375rem]" : "left-0.5"
                     }`}
                   />
@@ -224,16 +226,16 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
           )}
         </div>
       ) : (
-        <p className="mt-4 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[12px] leading-relaxed text-slate-600">
-          <IconPhone size={14} className="mt-px shrink-0 text-slate-400" />
+        <p className="mt-4 flex items-start gap-2 rounded-[10px] bg-paper-100 p-3 text-[12px] leading-relaxed text-ink-600 ring-1 ring-ink-200/70 ring-inset">
+          <IconPhone size={14} className="mt-px shrink-0 text-ink-400" />
           Look anyone up by the mobile number they registered, or by their UPI ID. Their
           registered name is what you will see when you pay.
         </p>
       )}
 
-      <p className="mt-4 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[11.5px] leading-relaxed text-slate-600">
-        <IconInfo size={14} className="mt-px shrink-0 text-slate-400" />
-        Only mobile numbers and UPI IDs already registered with Wallet Pay can be found.
+      <p className="mt-4 flex items-start gap-2 rounded-[10px] bg-paper-100 p-3 text-[11.5px] leading-relaxed text-ink-600 ring-1 ring-ink-200/70 ring-inset">
+        <IconInfo size={14} className="mt-px shrink-0 text-ink-400" />
+        Only mobile numbers and UPI IDs already registered with WAULT can be found.
       </p>
     </Sheet>
   );

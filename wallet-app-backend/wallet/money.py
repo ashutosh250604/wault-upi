@@ -1,7 +1,7 @@
 import secrets
 from decimal import Decimal, InvalidOperation
 
-from .timeutils import utcnow
+from .timeutils import to_ist, utcnow
 
 
 def rupees_to_paise(raw):
@@ -31,9 +31,10 @@ def make_reference(when=None) -> str:
     """Human-friendly transaction reference, e.g. TXN20260926K7Q2MP.
 
     ``when`` lets the seeder stamp backdated rows with the date they actually
-    happened instead of today's.
+    happened instead of today's. The date part is IST, so a reference minted at
+    2am carries the date the user is looking at rather than yesterday's.
     """
-    date_part = (when or utcnow()).strftime("%Y%m%d")
+    date_part = to_ist(when or utcnow()).strftime("%Y%m%d")
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     random_part = "".join(secrets.choice(alphabet) for _ in range(6))
     return f"TXN{date_part}{random_part}"

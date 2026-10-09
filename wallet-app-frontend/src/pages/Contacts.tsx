@@ -12,9 +12,10 @@ import { AppBar, AppShell } from "../components/AppShell";
 import { AddContactSheet } from "../components/AddContactSheet";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
+import { Card, SectionTitle } from "../components/ui/Card";
 import { Field, TextInput } from "../components/ui/Field";
-import { IconPlus, IconTrash, IconUser } from "../components/ui/Icons";
+import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { IconPlus, IconStar, IconTrash, IconUser } from "../components/ui/Icons";
 import { Sheet } from "../components/ui/Sheet";
 import { EmptyState, ErrorState } from "../components/ui/States";
 
@@ -120,11 +121,11 @@ export default function ContactsPage() {
     const showRegistered = Boolean(contact.nickname && contact.name);
 
     return (
-      <li key={contact.id} className="flex items-center gap-1">
+      <li key={contact.id} className="flex items-center gap-0.5">
         <button
           type="button"
           onClick={() => startPayment(contact)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-1 py-2.5 text-left transition hover:bg-slate-50 active:bg-slate-100"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[8px] px-1.5 py-2.5 text-left transition hover:bg-paper-100 active:bg-paper-200"
         >
           <Avatar
             name={label}
@@ -132,19 +133,21 @@ export default function ContactsPage() {
             tone={avatarToneFor(contact.vpa ?? contact.mobile ?? String(contact.user_id))}
           />
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
-              <span className="truncate text-[14.5px] font-semibold text-slate-900">
-                {label}
-              </span>
-              {contact.is_favourite ? (
-                <span className="shrink-0 text-[11px] text-amber-400" aria-label="Favourite">
-                  ★
-                </span>
-              ) : null}
+            <span className="truncate font-display text-[14.5px] font-bold tracking-tight text-ink-900">
+              {label}
             </span>
-            <span className="block truncate text-[12px] text-slate-500">
-              {showRegistered ? `${contact.name} · ` : ""}
-              {personHandle(contact)}
+            {/* The handle is what you actually pay, so it never truncates; the
+                registered name is the part that gives way on narrow screens. */}
+            <span className="mt-0.5 flex items-center gap-2 text-[12px] text-ink-500">
+              <span className="shrink-0 font-mono text-[11.5px] tabular-nums">
+                {personHandle(contact)}
+              </span>
+              {showRegistered ? (
+                <>
+                  <span aria-hidden="true" className="h-3 w-px shrink-0 bg-ink-200" />
+                  <span className="min-w-0 truncate">{contact.name}</span>
+                </>
+              ) : null}
             </span>
           </span>
         </button>
@@ -158,20 +161,20 @@ export default function ContactsPage() {
               : `Add ${label} to favourites`
           }
           aria-pressed={contact.is_favourite}
-          className={`rounded-full p-2 transition ${
+          className={`rounded-[6px] p-2 transition ${
             contact.is_favourite
-              ? "text-amber-400 hover:bg-amber-50"
-              : "text-slate-300 hover:bg-slate-100 hover:text-slate-500"
+              ? "text-seal-500 hover:bg-seal-50"
+              : "text-ink-300 hover:bg-paper-100 hover:text-ink-600"
           }`}
         >
-          <span aria-hidden="true">★</span>
+          <IconStar size={16} filled={contact.is_favourite} />
         </button>
 
         <button
           type="button"
           onClick={() => setPendingRemoval(contact)}
           aria-label={`Remove ${label}`}
-          className="rounded-full p-2 text-slate-300 transition hover:bg-rose-50 hover:text-rose-500"
+          className="rounded-[6px] p-2 text-ink-300 transition hover:bg-seal-50 hover:text-seal-600"
         >
           <IconTrash size={16} />
         </button>
@@ -192,7 +195,7 @@ export default function ContactsPage() {
               type="button"
               onClick={() => setAdding(true)}
               aria-label="Add contact"
-              className="rounded-full p-2 text-brand-700 transition hover:bg-brand-50"
+              className="rounded-[6px] p-2 text-ink-900 transition hover:bg-paper-100"
             >
               <IconPlus size={19} />
             </button>
@@ -200,7 +203,7 @@ export default function ContactsPage() {
         />
       }
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button
             size="lg"
             fullWidth
@@ -212,15 +215,15 @@ export default function ContactsPage() {
         </div>
       }
     >
-      <div className="space-y-4 px-5 pt-4 pb-6">
+      <div className="space-y-5 px-5 pt-4 pb-6">
         {contacts === null && error === null ? (
           <div className="space-y-3" aria-hidden="true">
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="flex items-center gap-3">
-                <div className="size-12 animate-pulse rounded-full bg-slate-200/80" />
+                <div className="size-12 animate-pulse rounded-[10px] bg-paper-200" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-32 animate-pulse rounded bg-slate-200/80" />
-                  <div className="h-3 w-40 animate-pulse rounded bg-slate-200/80" />
+                  <div className="h-3.5 w-32 animate-pulse rounded-[3px] bg-paper-200" />
+                  <div className="h-3 w-40 animate-pulse rounded-[3px] bg-paper-200" />
                 </div>
               </div>
             ))}
@@ -247,10 +250,20 @@ export default function ContactsPage() {
           </Field>
         )}
 
+        {/* The empty state is a warm panel, not a bright slip.
+
+            It used to be the default `Card` — the brightest sheet in the
+            palette, a full screen of near-white behind three lines of copy,
+            which is the loudest the emptiest screen in the app ever got. It is
+            now the same warm ochre as the wells and the muted notes, with an
+            inked tile stamped into it, so "empty" reads as a quiet, deliberate
+            state rather than as a page that failed to load. */}
         {empty ? (
-          <Card>
+          <div className="overflow-hidden rounded-[12px] border-[1.5px] border-ink-900/25 bg-paper-100">
             <EmptyState
-              icon={<IconUser size={22} />}
+              icon={<IconUser size={TILE_GLYPH.lg} strokeWidth={TILE_STROKE} />}
+              iconTone="ink"
+              iconSolid
               title="No contacts yet"
               description="Save the people you pay often and they'll appear on your home screen for one-tap payments."
               action={
@@ -262,24 +275,38 @@ export default function ContactsPage() {
                 </Button>
               }
             />
-          </Card>
+          </div>
         ) : null}
 
         {favourites.length > 0 ? (
-          <section>
-            <h2 className="mb-1 px-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
+          <section className="space-y-1">
+            <SectionTitle
+              className="px-1"
+              action={
+                <span className="font-mono text-[11.5px] tabular-nums text-ink-400">
+                  {favourites.length}
+                </span>
+              }
+            >
               Favourites
-            </h2>
-            <ul>{favourites.map(renderRow)}</ul>
+            </SectionTitle>
+            <ul className="divide-y divide-ink-200/70">{favourites.map(renderRow)}</ul>
           </section>
         ) : null}
 
         {others.length > 0 ? (
-          <section>
-            <h2 className="mb-1 px-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
-              {favourites.length > 0 ? "All contacts" : "Contacts"}
-            </h2>
-            <ul>{others.map(renderRow)}</ul>
+          <section className="space-y-1">
+            <SectionTitle
+              className="px-1"
+              action={
+                <span className="font-mono text-[11.5px] tabular-nums text-ink-400">
+                  {others.length}
+                </span>
+              }
+            >
+              {favourites.length > 0 ? "Everyone else" : "Contacts"}
+            </SectionTitle>
+            <ul className="divide-y divide-ink-200/70">{others.map(renderRow)}</ul>
           </section>
         ) : null}
 
@@ -298,7 +325,7 @@ export default function ContactsPage() {
         <button
           type="button"
           onClick={() => navigate("/scan")}
-          className="w-full rounded-2xl border border-dashed border-slate-200 py-3.5 text-[13px] font-semibold text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+          className="w-full rounded-[8px] border border-dashed border-ink-300 py-3.5 text-[13px] font-semibold text-ink-500 transition hover:border-ink-400 hover:text-ink-700"
         >
           After a scan? Pay any QR code instead
         </button>
@@ -344,9 +371,9 @@ export default function ContactsPage() {
           </div>
         }
       >
-        <p className="text-[13.5px] leading-relaxed text-slate-600">
+        <p className="text-[13.5px] leading-relaxed text-ink-600">
           Removing a contact only clears your own address book. It never touches your
-          transaction history, and it doesn&apos;t tell the other person anything.
+          activity, and it doesn&apos;t tell the other person anything.
         </p>
       </Sheet>
     </AppShell>

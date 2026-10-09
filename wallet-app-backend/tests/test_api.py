@@ -2,8 +2,18 @@ from datetime import datetime, timedelta, timezone
 
 from pytest import mark
 
+from wallet import coins
+from wallet.coins import (
+    AWARD_MAX_COINS,
+    AWARD_MIN_COINS,
+    SIGNUP_BONUS_COINS,
+    award_weights,
+)
 from wallet.config import _database_uri
+from wallet.extensions import db
 from wallet.limits import day_window
+from wallet.models import CoinAward, User
+from wallet.timeutils import utcnow
 
 
 PIN = "1234"
@@ -43,12 +53,67 @@ def test_health(client):
     assert body["driver"] == "pysqlite"
 
 
+def test_every_response_carries_the_browser_side_protections(client, demo_auth):
+    """The headers a payment app states about itself, on JSON and on the SPA."""
+    for response in (
+        client.get("/healthz"),
+        client.get("/api/coins", headers=demo_auth["headers"]),
+        client.post("/api/demo_login"),
+    ):
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert response.headers["X-Frame-Options"] == "DENY"
+        assert response.headers["Referrer-Policy"] == "no-referrer"
+        assert "camera=(self)" in response.headers["Permissions-Policy"]
+        # Ignored by browsers over plain HTTP, so it is safe to always send.
+        assert response.headers["Strict-Transport-Security"].startswith("max-age=")
+
+
+def test_a_missing_asset_is_a_404_rather_than_the_app_shell(tmp_path):
+    """The SPA fallback owns client routes, not files the browser asked for.
+
+    Answering `/sounds/payment-success.mp3` with index.html would have the
+    browser decode an HTML document as a sound, and would hide a renamed or
+    deleted asset behind a silent fallback until someone noticed it.
+    """
+    from wallet import create_app
+
+    static = tmp_path / "dist"
+    (static / "brand").mkdir(parents=True)
+    (static / "index.html").write_text("<!doctype html><title>shell</title>", encoding="utf-8")
+    (static / "brand" / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    application = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test-secret-key-that-is-long-enough-for-hs256",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{(tmp_path / 'spa.db').as_posix()}",
+            "DEMO_MODE": True,
+            "STATIC_FOLDER": str(static),
+        }
+    )
+    spa = application.test_client()
+
+    # An extension-less path is a client route: it still gets the app shell.
+    shell = spa.get("/history")
+    assert shell.status_code == 200
+    assert shell.mimetype == "text/html"
+    assert b"shell" in shell.data
+
+    # A real asset is served as itself...
+    assert spa.get("/brand/logo.png").status_code == 200
+
+    # ...and one that is gone is an honest 404, not HTML wearing an asset's URL.
+    missing = spa.get("/sounds/payment-success.mp3")
+    assert missing.status_code == 404
+    assert missing.mimetype == "application/json"
+
+
 def test_demo_login_returns_token_and_balance(client):
     response = client.post("/api/demo_login")
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["token"]
-    assert payload["vpa"] == "9000000001@okwalletpay"
+    assert payload["vpa"] == "9000000001@okwault"
     assert payload["balance"] == 5000.0
 
 
@@ -56,7 +121,7 @@ def test_protected_endpoints_require_token(client):
     assert client.get("/api/get_balance/1").status_code == 401
     assert client.get("/api/transactions/1").status_code == 401
     assert client.post("/api/transfer", json={"receiver_id": 2, "amount": 10}).status_code == 401
-    assert client.post("/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}).status_code == 401
+    assert client.post("/api/vpas/resolve", json={"vpa": "9000000002@okwault"}).status_code == 401
 
 
 def test_balance_and_seeded_history(client, demo_auth):
@@ -76,7 +141,7 @@ def test_balance_and_seeded_history(client, demo_auth):
 def test_cannot_touch_another_wallet(client, demo_auth):
     headers = demo_auth["headers"]
     other_id = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
     ).get_json()["user_id"]
 
     assert client.get(f"/api/get_balance/{other_id}", headers=headers).status_code == 403
@@ -99,15 +164,19 @@ def test_topup_then_transfer(client, demo_auth):
         headers=headers,
     )
     assert topup.status_code == 200
-    # ₹1000 is the first qualifying top-up, so the welcome offer pays ₹25 inside
-    # the same commit as the top-up itself.
-    assert topup.get_json()["new_balance"] == 6025.0
+    # ₹1000 is the first qualifying top-up, so the welcome offer pays 25 coins
+    # inside the same commit as the top-up itself — coins, not cash: the offer
+    # moves the coin balance, and the wallet balance is only the top-up.
+    assert topup.get_json()["new_balance"] == 6000.0
     assert topup.get_json()["rewards"] == [
-        {"code": "first_topup", "title": "₹25 cashback", "amount": 25.0}
+        {"code": "first_topup", "title": "25 coins", "coins": 25, "amount": 25.0}
     ]
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == (
+        SIGNUP_BONUS_COINS + 25
+    )
 
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
     ).get_json()
     assert receiver["name"] == "Meera Iyer"
 
@@ -127,14 +196,14 @@ def test_topup_then_transfer(client, demo_auth):
     assert "rewards" not in transfer.get_json()
 
     balance = client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()
-    assert balance["balance"] == 5924.75
+    assert balance["balance"] == 5899.75
 
 
 def test_transfer_rejects_self_and_insufficient_funds(client, demo_auth):
     headers = demo_auth["headers"]
     user_id = demo_auth["user_id"]
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
     ).get_json()
 
     self_transfer = client.post(
@@ -189,7 +258,7 @@ def test_full_onboarding_flow(client):
         "/api/set_name", json={"name": "Dev Tester", "email": "dev@test.app"}, headers=headers
     )
     assert named.status_code == 200
-    assert named.get_json()["vpa"] == "9876543210@okwalletpay"
+    assert named.get_json()["vpa"] == "9876543210@okwault"
 
     # Half-onboarded: named, but no PIN yet — the client uses this to route
     # the user back to the PIN step.
@@ -206,7 +275,7 @@ def test_full_onboarding_flow(client):
 
     # The user cannot pay themselves.
     self_resolve = client.post(
-        "/api/vpas/resolve", json={"vpa": "9876543210@okwalletpay"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9876543210@okwault"}, headers=headers
     )
     assert self_resolve.status_code == 400
 
@@ -214,7 +283,7 @@ def test_full_onboarding_flow(client):
 def test_transfer_requires_a_pin_that_the_server_verifies(client, demo_auth):
     headers = demo_auth["headers"]
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
     ).get_json()["user_id"]
 
     # A stolen token alone must not be able to move money.
@@ -250,7 +319,7 @@ def test_transfer_requires_a_pin_that_the_server_verifies(client, demo_auth):
 def test_pin_lockout_is_shared_by_every_debit_path(client, demo_auth):
     headers = demo_auth["headers"]
     receiver = client.post(
-        "/api/vpas/resolve", json={"vpa": "9000000002@okwalletpay"}, headers=headers
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
     ).get_json()["user_id"]
 
     for _ in range(5):
@@ -326,13 +395,17 @@ def test_request_lifecycle_ends_in_a_real_transfer(client, demo_auth):
         ]
         == 2200.0
     )
-    # 5000 + 300 received, plus the ₹10 "when someone pays you" cashback that
-    # arriving money unlocks for Aarav (Meera only paid, so hers stays closed).
+    # 5000 + the 300 received. The "when someone pays you" offer unlocked by
+    # arriving money pays Aarav 10 coins, which is not wallet money — the
+    # balance is the transfer alone.
     assert (
         client.get(f"/api/get_balance/{aarav['user_id']}", headers=aarav["headers"]).get_json()[
             "balance"
         ]
-        == 5310.0
+        == 5300.0
+    )
+    assert client.get("/api/coins", headers=aarav["headers"]).get_json()["coins"] == (
+        SIGNUP_BONUS_COINS + 10
     )
     ledger = client.get(
         f"/api/transactions/{meera['user_id']}", headers=meera["headers"]
@@ -560,8 +633,9 @@ def test_topup_from_a_linked_account_debits_it_and_needs_a_pin(client, demo_auth
         headers=headers,
     )
     assert okay.status_code == 200
-    # ₹500 clears the ₹100 first-top-up threshold, so the ₹25 cashback rides along.
-    assert okay.get_json()["new_balance"] == 5525.0
+    # ₹500 clears the ₹100 first-top-up threshold, so the offer's 25 coins ride
+    # along — in the coin balance, not in this one.
+    assert okay.get_json()["new_balance"] == 5500.0
     assert okay.get_json()["account"]["balance"] == 47750.0
 
     # A top-up larger than the linked account holds is refused outright.
@@ -600,7 +674,7 @@ def test_statement_csv_exports_only_the_callers_ledger(client, demo_auth):
     assert response.status_code == 200
     assert response.mimetype == "text/csv"
     assert "attachment" in response.headers["Content-Disposition"]
-    assert "walletpay-statement" in response.headers["Content-Disposition"]
+    assert "okwault-statement" in response.headers["Content-Disposition"]
 
     text = response.get_data(as_text=True)
     rows = text.strip().splitlines()
@@ -631,6 +705,129 @@ def test_statement_ignores_an_unparseable_month(client, demo_auth, bad_month):
     assert response.status_code == 200
     # Falls back to the full statement rather than erroring on a bad query.
     assert len(response.get_data(as_text=True).strip().splitlines()) > 1
+
+
+def test_statement_pdf_is_a_scoped_download(client, demo_auth):
+    headers = demo_auth["headers"]
+
+    response = client.get("/api/statements.pdf", headers=headers)
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert "okwault-statement" in response.headers["Content-Disposition"]
+    assert response.headers["Content-Disposition"].endswith('.pdf"')
+    # A real PDF, not an error page wearing the right mimetype.
+    assert response.data.startswith(b"%PDF")
+    assert len(response.data) > 2000
+
+    assert client.get("/api/statements.pdf").status_code == 401
+
+    # Another account downloads its own statement, not this one.
+    meera = login_as(client, "9000000002")
+    assert client.get("/api/statements.pdf", headers=meera["headers"]).data != response.data
+
+
+def test_statement_pdf_brands_the_period_it_was_asked_for(client, demo_auth):
+    headers = demo_auth["headers"]
+
+    empty = client.get(
+        "/api/statements.pdf?from=2020-01-01&to=2020-01-31", headers=headers
+    )
+    # An empty window is still a valid statement — it just says so.
+    assert empty.status_code == 200
+    assert empty.data.startswith(b"%PDF")
+
+    full = client.get("/api/statements.pdf", headers=headers)
+    assert len(full.data) > len(empty.data)
+
+
+def test_statement_window_labels_and_fallbacks():
+    """The window is the user's calendar month, not the server's.
+
+    Its boundaries are IST midnights converted to UTC, so September runs from
+    18:30 UTC on 31 August — which is exactly midnight on the 1st in India. A
+    statement that started at UTC midnight would file a payment made at 1am IST
+    on the 1st under the previous month.
+    """
+    from wallet.blueprints.accounts import _statement_window
+
+    start, end, label = _statement_window({"month": "2026-09"})
+    assert label == "September 2026"
+    assert (start.month, start.day, start.hour, start.minute) == (8, 31, 18, 30)
+    assert (end.month, end.day, end.hour, end.minute) == (9, 30, 18, 30)
+
+    start, end, label = _statement_window({"from": "2026-09-01", "to": "2026-09-30"})
+    assert label == "01-09-2026 to 30-09-2026"
+    # `to` is inclusive: the window closes at IST midnight on 1 October.
+    assert (start.month, start.day, start.hour, start.minute) == (8, 31, 18, 30)
+    assert (end.month, end.day, end.hour, end.minute) == (9, 30, 18, 30)
+
+    # Anything missing or unparseable falls back to the whole statement.
+    assert _statement_window({"from": "yesterday"})[2] == "All transactions"
+    assert _statement_window({"from": "2026-09-30", "to": "2026-09-01"})[2] == "All transactions"
+    assert _statement_window({})[2] == "All transactions"
+    assert _statement_window({"from": "2026-09-01"})[1:] == (None, "From 01-09-2026")
+
+
+def test_times_are_rendered_in_ist():
+    """One conversion rule for the whole backend: store UTC, show IST."""
+    from datetime import datetime, timezone
+
+    from wallet.timeutils import format_date, format_datetime, to_ist
+
+    # 20:30 UTC on 30 September is 02:00 on 1 October in India — the case that
+    # makes a UTC-rendered date wrong rather than merely different.
+    late = datetime(2026, 9, 30, 20, 30, tzinfo=timezone.utc)
+    assert format_date(late) == "01-10-2026"
+    assert format_datetime(late) == "01-10-2026, 02:00"
+    assert to_ist(late).utcoffset().total_seconds() == 19800
+    # SQLite hands back naive datetimes; they are UTC, never local time.
+    assert format_date(datetime(2026, 9, 30, 20, 30)) == "01-10-2026"
+
+
+def test_sessions_last_thirty_minutes(client):
+    """A wallet session is half an hour, and a token says so."""
+    from datetime import datetime, timedelta, timezone
+
+    from wallet.security import issue_token, token_expiry
+
+    config = client.application.config
+    assert config["JWT_EXPIRES_MINUTES"] == 30
+    assert "JWT_EXPIRES_HOURS" not in config
+
+    issued = datetime(2026, 10, 6, 9, 0, tzinfo=timezone.utc)
+    with client.application.app_context():
+        assert token_expiry(issued) == issued + timedelta(minutes=30)
+        # The claim in the token itself is the same half hour.
+        import jwt
+
+        # Minted now, so this one decodes on its own merits: whatever the clock
+        # says, a fresh token is good for exactly 30 minutes.
+        claims = jwt.decode(
+            issue_token(7),
+            config["SECRET_KEY"],
+            algorithms=[config["JWT_ALGORITHM"]],
+        )
+        assert claims["exp"] - claims["iat"] == 1800
+
+
+def test_the_session_ceiling_is_clamped_whatever_the_env_says(monkeypatch):
+    """A deploy asking for a 12-hour login gets 30 minutes instead.
+
+    The ceiling has to live in code rather than in the default, or "maximum 30
+    minutes" is only true until somebody sets an environment variable.
+    """
+    import importlib
+
+    import wallet.config as config_module
+
+    monkeypatch.setenv("JWT_EXPIRES_MINUTES", "720")
+    try:
+        reloaded = importlib.reload(config_module)
+        assert reloaded.Config.JWT_EXPIRES_MINUTES == 30
+    finally:
+        monkeypatch.delenv("JWT_EXPIRES_MINUTES", raising=False)
+        importlib.reload(config_module)
 
 
 def test_postgres_urls_are_pinned_to_the_psycopg2_driver():
@@ -702,7 +899,7 @@ def test_contacts_crud_is_idempotent_and_owner_scoped(client, demo_auth):
     assert first.get_json()["name"] == "Dev Friend"
 
     # Saving the same person again updates instead of duplicating.
-    again = client.post("/api/contacts", json={"identifier": "9000000088@okwalletpay"}, headers=headers)
+    again = client.post("/api/contacts", json={"identifier": "9000000088@okwault"}, headers=headers)
     assert again.status_code == 200
     assert again.get_json()["id"] == contact_id
 
@@ -817,12 +1014,82 @@ def test_otp_locks_after_three_wrong_attempts(client):
     assert "Too many" in blocked.get_json()["message"]
 
 
+def test_the_first_five_otp_requests_are_free_and_the_sixth_waits(client, app):
+    """A slow SMS is not a reason to throttle anyone.
+
+    Asking again while a code is still on its way is what everyone does, so the
+    first `OTP_FREE_REQUESTS` requests for a number go through unchallenged and
+    carry no wait. Only the request after them is held back, and the hold is
+    enforced here rather than by the client's resend button.
+    """
+    mobile = "9876500001"
+    free = app.config["OTP_FREE_REQUESTS"]
+    assert free >= 2, "the free-request rule is what this test is about"
+
+    for index in range(free - 1):
+        answer = client.post("/api/start_login", json={"mobile": mobile})
+        assert answer.status_code == 200, f"request {index + 1} of {free} should be free"
+        body = answer.get_json()
+        # No wait to announce while requests are still free, so the screen has
+        # no countdown to show and nothing to disable.
+        assert body["resend_available_at"] is None
+        assert body["requests_remaining"] == free - index - 1
+
+    # The last free request is where the window opens: it succeeds, and it
+    # carries the instant the next one may be made — which is what the client's
+    # countdown runs on, instead of a second clock it started itself.
+    fifth = client.post("/api/start_login", json={"mobile": mobile})
+    assert fifth.status_code == 200
+    assert fifth.get_json()["requests_remaining"] == 0
+    assert fifth.get_json()["resend_available_at"] is not None
+
+    assert client.post("/api/start_login", json={"mobile": mobile}).status_code == 429
+    sixth = client.post("/api/start_login", json={"mobile": mobile})
+    assert sixth.status_code == 429
+    body = sixth.get_json()
+    assert "wait" in body["message"].lower()
+    assert body["retry_after"] > 0
+    stamp = datetime.fromisoformat(body["resend_available_at"])
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    # The hold is the configured window, counted from the request that ran out.
+    # Generous on the low side: the clock has moved on since that request was
+    # stamped, and the whole suite is slow enough here for a second or two of
+    # drift to be the test's fault rather than the endpoint's.
+    window = app.config["OTP_RESEND_SECONDS"]
+    left = stamp - utcnow()
+    assert timedelta(seconds=window - 10) <= left <= timedelta(seconds=window), (
+        f"{left.total_seconds():.1f}s left of a {window}s window"
+    )
+
+    # The refusals must not have invalidated the code already issued.
+    otp = fifth.get_json()["dev_otp"]
+    assert (
+        client.post("/api/verify_otp", json={"mobile": mobile, "otp": otp}).status_code == 200
+    )
+
+    # Verifying ends the run: the next sign-in starts with its free requests
+    # again, rather than inheriting a throttle from a login that succeeded.
+    restarted = client.post("/api/start_login", json={"mobile": mobile})
+    assert restarted.status_code == 200
+    assert restarted.get_json()["requests_remaining"] == free - 1
+
+    # A run that lapsed is over too: a code nobody used has expired, so asking
+    # again hours later is not "the sixth request", it is the first.
+    with app.app_context():
+        ttl = app.config["OTP_TTL_MINUTES"]
+        user = User.query.filter_by(mobile=mobile).first()
+        user.last_otp_sent_at = utcnow() - timedelta(minutes=ttl + 1)
+        db.session.commit()
+    assert client.post("/api/start_login", json={"mobile": mobile}).status_code == 200
+
+
 def test_the_inbox_logs_both_sides_of_a_payment(client, demo_auth):
     aarav = demo_auth
     meera = login_as(client, "9000000002")
     payee = client.post(
         "/api/vpas/resolve",
-        json={"vpa": "9000000002@okwalletpay"},
+        json={"vpa": "9000000002@okwault"},
         headers=aarav["headers"],
     ).get_json()["user_id"]
 
@@ -842,7 +1109,8 @@ def test_the_inbox_logs_both_sides_of_a_payment(client, demo_auth):
 
     inbox = client.get("/api/notifications", headers=aarav["headers"]).get_json()
     assert inbox["unread_count"] >= 1
-    sent = inbox["notifications"][0]
+    # The payment and the coins it paid out are two notes, written together.
+    sent = [row for row in inbox["notifications"] if row["kind"] == "money_sent"][0]
     assert sent["kind"] == "money_sent"
     assert sent["title"] == "Money sent to Meera Iyer"
     assert sent["body"] == "lunch"
@@ -910,11 +1178,16 @@ def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_au
     assert client.get("/api/rewards").status_code == 401
     assert client.get("/api/limits").status_code == 401
 
-    # The stranger's inbox holds only their own security notes — signing in, then
-    # setting a PIN — and none of Aarav's ledger activity leaks across.
+    # The stranger's inbox holds only their own news — signing in, setting a PIN,
+    # and the welcome bonus every new account is handed — and none of Aarav's
+    # ledger activity leaks across.
     stranger_inbox = client.get("/api/notifications", headers=stranger["headers"]).get_json()
-    assert {row["kind"] for row in stranger_inbox["notifications"]} == {"security"}
+    assert {row["kind"] for row in stranger_inbox["notifications"]} == {
+        "security",
+        "reward",
+    }
     assert all(row["id"] != aarav_note for row in stranger_inbox["notifications"])
+    assert all(row["amount"] is None for row in stranger_inbox["notifications"])
 
     # 404 rather than 403: a stranger can't confirm which ids are real.
     assert (
@@ -931,7 +1204,7 @@ def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_au
     )
 
 
-def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth):
+def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth, app):
     headers = demo_auth["headers"]
     user_id = demo_auth["user_id"]
 
@@ -955,19 +1228,34 @@ def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth):
     qualifying = client.post(
         "/api/topup", json={"user_id": user_id, "amount": 100, "pin": PIN}, headers=headers
     )
-    # 5000 + the ₹50 that didn't qualify + this ₹100 + the ₹25 it unlocked.
-    assert qualifying.get_json()["new_balance"] == 5175.0
-    assert qualifying.get_json()["rewards"][0]["amount"] == 25.0
+    # 5000 + the ₹50 that didn't qualify + this ₹100. No cashback rides along:
+    # the offer pays coins, and the wallet balance is only the top-up.
+    assert qualifying.get_json()["new_balance"] == 5150.0
+    assert qualifying.get_json()["rewards"][0]["coins"] == 25
 
     after = {item["code"]: item for item in client.get("/api/rewards", headers=headers).get_json()}
     assert after["first_topup"]["status"] == "credited"
     assert after["first_topup"]["credited_at"]
+    assert after["first_topup"]["coins"] == 25
+    assert after["first_topup"]["reward"] == 25.0
 
-    # A cashback is real money: it is a ledger row like any other.
+    # The payout is a real coin award, tagged with the offer that made it —
+    # which is what keeps the coin balance one sum of one log.
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == (
+        SIGNUP_BONUS_COINS + 25
+    )
+    with app.app_context():
+        award = CoinAward.query.filter_by(
+            user_id=user_id, reason="offer:first_topup"
+        ).one()
+        assert award.coins == 25
+        assert award.transaction_id is None
+
+    # No rupees moved: the two top-ups are the newest ledger rows, and nothing
+    # in the history is a cashback any more.
     ledger = client.get(f"/api/transactions/{user_id}", headers=headers).get_json()
-    assert ledger[0]["type"] == "cashback"
-    assert ledger[0]["amount"] == 25.0
-    assert ledger[0]["sender"] is None
+    assert [row["type"] for row in ledger[:2]] == ["topup", "topup"]
+    assert all(row["type"] != "cashback" for row in ledger)
 
     # And it cannot be paid twice — a credited offer is skipped, not re-earned.
     client.post(
@@ -975,11 +1263,16 @@ def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth):
     )
     assert (
         client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
-        == 5275.0
+        == 5250.0
+    )
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == (
+        SIGNUP_BONUS_COINS + 25
     )
 
 
-def test_the_third_payment_credits_fifty_and_a_refusal_credits_nothing(client, demo_auth):
+def test_the_third_payment_credits_fifty_coins_and_a_refusal_credits_nothing(
+    client, demo_auth, app
+):
     headers = demo_auth["headers"]
     user_id = demo_auth["user_id"]
     payee = onboard(client, "9000000933", "Offer Payee")
@@ -1009,14 +1302,27 @@ def test_the_third_payment_credits_fifty_and_a_refusal_credits_nothing(client, d
 
     assert "rewards" not in answers[0]
     assert "rewards" not in answers[1]
-    # 5000 + 1000 top-up + 25 welcome cashback - 60 paid + 50 payments cashback.
     assert answers[2]["rewards"] == [
-        {"code": "three_payments", "title": "₹50 cashback", "amount": 50.0}
+        {"code": "three_payments", "title": "50 coins", "coins": 50, "amount": 50.0}
     ]
+    # 5000 + 1000 top-up - 60 paid. Neither offer moved the wallet: the welcome
+    # bonus, the ₹25 top-up offer and the ₹50 payments offer are all coins.
     assert (
         client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
-        == 6015.0
+        == 5940.0
     )
+    # ...and each of them is one row in the award log, tagged with what paid it.
+    with app.app_context():
+        offers = {
+            row.reason: row.coins
+            for row in CoinAward.query.filter_by(user_id=user_id).all()
+            if row.reason != CoinAward.REASON_PAYMENT
+        }
+    assert offers == {
+        CoinAward.REASON_SIGNUP: SIGNUP_BONUS_COINS,
+        "offer:first_topup": 25,
+        "offer:three_payments": 50,
+    }
 
 
 def test_the_daily_cap_is_reported_and_enforced_by_the_same_numbers(client, demo_auth):
@@ -1059,11 +1365,446 @@ def test_the_daily_cap_is_reported_and_enforced_by_the_same_numbers(client, demo
     assert "Only ₹40,000.00" in refused.get_json()["message"]
     assert (
         client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
-        == 45025.0
+        == 45000.0
     )
     # A refused payment is not a notification-worthy event: nothing happened.
     inbox = client.get("/api/notifications", headers=headers).get_json()
     assert all(row["kind"] != "money_sent" or row["amount"] != 40001.0 for row in inbox["notifications"])
+
+
+def fresh_payer(client, mobile, name, topup_rupees=500):
+    """A brand-new account, funded and ready to pay.
+
+    A brand-new account is the only account whose coin history a test can know:
+    a real one starts with the welcome bonus and nothing else, and the seeded
+    demo accounts have already been handed theirs.
+    """
+    payer = onboard(client, mobile, name)
+    client.post(
+        "/api/topup",
+        json={"user_id": payer["user_id"], "amount": topup_rupees, "pin": PIN},
+        headers=payer["headers"],
+    )
+    return payer
+
+
+def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
+    """Each payment pays, the amount is the server's, and it is recorded once.
+
+    The payout is random, so the assertions are about the shape of the earning
+    rather than a fixed number: something is always awarded, it is inside the
+    range, the balance is exactly the sum of what was written down, and the
+    award is attached to the payment that earned it.
+    """
+    payer = fresh_payer(client, "9000000931", "Coin Payer")
+    headers = payer["headers"]
+    payee = onboard(client, "9000000932", "Coin Payee")
+
+    started = client.get("/api/coins", headers=headers).get_json()
+    assert started["coin_value"] == 1.0
+    assert started["min_redeem"] == 10
+    # A brand-new account holds two things and no more: the welcome bonus, and
+    # the 25 coins the ₹500 `fresh_payer` top-up earned for the first-top-up
+    # offer — the same top-up that put the offers in play, counted rather than
+    # discarded (see `settle_due`).
+    assert started["coins"] == SIGNUP_BONUS_COINS + 25
+    assert [row["reason"] for row in started["awards"]] == [
+        "offer:first_topup",
+        "signup",
+    ]
+
+    awarded = 0
+    drawn: list[int] = []
+    for _ in range(4):
+        answer = client.post(
+            "/api/transfer",
+            json={"receiver_id": payee["user_id"], "amount": 5, "pin": PIN},
+            headers=headers,
+        ).get_json()
+        earned = answer["coins_earned"]
+        assert AWARD_MIN_COINS <= earned <= AWARD_MAX_COINS
+        drawn.append(earned)
+        awarded += earned
+
+    after = client.get("/api/coins", headers=headers).get_json()
+    # Four draws and the 50-coin offer the third payment completed, all on top
+    # of the welcome bonus and the top-up offer.
+    assert after["earned"] == SIGNUP_BONUS_COINS + 25 + awarded + 50
+    assert (
+        after["coins"]
+        == after["earned"] - after["redeemed"]
+        == started["coins"] + awarded + 50
+    )
+    # The award history reads newest first — this test's four payments, and the
+    # offer the third of them completed — and each row says where it came from.
+    assert [(row["reason"], row["coins"]) for row in after["awards"]] == [
+        ("payment", drawn[3]),
+        ("payment", drawn[2]),
+        ("offer:three_payments", 50),
+        ("payment", drawn[1]),
+        ("payment", drawn[0]),
+    ]
+    assert [row["label"] for row in after["awards"]][:4] == [
+        "Payment rewarded",
+        "Payment rewarded",
+        "Offer reward",
+        "Payment rewarded",
+    ]
+
+    # One award per payment, keyed to the transaction that earned it — which is
+    # what stops a retry paying for the same transfer twice.
+    with app.app_context():
+        rows = CoinAward.query.filter_by(
+            user_id=payer["user_id"], reason=CoinAward.REASON_PAYMENT
+        ).all()
+        assert len(rows) == 4
+        assert len({row.transaction_id for row in rows}) == 4
+        assert [row.coins for row in rows] == drawn
+        assert sum(row.coins for row in rows) == awarded
+
+    # A top-up is money arriving, not a payment made, so it earns nothing.
+    coins_before = after["coins"]
+    client.post(
+        "/api/topup", json={"user_id": payer["user_id"], "amount": 50, "pin": PIN}, headers=headers
+    )
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == coins_before
+
+    # Earning coins writes to the inbox, in the same commit as the payment.
+    kinds = [
+        row["kind"]
+        for row in client.get("/api/notifications", headers=headers).get_json()["notifications"]
+    ]
+    assert "reward" in kinds
+
+
+def test_the_award_draw_is_small_most_of_the_time_but_reaches_fifty(app):
+    """The odds, stated as odds.
+
+    A uniform 1–50 would average 25 coins a payment and make a large award
+    ordinary. The draw is meant to be weighted the other way — mostly pocket
+    change, with the big numbers genuinely rare — so this checks the declared
+    weights as well as a few thousand real draws.
+    """
+    weights = award_weights()
+    assert [value for value, _ in weights] == list(
+        range(AWARD_MIN_COINS, AWARD_MAX_COINS + 1)
+    )
+    # Every value is reachable, including the top of the range: "rare" and
+    # "impossible" are different things.
+    assert all(weight >= 1 for _, weight in weights)
+
+    total = sum(weight for _, weight in weights)
+    head = sum(weight for value, weight in weights if value <= 5)
+    assert head / total > 0.5, "1-5 should be the common case"
+    tail = [weight for value, weight in weights if value >= 6]
+    assert tail == sorted(tail, reverse=True), "6-50 should get rarer as they climb"
+
+    # The declared odds and the generator should agree.
+    with app.app_context():
+        draws = [coins._draw_award() for _ in range(4000)]
+    assert all(AWARD_MIN_COINS <= value <= AWARD_MAX_COINS for value in draws)
+    small = sum(1 for value in draws if value <= 5) / len(draws)
+    assert 0.6 < small < 0.8, f"1-5 came up {small:.0%} of the time"
+    assert any(value > 5 for value in draws), "the tail has to actually happen"
+    assert sum(draws) / len(draws) < 10, "the average payout should stay small"
+
+
+def test_coins_redeem_into_the_wallet_and_cannot_be_spent_twice(client):
+    payer = fresh_payer(client, "9000000941", "Redeem Payer", topup_rupees=1000)
+    headers = payer["headers"]
+    user_id = payer["user_id"]
+    payee = onboard(client, "9000000942", "Redeem Payee")
+
+    # Pay until the balance clears the minimum. The payout is random, so the
+    # number of payments it takes is not fixed — the balance is what matters.
+    for _ in range(60):
+        if client.get("/api/coins", headers=headers).get_json()["coins"] >= 10:
+            break
+        assert (
+            client.post(
+                "/api/transfer",
+                json={"receiver_id": payee["user_id"], "amount": 1, "pin": PIN},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+
+    before = client.get("/api/coins", headers=headers).get_json()
+    assert before["coins"] >= 10
+    # Clearing the minimum offers the whole balance — a coin is ₹1 and none of
+    # them are held back to make the payout a round number.
+    assert before["redeemable"] == before["coins"]
+    assert before["redeemable_value"] == float(before["redeemable"])
+    assert before["redeemable"] >= 10
+    balance_before = client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()[
+        "balance"
+    ]
+
+    redeemed = client.post("/api/coins/redeem", json={}, headers=headers)
+    assert redeemed.status_code == 200
+    body = redeemed.get_json()
+    assert body["coins_redeemed"] == before["redeemable"]
+    assert body["amount"] == float(before["redeemable"])
+    # Everything held went out, so the coin balance is empty rather than holding
+    # a remainder of a few coins.
+    assert body["coins"]["coins"] == 0
+    assert body["coins"]["redeemable"] == 0
+
+    balance_after = client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()[
+        "balance"
+    ]
+    assert balance_after == balance_before + float(before["redeemable"])
+
+    # The credit is a real ledger row, visible as a coin reward.
+    ledger = client.get(f"/api/transactions/{user_id}", headers=headers).get_json()
+    coin_rows = [row for row in ledger if row["type"] == "coins"]
+    assert len(coin_rows) == 1
+    assert coin_rows[0]["amount"] == float(before["redeemable"])
+    assert coin_rows[0]["receiver"] == user_id
+
+    # Spending them again is refused, and the balance doesn't move.
+    again = client.post("/api/coins/redeem", json={}, headers=headers)
+    assert again.status_code == 400
+    # An empty balance is not a payout: the refusal names the minimum rather
+    # than leaving the reader to work it out.
+    refusal = again.get_json()["message"]
+    assert "10" in refusal and "redeem" in refusal
+    assert (
+        client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()["balance"]
+        == balance_after
+    )
+
+
+def test_redemption_pays_out_the_whole_balance_at_a_rupee_a_coin(client, app):
+    """11 coins pay ₹11, 37 pay ₹37 — the ten is the gate, not the step.
+
+    Redemption used to round the balance down to whole tens and leave the odd
+    coins behind, which quietly kept money the user had earned: a balance of 37
+    paid ₹30 and parked 7. The spec is one rupee a coin from ten upwards, so the
+    two figures are checked at the exact sizes it names, against the wallet
+    balance rather than against the response alone.
+    """
+    payer = fresh_payer(client, "9000000971", "Exact Payer", topup_rupees=50)
+    headers = payer["headers"]
+    user_id = payer["user_id"]
+
+    # Start from an empty coin balance: the welcome bonus is real coins, and
+    # clearing it through the API is how any account ends up holding nothing.
+    cleared = client.post("/api/coins/redeem", json={}, headers=headers)
+    assert cleared.status_code == 200
+    assert cleared.get_json()["coins_redeemed"] == SIGNUP_BONUS_COINS
+
+    for held, expected in ((11, 11.0), (37, 37.0)):
+        with app.app_context():
+            coins.grant(user_id, held)
+            db.session.commit()
+
+        before = client.get("/api/coins", headers=headers).get_json()
+        assert before["coins"] == held
+        assert before["redeemable"] == held, "no rounding to the nearest ten"
+        assert before["redeemable_value"] == expected
+
+        balance_before = client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()[
+            "balance"
+        ]
+        paid = client.post("/api/coins/redeem", json={}, headers=headers)
+        assert paid.status_code == 200
+        body = paid.get_json()
+        assert body["coins_redeemed"] == held
+        assert body["amount"] == expected
+        assert body["coins"]["coins"] == 0
+        assert body["coins"]["redeemable"] == 0
+
+        balance_after = client.get(f"/api/get_balance/{user_id}", headers=headers).get_json()[
+            "balance"
+        ]
+        assert balance_after == balance_before + expected
+
+    # Nine coins are still short of the gate, named amount or not.
+    with app.app_context():
+        coins.grant(user_id, 9)
+        db.session.commit()
+    short = client.post("/api/coins/redeem", json={}, headers=headers)
+    assert short.status_code == 400
+    assert "10 are needed" in short.get_json()["message"]
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == 9
+
+
+def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
+    """Half-finished coin balances get a reason, not a generic refusal.
+
+    The payout is pinned to a single coin here, because this test is about the
+    wording of a refusal that only happens while the balance is short — it is
+    not about the draw. The welcome bonus is part of the balance, so the figures
+    below are the bonus plus the one coin the payment is pinned to.
+    """
+    monkeypatch.setattr(coins, "_draw_award", lambda: 1)
+    # A top-up deliberately below the ₹100 the first-top-up offer needs, so the
+    # only coins in play are the welcome bonus and the pinned payout.
+    payer = fresh_payer(client, "9000000951", "Rules Payer", topup_rupees=50)
+    headers = payer["headers"]
+    payee = onboard(client, "9000000952", "Rules Payee")
+
+    client.post(
+        "/api/transfer",
+        json={"receiver_id": payee["user_id"], "amount": 1, "pin": PIN},
+        headers=headers,
+    )
+
+    held = SIGNUP_BONUS_COINS + 1
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == held
+
+    # A named amount is not a menu: a redemption takes the whole balance, so
+    # asking for seven of the fifty-one on hand is refused — and the refusal
+    # says what is actually held rather than what the wallet would prefer.
+    odd = client.post("/api/coins/redeem", json={"coins": 7}, headers=headers)
+    assert odd.status_code == 400
+    assert f"You have {held} coins" in odd.get_json()["message"]
+    assert "takes all of them" in odd.get_json()["message"]
+
+    # Asking for more than is held is refused the same way.
+    greedy = client.post("/api/coins/redeem", json={"coins": held + 9}, headers=headers)
+    assert greedy.status_code == 400
+    assert f"You have {held} coins" in greedy.get_json()["message"]
+
+    # Redeem the balance — all of it, since 51 coins clear the minimum.
+    assert client.post("/api/coins/redeem", json={}, headers=headers).status_code == 200
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == 0
+
+    # A balance under the minimum is refused with the shortfall rather than a
+    # shrug, and the refusal names the gate it has to clear.
+    with app.app_context():
+        coins.grant(payer["user_id"], 4)
+        db.session.commit()
+    short = client.post("/api/coins/redeem", json={}, headers=headers)
+    assert short.status_code == 400
+    assert "10 are needed" in short.get_json()["message"]
+
+    assert client.get("/api/coins").status_code == 401
+    assert client.post("/api/coins/redeem", json={}).status_code == 401
+
+
+def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
+    """The welcome bonus belongs to sign-up, not to signing in.
+
+    It is granted where an account becomes real — the moment a one-time code is
+    verified — and the guard is the award log itself, so signing in again, or
+    five times again, cannot hand it over twice.
+    """
+    mobile = "9000000961"
+    otp = client.post("/api/start_login", json={"mobile": mobile}).get_json()["dev_otp"]
+    payload = client.post(
+        "/api/verify_otp", json={"mobile": mobile, "otp": otp}
+    ).get_json()
+    headers = {"Authorization": f"Bearer {payload['token']}"}
+    user_id = payload["user_id"]
+
+    assert SIGNUP_BONUS_COINS == 50
+    first = client.get("/api/coins", headers=headers).get_json()
+    assert first["coins"] == 50
+    assert first["value"] == 50.0
+    assert first["redeemable"] == 50
+    assert len(first["awards"]) == 1
+    assert first["awards"][0]["coins"] == 50
+    assert first["awards"][0]["reason"] == "signup"
+    assert first["awards"][0]["label"] == "Welcome bonus"
+
+    # Coins are not wallet money: 50 coins are worth ₹50 and none of it is in
+    # the balance until they are redeemed. A bonus you can spend by accident is
+    # not a bonus, it is a credit.
+    # (Read from `/me`, which answers before a wallet row exists at all.)
+    assert client.get("/api/me", headers=headers).get_json()["balance"] == 0.0
+
+    titles = [
+        row["title"]
+        for row in client.get("/api/notifications", headers=headers).get_json()[
+            "notifications"
+        ]
+    ]
+    assert "50 coin welcome bonus" in titles
+
+    # Two more sign-ins. The bonus is not a sign-in bonus.
+    for _ in range(2):
+        otp = client.post("/api/start_login", json={"mobile": mobile}).get_json()["dev_otp"]
+        assert (
+            client.post("/api/verify_otp", json={"mobile": mobile, "otp": otp}).status_code
+            == 200
+        )
+
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == 50
+    with app.app_context():
+        assert CoinAward.query.filter_by(user_id=user_id).count() == 1
+
+
+def test_statement_pdf_prints_balances_that_reconcile(client, app):
+    """Opening plus credits minus debits equals the closing balance — and the
+    figures are the ledger's, printed on the page for a reader to check.
+
+    The statement is built with compression off so the test can read the text it
+    actually emitted. Asserting only that a PDF came back would pass even if the
+    panel printed nothing at all.
+    """
+    from reportlab import rl_config
+
+    from wallet.blueprints.accounts import _statement_rows
+    from wallet.models import Wallet
+
+    payer = fresh_payer(client, "9000000961", "Statement Payer", topup_rupees=1000)
+    headers = payer["headers"]
+    user_id = payer["user_id"]
+    payee = onboard(client, "9000000962", "Statement Payee")
+    for amount in (11, 22, 33):
+        assert (
+            client.post(
+                "/api/transfer",
+                json={"receiver_id": payee["user_id"], "amount": amount, "pin": PIN},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+
+    with app.app_context():
+        rows, _ = _statement_rows(user_id, None, None)
+        credits = sum(row.amount_paise for row in rows if row.sender_id != user_id)
+        debits = sum(row.amount_paise for row in rows if row.sender_id == user_id)
+        closing = Wallet.query.filter_by(user_id=user_id).first().balance_paise
+        # The top-up is a credit, the three payments are debits, so the panel has
+        # real movement to report in both columns.
+        assert credits >= 100000
+        assert debits == (11 + 22 + 33) * 100
+
+    opening = closing - (credits - debits)
+    assert opening + credits - debits == closing
+
+    previous = rl_config.pageCompression
+    rl_config.pageCompression = 0
+    try:
+        response = client.get("/api/statements.pdf", headers=headers)
+    finally:
+        rl_config.pageCompression = previous
+
+    assert response.status_code == 200
+    body = response.data
+    assert body.startswith(b"%PDF")
+
+    # The panel a bank statement carries, and the sum it rests on.
+    for label in (
+        b"Opening balance",
+        b"Total credits",
+        b"Total debits",
+        b"Net change",
+        b"Closing balance",
+        b"equals the closing balance",
+    ):
+        assert label in body
+
+    # Every figure printed is the ledger's own, to the paise.
+    for paise in (opening, credits, debits, closing):
+        assert f"{paise / 100:,.2f}".encode() in body
+
+    # Month banners, so a long statement is readable a month at a time.
+    assert b"September 2026" in body or b"October 2026" in body
+    assert b"Debits" in body
 
 
 def test_the_limit_day_starts_at_midnight_in_ist(app):

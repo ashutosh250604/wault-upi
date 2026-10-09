@@ -79,7 +79,7 @@ export function PinPad({
   return (
     <div className="flex flex-col items-center">
       <div key={shakeToken} className={cx(error && "animate-shake")}>
-        <div className="flex items-center justify-center gap-3" role="group" aria-label="PIN entry">
+        <div className="flex items-center justify-center gap-2.5" role="group" aria-label="PIN entry">
           <span className="sr-only">{`PIN: ${value.length} of ${PIN_LENGTH} digits entered`}</span>
           {Array.from({ length: PIN_LENGTH }).map((_, index) => {
             const filled = index < value.length;
@@ -88,19 +88,19 @@ export function PinPad({
                 key={index}
                 aria-hidden="true"
                 className={cx(
-                  "flex h-14 w-12 items-center justify-center rounded-2xl border-2 transition-colors duration-150",
+                  "flex h-14 w-12 items-center justify-center rounded-[8px] border transition-colors duration-150",
                   error
-                    ? "border-rose-300 bg-rose-50"
+                    ? "border-seal-300 bg-seal-50"
                     : filled
-                      ? "border-brand-500 bg-brand-50"
-                      : "border-slate-200 bg-slate-50",
+                      ? "border-ink-900 bg-ink-900"
+                      : "border-ink-200 bg-paper-100",
                 )}
               >
                 {filled ? (
                   <span
                     className={cx(
-                      "size-3 animate-pop rounded-full",
-                      error ? "bg-rose-500" : "bg-brand-600",
+                      "size-2.5 animate-pop rounded-[2px]",
+                      error ? "bg-seal-500" : "bg-paper-25",
                     )}
                   />
                 ) : null}
@@ -113,19 +113,19 @@ export function PinPad({
       <div className="mt-3 flex h-5 items-center gap-1.5" aria-live="polite">
         {busy ? (
           <>
-            <Spinner size={13} className="text-brand-600" />
-            <span className="text-[13px] font-medium text-slate-500">{busyLabel}</span>
+            <Spinner size={13} className="text-ink-900" />
+            <span className="text-[13px] font-medium text-ink-500">{busyLabel}</span>
           </>
         ) : error ? (
-          <span className="text-[13px] font-medium text-rose-600">{error}</span>
+          <span className="text-[13px] font-medium text-seal-700">{error}</span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-[12px] text-slate-400">
+          <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-400">
             <IconLock size={13} /> Checked by the server before any money moves
           </span>
         )}
       </div>
 
-      <div className="mx-auto mt-3 grid w-full max-w-[17rem] grid-cols-3 gap-1">
+      <div className="mx-auto mt-3 grid w-full max-w-[17.5rem] grid-cols-3 gap-1">
         {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit, index) => (
           <KeypadButton
             key={digit}
@@ -156,7 +156,7 @@ export function PinPad({
           type="button"
           disabled={busy}
           onClick={onForgotPin}
-          className="mt-3 rounded-lg px-2 py-1 text-[12.5px] font-semibold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50"
+          className="mt-3 rounded-[5px] px-2 py-1 text-[12.5px] font-semibold text-seal-700 underline decoration-seal-300 decoration-1 underline-offset-4 transition hover:decoration-seal-600 disabled:opacity-50"
         >
           Forgot PIN?
         </button>

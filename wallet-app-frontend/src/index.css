@@ -1,36 +1,91 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ *
- * Design tokens
+ * Design tokens — "Ink & Seal"
+ *
+ * WAULT looks like a crisp payment slip: press-ink type on warm
+ * paper, hairline ledger rules instead of card soup, and one sealing-red
+ * accent used the way a rubber stamp is used — brand mark, attention,
+ * destructive confirmation, and the PAID stamp on a finished payment.
  * ------------------------------------------------------------------ */
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, "Noto Sans", sans-serif;
+    "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display:
+    "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Brand ramp — a violet-leaning indigo, distinct from any real UPI app. */
-  --color-brand-50: #eef0ff;
-  --color-brand-100: #e1e3ff;
-  --color-brand-200: #c8c9ff;
-  --color-brand-300: #a6a2ff;
-  --color-brand-400: #8877ff;
-  --color-brand-500: #7048fb;
-  --color-brand-600: #5b31ef;
-  --color-brand-700: #4c21d4;
-  --color-brand-800: #3f1dab;
-  --color-brand-900: #351d86;
-  --color-brand-950: #20104f;
+  /* Warm graphite — one grey family for the whole app. The light end is warmed
+     just enough to sit on yellow paper; ink-25 is "light ink" for text on a dark
+     ground, so it matches paper-25. */
+  --color-ink-25: #f9efc0;
+  --color-ink-50: #f6f2e6;
+  --color-ink-100: #eae5d6;
+  --color-ink-200: #dbd5c4;
+  --color-ink-300: #c0b9a5;
+  --color-ink-400: #7c7c72;
+  --color-ink-500: #66665f;
+  --color-ink-600: #4e4e49;
+  --color-ink-700: #393935;
+  --color-ink-800: #262622;
+  --color-ink-900: #191916;
+  --color-ink-950: #0f0f0d;
 
-  --animate-fade-in: fade-in 0.2s ease-out both;
-  --animate-pop: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* Seal red — the only accent, desaturated toward print ink. */
+  --color-seal-50: #fbe4dd;
+  --color-seal-100: #f7cfc5;
+  --color-seal-300: #eda290;
+  --color-seal-400: #e2735c;
+  --color-seal-500: #d6402c;
+  --color-seal-600: #b63121;
+  --color-seal-700: #94281b;
+  --color-seal-800: #78231a;
+  --color-seal-900: #641f18;
+
+  /* Premium paper — the app's one surface family. Every surface in the UI is one
+     of these: a warm butter yellow, never white. The ramp is pitched deep
+     deliberately — the brightest sheet still reads as cream next to the page,
+     and a well is warmer than the page it is pressed into. Nothing here is
+     allowed to climb back toward #fff, because a slip that reads as white is
+     the one thing this palette exists to avoid. */
+  --color-paper-25: #f9efc0; /* slips, cards, buttons — the brightest sheet */
+  --color-paper-50: #f3e5a8; /* the app page itself */
+  --color-paper-100: #ebd894; /* wells (inputs), muted notes, hover washes */
+  --color-paper-200: #dfc87c; /* the desk behind the frame; skeleton marks */
+  --color-paper-300: #cdb264; /* deep rule on paper, inactive progress track */
+
+  /* Money semantics only: credits, pending states. Never decoration. Pending
+     is shifted toward ochre so it stays legible on a yellow ground. */
+  --color-credit-50: #e2f2e8;
+  --color-credit-100: #c8e8d5;
+  --color-credit-600: #177245;
+  --color-credit-700: #145c39;
+  --color-pending-50: #f9e3c0;
+  --color-pending-100: #f4d49c;
+  --color-pending-600: #a3630f;
+  --color-pending-700: #834d0c;
+
+  /* Press inks for avatars: muted pigment that encodes *who*, so it is
+     deliberately kept away from the seal accent and the money semantics. */
+  --color-press-cobalt: #2f4f8f;
+  --color-press-teal: #1f5f5b;
+  --color-press-olive: #5b6b32;
+  --color-press-clay: #8a4a34;
+  --color-press-plum: #6d3a5d;
+  --color-press-carbon: #35352f;
+
+  --animate-fade-in: fade-in 0.18s ease-out both;
+  --animate-pop: pop 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   --animate-slide-up: slide-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-shake: shake 0.4s ease-in-out both;
-  --animate-scan: scan-sweep 2.4s ease-in-out infinite;
+  --animate-scan: scan-sweep 2.2s ease-in-out infinite;
   /* Route/page entry — the difference between "a website" and "an app". */
-  --animate-enter: enter 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-sheet: sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-enter: enter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;
-  --animate-ring: ring-pulse 2.6s ease-out infinite;
+  /* The one orchestrated moment: a stamp landing on a receipt. */
+  --animate-stamp: stamp-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.12) both;
 
   @keyframes fade-in {
     from {
@@ -43,7 +98,7 @@
   @keyframes pop {
     from {
       opacity: 0;
-      transform: scale(0.6);
+      transform: scale(0.55);
     }
     to {
       opacity: 1;
@@ -52,8 +107,8 @@
   }
   @keyframes slide-up {
     from {
-      opacity: 0;
-      transform: translateY(12px);
+      opacity: 0.5;
+      transform: translateY(14px);
     }
     to {
       opacity: 1;
@@ -62,18 +117,8 @@
   }
   @keyframes enter {
     from {
-      opacity: 0.35;
-      transform: translateY(10px) scale(0.995);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-  @keyframes sheet-up {
-    from {
-      opacity: 0.6;
-      transform: translateY(16px);
+      opacity: 0.4;
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
@@ -83,20 +128,10 @@
   @keyframes shimmer {
     0%,
     100% {
-      opacity: 0.55;
+      opacity: 0.5;
     }
     50% {
       opacity: 1;
-    }
-  }
-  @keyframes ring-pulse {
-    0% {
-      transform: scale(0.85);
-      opacity: 0.7;
-    }
-    100% {
-      transform: scale(1.6);
-      opacity: 0;
     }
   }
   @keyframes scan-sweep {
@@ -132,6 +167,23 @@
       transform: translateX(6px);
     }
   }
+  @keyframes stamp-in {
+    from {
+      opacity: 0;
+      transform: scale(1.9) rotate(-16deg);
+      filter: blur(1.5px);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(0.96) rotate(-7deg);
+      filter: blur(0);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) rotate(-7deg);
+      filter: blur(0);
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -145,25 +197,25 @@ body {
   margin: 0;
   min-height: 100dvh;
   font-family: var(--font-sans);
-  color: var(--color-slate-900);
-  background-color: #eef0f7;
-  /* Soft mesh so the app surface reads as a card on desktop. */
-  background-image:
-    radial-gradient(60rem 40rem at 10% -10%, #e2e4ff 0%, transparent 60%),
-    radial-gradient(50rem 35rem at 110% 10%, #ffe8f6 0%, transparent 55%),
-    radial-gradient(40rem 40rem at 50% 120%, #e6fbf3 0%, transparent 60%);
-  background-attachment: fixed;
+  color: var(--color-ink-900);
+  /* Flat desk in the same paper family: the app surface is the only sheet. */
+  background-color: var(--color-paper-200);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
 }
 
-/* Chrome/Safari paint a yellow autofill background that breaks the design. */
+::selection {
+  background: var(--color-seal-500);
+  color: var(--color-paper-25);
+}
+
+/* Autofill repaints the field, so it must repaint it in paper, not white. */
 input:-webkit-autofill,
 input:-webkit-autofill:focus {
-  -webkit-text-fill-color: var(--color-slate-900);
-  box-shadow: 0 0 0 1000px #fff inset;
+  -webkit-text-fill-color: var(--color-ink-900);
+  box-shadow: 0 0 0 1000px var(--color-paper-100) inset;
   transition: background-color 9999s ease-out 0s;
 }
 
@@ -179,15 +231,27 @@ input:-webkit-autofill:focus {
   display: none;
 }
 
-/* Tall pages inside the app surface scroll on their own. */
+/* Tall pages inside the app surface scroll on their own — and say nothing about
+   it. A visible scrollbar is the one piece of browser chrome that instantly
+   makes the app read as a web page, so the bar is hidden and only the scrolling
+   stays. The pages are built to fit one screen; the ones that cannot (Profile,
+   a long ledger) still move, they just do not announce it. */
 .app-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-slate-300) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.app-scroll::-webkit-scrollbar {
+  display: none;
 }
 
-@utility safe-bottom {
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
-}
+/* ------------------------------------------------------------------ *
+ * Layering scale — keep every z-index on this ladder, no local numbers:
+ *   0   page content
+ *  10   in-page floating chrome (hero overlap, scanner chrome)
+ *  30   app chrome that must beat the scroll area (bottom nav + its Pay bubble)
+ *  50   modal sheets (portalled to <body>)
+ *  60   toasts (portalled to <body>, above any sheet)
+ * ------------------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
   *,

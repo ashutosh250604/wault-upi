@@ -1,12 +1,14 @@
 import secrets
 from datetime import timedelta
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from .. import coins
 from ..events import notify
 from ..extensions import db
 from ..models import Notification, User, Wallet
+from ..otp import deliver_otp
 from ..security import (
     EMAIL_RE,
     MOBILE_RE,
@@ -14,8 +16,8 @@ from ..security import (
     check_pin,
     current_user,
     hash_secret,
-    issue_token,
     require_auth,
+    session_payload,
     verify_secret,
 )
 from ..timeutils import as_utc, utcnow
@@ -25,6 +27,57 @@ bp = Blueprint("auth", __name__)
 
 def _generate_otp() -> str:
     return f"{secrets.randbelow(900000) + 100000}"
+
+
+def _request_run(user, now) -> int:
+    """How many codes this number has asked for in the current run.
+
+    A run is the stretch of requests made while a code is still valid. Someone
+    who asks twice, verifies, and then signs in again next week has not made
+    three requests — the counter is per run, not per number, which is what
+    "five continuous requests" means. The run ends on a successful verify (see
+    `verify_otp`) or once the previous code has lapsed; the value here is only
+    read, and `start_login` writes the incremented one back.
+    """
+    previous = as_utc(user.last_otp_sent_at) if user.last_otp_sent_at else None
+    if previous is None:
+        return 0
+    if now - previous > timedelta(minutes=current_app.config["OTP_TTL_MINUTES"]):
+        return 0
+    return user.otp_requests or 0
+
+
+def _cooldown_state(user, now, run: int):
+    """The OTP throttle for this request, as data rather than prose.
+
+    Returns `(wait_seconds, available_at)`. `wait_seconds` is 0 when the request
+    may go ahead. Both are handed to the client so it can count the window down
+    from a timestamp the server chose, instead of starting its own clock — a
+    refresh, a backgrounded tab or a clock that ticks while the phone is asleep
+    then all show the same remaining time.
+    """
+    cooldown = current_app.config["OTP_RESEND_SECONDS"]
+    if cooldown <= 0 or run < current_app.config["OTP_FREE_REQUESTS"]:
+        return 0, None
+    previous = as_utc(user.last_otp_sent_at)
+    if previous is None:
+        return 0, None
+    available_at = previous + timedelta(seconds=cooldown)
+    waited = (now - previous).total_seconds()
+    if waited >= cooldown:
+        return 0, available_at
+    return max(1, int(cooldown - waited + 0.999)), available_at
+
+
+def _throttle_payload(wait: int, available_at, run: int) -> dict:
+    """The 429 body: what to say, and the instant the wait is over."""
+    return {
+        "message": f"Please wait {wait} seconds before requesting a new OTP.",
+        "retry_after": wait,
+        "resend_available_at": available_at.isoformat() if available_at else None,
+        "requests_remaining": 0,
+        "requests_made": run,
+    }
 
 
 @bp.post("/start_login")
@@ -37,15 +90,27 @@ def start_login():
     otp = _generate_otp()
     now = utcnow()
     user = User.query.filter_by(mobile=mobile).first()
+
+    # The first few codes are free. Past that, one code per cooldown window:
+    # issuing another would invalidate the code already on its way and let
+    # anyone turn this endpoint into an SMS cannon. The client counts the same
+    # window down, but the button is not what enforces it.
+    run = _request_run(user, now) if user else 0
+    wait, available_at = _cooldown_state(user, now, run) if user else (0, None)
+    if wait > 0:
+        return jsonify(_throttle_payload(wait, available_at, run)), 429
+
     if user is None:
         user = User(mobile=mobile)
         db.session.add(user)
 
+    run += 1
     user.otp_hash = hash_secret(otp)
     user.otp_expiry = now + timedelta(minutes=current_app.config["OTP_TTL_MINUTES"])
     user.otp_attempts = 0
     user.otp_is_used = False
     user.last_otp_sent_at = now
+    user.otp_requests = run
     user.updated_at = now
 
     try:
@@ -54,13 +119,30 @@ def start_login():
         db.session.rollback()
         return jsonify({"message": "Could not start login. Please try again."}), 500
 
-    payload = {"message": "OTP sent!"}
-    if current_app.config["DEMO_MODE"]:
-        # No SMS provider configured: the OTP comes back in the response instead.
-        payload["dev_otp"] = otp
-    else:
-        # Console SMS provider (development / self-hosted).
-        current_app.logger.info("OTP for %s: %s", mobile, otp)
+    # Delivery is a seam (wallet/otp.py). Until an SMS gateway is configured it
+    # reports that nothing was sent, and the code is exposed here instead: in the
+    # response for the public demo, in the server log otherwise.
+    free = current_app.config["OTP_FREE_REQUESTS"]
+    next_available_at = (
+        now + timedelta(seconds=current_app.config["OTP_RESEND_SECONDS"])
+        if run >= free and current_app.config["OTP_RESEND_SECONDS"] > 0
+        else None
+    )
+    payload = {
+        "message": "OTP sent!",
+        # How many of the free requests are left, and — once they run out — the
+        # instant the next one may be made. The verify screen renders its
+        # countdown from this rather than from its own 60-second guess.
+        "requests_remaining": max(0, free - run),
+        "resend_available_at": next_available_at.isoformat()
+        if next_available_at
+        else None,
+    }
+    if not deliver_otp(mobile, otp):
+        if current_app.config["DEMO_MODE"]:
+            payload["dev_otp"] = otp
+        else:
+            current_app.logger.info("OTP for %s: %s", mobile, otp)
 
     return jsonify(payload), 200
 
@@ -98,6 +180,9 @@ def verify_otp():
 
     user.otp_is_used = True
     user.is_verified = True
+    # The run is over: whoever this is has the code and is in. The next sign-in
+    # starts with its free requests again.
+    user.otp_requests = 0
     user.updated_at = utcnow()
     # Every real payment app mails you about a sign-in. Ours writes it to the
     # inbox instead, which is where the rest of the wallet's news lives.
@@ -107,6 +192,11 @@ def verify_otp():
         "New sign-in to your wallet",
         f"Verified with a one-time code on {user.mobile}",
     )
+    # The welcome bonus, in the same commit as the sign-in. Verifying a code is
+    # the moment an account becomes real — it is the first thing a new number
+    # does and the only thing every returning user does — and the grant is
+    # idempotent, so "new" and "returning" need no branch here.
+    coins.grant_signup_bonus(user.id)
     db.session.commit()
 
     return (
@@ -115,7 +205,7 @@ def verify_otp():
                 "message": f"Welcome back, {user.name}!"
                 if user.has_name
                 else "OTP verified!",
-                "token": issue_token(user.id),
+                **session_payload(user.id),
                 "user_id": user.id,
                 "name": user.name,
                 "vpa": user.vpa,
@@ -236,7 +326,7 @@ def demo_login():
     return jsonify(
         {
             "message": f"Welcome, {user.name or 'there'}!",
-            "token": issue_token(user.id),
+            **session_payload(user.id),
             "user_id": user.id,
             "mobile": user.mobile,
             "name": user.name,
@@ -244,19 +334,6 @@ def demo_login():
             "balance": round((user.wallet.balance_paise if user.wallet else 0) / 100, 2),
         }
     ), 200
-
-
-@bp.get("/get_user_id")
-@require_auth
-def get_user_id():
-    mobile = (request.args.get("mobile") or "").strip()
-    if not mobile:
-        return jsonify({"user_id": g.user_id}), 200
-
-    user = User.query.filter_by(mobile=mobile).first()
-    if user is None:
-        return jsonify({"message": "User not found"}), 404
-    return jsonify({"user_id": user.id}), 200
 
 
 @bp.get("/me")

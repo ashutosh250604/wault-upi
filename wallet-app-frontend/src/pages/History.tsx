@@ -1,18 +1,15 @@
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { WalletTransaction } from "../types";
-import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
-import { saveBlob } from "../lib/download";
 import { formatCurrency } from "../lib/format";
-import { useToast } from "../hooks/toast";
 import { classifyTransaction } from "../lib/transactions";
 import { useAppSession } from "../session/context";
 import { AppBar, AppShell } from "../components/AppShell";
+import { StatementDownload } from "../components/StatementDownload";
 import { TransactionDetailSheet, TransactionList } from "../components/Transactions";
 import { Card } from "../components/ui/Card";
-import { Button } from "../components/ui/Button";
-import { IconDownload, IconRefresh } from "../components/ui/Icons";
+import { IconRefresh } from "../components/ui/Icons";
 import { ErrorState } from "../components/ui/States";
 import { Spinner } from "../components/ui/Spinner";
 
@@ -26,11 +23,9 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
 
 export default function HistoryPage() {
   const { userId, transactions, status, error, refresh } = useAppSession();
-  const toast = useToast();
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<WalletTransaction | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   const { visible, totals } = useMemo(() => {
     const list = transactions ?? [];
@@ -63,21 +58,6 @@ export default function HistoryPage() {
     setRefreshing(false);
   };
 
-  const exportStatement = async () => {
-    setExporting(true);
-    try {
-      // The server builds the CSV from the ledger, so the download can't drift
-      // from the rows on screen.
-      const { blob, filename } = await api.statementCsv();
-      saveBlob(blob, filename);
-      toast.success(`Statement saved as ${filename}`);
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   return (
     <AppShell
       nav
@@ -86,52 +66,43 @@ export default function HistoryPage() {
         <AppBar
           title="Transactions"
           right={
+            // A capsule, not a floating icon: the same refresh control as the
+            // balance on the home hero, so the two read as one idea.
             <button
               type="button"
               onClick={() => void onRefresh()}
               disabled={refreshing}
               aria-label="Refresh transactions"
-              className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-60"
+              className="mr-0.5 inline-flex items-center gap-1.5 rounded-[7px] bg-paper-100 px-2.5 py-1.5 text-[11.5px] font-semibold text-ink-700 ring-[1.5px] ring-ink-900/70 ring-inset transition hover:bg-paper-200 active:bg-paper-300 disabled:opacity-60"
             >
-              {refreshing ? <Spinner size={17} /> : <IconRefresh size={17} />}
+              {refreshing ? <Spinner size={13} /> : <IconRefresh size={13} />}
+              Refresh
             </button>
           }
         />
       }
     >
       <div className="space-y-5 px-5 pt-4 pb-6">
-        <Card className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
-              Money in
-            </p>
-            <p className="mt-1 text-[17px] font-bold tabular-nums text-emerald-600">
+        {/* The day's totals read like a printed summary line, not two boxes. */}
+        <div className="grid grid-cols-2 divide-x divide-ink-200 rounded-[10px] border-[1.5px] border-ink-900/75 bg-paper-25 px-4 py-3.5">
+          <div className="pr-3">
+            <p className="text-[12px] font-medium text-ink-500">Money in</p>
+            <p className="mt-1 font-display text-[19px] leading-none font-extrabold tracking-[-0.02em] tabular-nums text-credit-600">
               {formatCurrency(totals.moneyIn)}
             </p>
           </div>
-          <div className="border-l border-slate-100 pl-3">
-            <p className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
-              Money out
-            </p>
-            <p className="mt-1 text-[17px] font-bold tabular-nums text-slate-900">
+          <div className="pl-4">
+            <p className="text-[12px] font-medium text-ink-500">Money out</p>
+            <p className="mt-1 font-display text-[19px] leading-none font-extrabold tracking-[-0.02em] tabular-nums text-ink-900">
               {formatCurrency(totals.moneyOut)}
             </p>
           </div>
-        </Card>
+        </div>
 
-        <Button
-          variant="secondary"
-          fullWidth
-          size="sm"
-          loading={exporting}
-          leftIcon={<IconDownload size={15} />}
-          onClick={() => void exportStatement()}
-        >
-          Download statement (CSV)
-        </Button>
+        <StatementDownload fullWidth />
 
         <div
-          className="flex gap-1.5 rounded-2xl bg-slate-100 p-1.5"
+          className="flex gap-5 border-b border-ink-200"
           role="tablist"
           aria-label="Filter transactions"
         >
@@ -145,11 +116,11 @@ export default function HistoryPage() {
                 aria-selected={active}
                 onClick={() => setFilter(item.key)}
                 className={cx(
-                  "flex-1 rounded-xl py-2 text-[12.5px] font-semibold transition",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50",
+                  "-mb-px border-b-2 px-0.5 pb-2 text-[13px] font-semibold transition",
+                  "focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none",
                   active
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700",
+                    ? "border-ink-900 text-ink-900"
+                    : "border-transparent text-ink-500 hover:text-ink-700",
                 )}
               >
                 {item.label}

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: upi-wallet-demo
+    name: upi-wallet-app
     runtime: docker
     plan: free
     dockerfilePath: ./wallet-app-backend/Dockerfile
@@ -16,6 +16,7 @@ services:
       - key: DEMO_MODE
         value: "true"
       - key: VPA_SUFFIX
-        value: okwalletpay
-      - key: JWT_EXPIRES_HOURS
-        value: "12"
+        value: okwault
+      # Session lifetime in minutes. The app clamps anything above 30.
+      - key: JWT_EXPIRES_MINUTES
+        value: "30"

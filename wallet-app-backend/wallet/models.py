@@ -22,6 +22,11 @@ class User(db.Model):
     otp_attempts = db.Column(db.Integer, nullable=False, default=0)
     otp_is_used = db.Column(db.Boolean, nullable=False, default=False)
     last_otp_sent_at = db.Column(db.DateTime(timezone=True))
+    # How many codes have been asked for in a row. The first `OTP_FREE_REQUESTS`
+    # are free; after that each one waits out `OTP_RESEND_SECONDS`. Reset when a
+    # code is verified, or once the previous code has lapsed — see
+    # `blueprints/auth.py`, which is the only writer.
+    otp_requests = db.Column(db.Integer, nullable=False, default=0)
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(
@@ -242,6 +247,8 @@ class Notification(db.Model):
     MONEY_SENT = "money_sent"
     TOPUP = "topup"
     REQUEST_RECEIVED = "request_received"
+    # Covers both a decline and a withdrawal: either way an ask the user was
+    # party to closed without money moving, and the title says which happened.
     REQUEST_DECLINED = "request_declined"
     REWARD = "reward"
     SECURITY = "security"
@@ -284,6 +291,10 @@ class Reward(db.Model):
     (title, terms, target, payout) lives in `wallet/rewards.py`, so the promise
     the user is being held to has exactly one definition and can't drift from a
     row somebody edited.
+
+    There is deliberately no pointer to a transaction. Offers pay in coins now,
+    and a coin award is itself the record of what was paid — the row here only
+    has to say that the promise was kept, and `credited_at` says when.
     """
 
     __tablename__ = "rewards"
@@ -306,11 +317,74 @@ class Reward(db.Model):
     started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     expires_at = db.Column(db.DateTime(timezone=True))
     credited_at = db.Column(db.DateTime(timezone=True))
-    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(
         db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
+
+
+class CoinAward(db.Model):
+    """Coins a payment drew, written down the moment it settles.
+
+    A payout is random (1–50, weighted towards the low end — see
+    `wallet/coins.py`), and a random amount cannot be re-derived from the
+    ledger the way a fixed "every third payment" rule could. So the draw is
+    recorded here, against the transaction that earned it, and the balance is
+    the sum of these rows.
+
+    `transaction_id` is unique: it is the record of what a payment paid, and
+    the guarantee that a retry or a double settle cannot pay for it twice.
+    """
+
+    __tablename__ = "coin_awards"
+
+    #: A payment's draw. One row per payment, guarded by `transaction_id`.
+    REASON_PAYMENT = "payment"
+    #: The one-off welcome bonus, granted once per account and guarded by
+    #: `reason` — there is no transaction behind it to be unique on.
+    REASON_SIGNUP = "signup"
+    #: Coins paid by an offer. The code is kept in the reason
+    #: ("offer:three_payments") so an award can always be traced back to the
+    #: promise that paid it.
+    OFFER_PREFIX = "offer:"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    coins = db.Column(db.Integer, nullable=False)
+    # Where the coins came from. Stored rather than inferred: a payment's payout
+    # is a random draw that only this row records, and the welcome bonus and an
+    # offer's payout have no transaction of their own to be identified by.
+    reason = db.Column(db.String(32), nullable=False, default=REASON_PAYMENT)
+    transaction_id = db.Column(
+        db.Integer, db.ForeignKey("transactions.id"), nullable=True, unique=True
+    )
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
+
+
+class CoinRedemption(db.Model):
+    """Coins spent, and the wallet credit they bought.
+
+    The coin *balance* is the award log minus this one (see `wallet/coins.py`),
+    so neither needs a running total that could drift. Spending is the thing the
+    ledger can't tell us — the credit it buys looks like any other money
+    arriving — so this row is both the record of the payout and the guard that
+    stops the same coins being spent twice.
+    """
+
+    __tablename__ = "coin_redemptions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    coins = db.Column(db.Integer, nullable=False)
+    amount_paise = db.Column(db.BigInteger, nullable=False)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transactions.id"))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
 
@@ -320,8 +394,9 @@ class Transaction(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(24), unique=True, index=True)
-    # 'topup' | 'transfer' | 'cashback'. A cashback credit has no sender — the
-    # money comes from the rewards engine, not from another wallet.
+    # 'topup' | 'transfer' | 'cashback' | 'coins'. A cashback or coin credit has
+    # no sender — the money comes from WAULT's own rewards engine, not from
+    # another wallet.
     type = db.Column(db.String(16), nullable=False)
     status = db.Column(db.String(16), nullable=False, default="success")
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id"))

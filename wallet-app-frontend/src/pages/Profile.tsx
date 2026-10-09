@@ -16,9 +16,11 @@ import { useNotifications } from "../hooks/useNotifications";
 import { AppBar, AppShell } from "../components/AppShell";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
+import { Card, CardTitle, TextLink } from "../components/ui/Card";
 import { CopyButton } from "../components/ui/CopyButton";
 import { DetailRow } from "../components/ui/DetailRow";
+import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { IconTile } from "../components/ui/IconTile";
 import { Sheet } from "../components/ui/Sheet";
 import {
   IconBell,
@@ -36,6 +38,15 @@ import {
 
 const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
 
+/** "28 minutes" / "1h 5m" — a 30-minute session reads badly as "0h 28m". */
+function countdown(minutes: number): string {
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
 /** A plain navigation row, so the profile screen can point at the deeper screens. */
 function LinkRow({
   to,
@@ -49,15 +60,20 @@ function LinkRow({
   subtitle: string;
 }) {
   return (
-    <Link to={to} className="flex items-center gap-3 py-3.5 transition hover:opacity-80">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+    <Link
+      to={to}
+      className="flex items-center gap-3 py-3 transition hover:opacity-70 active:opacity-60"
+    >
+      <IconTile tone="ink" scale="sm">
         {icon}
-      </span>
+      </IconTile>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] font-semibold text-slate-800">{title}</span>
-        <span className="block text-[12px] text-slate-500">{subtitle}</span>
+        <span className="block font-display text-[13.5px] font-bold tracking-tight text-ink-900">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-[12px] text-ink-500">{subtitle}</span>
       </span>
-      <IconChevronRight size={16} className="shrink-0 text-slate-300" />
+      <IconChevronRight size={16} className="shrink-0 text-ink-300" />
     </Link>
   );
 }
@@ -100,19 +116,21 @@ export default function ProfilePage() {
 
   return (
     <AppShell nav header={<AppBar title="Profile" />}>
-      <div className="space-y-5 px-5 pt-4 pb-6">
-        <Card className="flex items-center gap-4">
-          <Avatar name={profile?.name} size="xl" tone="gradient" />
+      {/* Tighter gutter and rhythm than a feed screen: the profile is a card
+          index, and the rows should read as one document, not five banners. */}
+      <div className="space-y-4 px-4 pt-3.5 pb-6">
+        <Card className="flex items-center gap-3.5 p-3.5">
+          <Avatar name={profile?.name} size="lg" tone="ink" />
           <div className="min-w-0">
-            <p className="truncate text-[17px] font-bold tracking-tight text-slate-900">
-              {profile?.name ?? "Wallet Pay user"}
+            <p className="truncate font-display text-[17px] font-extrabold tracking-tight text-ink-900">
+              {profile?.name ?? "WAULT user"}
             </p>
-            <p className="truncate text-[13px] text-slate-500 tabular-nums">
+            <p className="mt-0.5 truncate font-mono text-[12.5px] text-ink-500 tabular-nums">
               {profile?.vpa ?? formatMobile(session?.mobile)}
             </p>
             <Link
               to="/my-qr"
-              className="mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-semibold text-brand-700"
+              className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-seal-700 transition hover:text-seal-800"
             >
               <IconQr size={14} /> Show my QR
             </Link>
@@ -128,7 +146,7 @@ export default function ProfilePage() {
           </DetailRow>
           <DetailRow label="UPI ID">
             {profile?.vpa ? (
-              <span className="inline-flex items-center gap-1 tabular-nums">
+              <span className="inline-flex items-center gap-1 font-mono tabular-nums">
                 {profile.vpa}
                 <CopyButton value={profile.vpa} label="Copy UPI ID" size={14} />
               </span>
@@ -143,7 +161,7 @@ export default function ProfilePage() {
             ) : (
               <Link
                 to="/onboarding/pin"
-                className="font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2"
+                className="font-semibold text-seal-700 underline decoration-seal-300 decoration-1 underline-offset-4"
               >
                 Not set — add one
               </Link>
@@ -153,11 +171,11 @@ export default function ProfilePage() {
 
         <Card>
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-[13.5px] font-semibold text-slate-800">Today's sending limit</p>
+            <CardTitle>Today's sending limit</CardTitle>
             {limits ? (
-              <p className="text-[13px] font-bold text-slate-900 tabular-nums">
+              <p className="font-display text-[13.5px] font-bold tracking-tight text-ink-900 tabular-nums">
                 {formatCurrencyShort(limits.remaining)}{" "}
-                <span className="text-[11.5px] font-medium text-slate-400">
+                <span className="text-[11.5px] font-medium text-ink-400">
                   of {formatCurrencyShort(limits.daily_limit)} left
                 </span>
               </p>
@@ -166,57 +184,57 @@ export default function ProfilePage() {
 
           {limits ? (
             <>
-              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="mt-3 h-1.5 overflow-hidden rounded-[3px] bg-paper-200">
                 <span
                   className={cx(
-                    "block h-full rounded-full transition-all",
-                    limits.used_percent >= 90 ? "bg-rose-500" : "bg-brand-500",
+                    "block h-full rounded-[3px] transition-all",
+                    limits.used_percent >= 90 ? "bg-seal-600" : "bg-ink-900",
                   )}
                   style={{ width: `${Math.min(100, Math.max(0, limits.used_percent))}%` }}
                 />
               </div>
-              <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+              <p className="mt-2.5 text-[12px] leading-relaxed text-ink-500">
                 {formatCurrency(limits.spent_today)} sent today. The cap is enforced on every
-                debit, not just shown here, and it resets at midnight.
+                debit. It resets at midnight IST.
               </p>
             </>
           ) : (
-            <p className="mt-2 text-[12px] text-slate-400">Checking your limit…</p>
+            <p className="mt-2.5 text-[12px] text-ink-400">Checking your limit…</p>
           )}
         </Card>
 
-        <Card padded={false} className="divide-y divide-slate-100 px-4">
+        <Card padded={false} className="divide-y divide-ink-200/70 px-4">
           <LinkRow
             to="/notifications"
-            icon={<IconBell size={17} />}
+            icon={<IconBell size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />}
             title="Notifications"
             subtitle={
               unreadCount > 0
-                ? `${unreadCount} unread — payments, requests and cashback`
-                : "Payments, requests and cashback"
+                ? `${unreadCount} unread — payments, requests and rewards`
+                : "Payments, requests and rewards"
             }
           />
           <LinkRow
             to="/accounts"
-            icon={<IconWallet size={17} />}
+            icon={<IconWallet size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />}
             title="Linked accounts"
             subtitle="Where your top-ups come from"
           />
           <LinkRow
             to="/contacts"
-            icon={<IconUser size={17} />}
+            icon={<IconUser size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />}
             title="Contacts"
             subtitle="People you pay often"
           />
           <LinkRow
             to="/requests"
-            icon={<IconSent size={17} />}
+            icon={<IconSent size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />}
             title="Requests"
             subtitle="Money you've asked for, and been asked for"
           />
           <LinkRow
             to="/history"
-            icon={<IconReceipt size={17} />}
+            icon={<IconReceipt size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />}
             title="Transactions"
             subtitle="Every payment and top-up"
           />
@@ -224,22 +242,23 @@ export default function ProfilePage() {
 
         <Card>
           <div className="flex items-start gap-2.5">
-            <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
-            <div className="text-[12.5px] leading-relaxed text-slate-600">
-              <p className="font-semibold text-slate-700">Session</p>
+            <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
+            <div className="text-[12.5px] leading-relaxed text-ink-600">
+              <p className="font-display text-[13px] font-bold tracking-tight text-ink-900">
+                Session
+              </p>
               {token.expiresAt ? (
                 <p className="mt-0.5">
-                  Your token expires {formatDateTime(token.expiresAt.toISOString())}
+                  Signed in until {formatDateTime(token.expiresAt.toISOString())}
                   {token.minutesLeft !== null
-                    ? ` — about ${Math.floor(token.minutesLeft / 60)}h ${token.minutesLeft % 60}m left.`
+                    ? ` — about ${countdown(token.minutesLeft)} left.`
                     : "."}
                 </p>
               ) : (
-                <p className="mt-0.5">Signed in with a JSON Web Token.</p>
+                <p className="mt-0.5">Signed in.</p>
               )}
-              <p className="mt-0.5 text-slate-500">
-                A 401 from any call signs you out automatically instead of leaving the
-                screen half-broken.
+              <p className="mt-0.5 text-ink-500">
+                Sessions can't be extended, so you sign in again once it ends.
               </p>
             </div>
           </div>
@@ -247,14 +266,14 @@ export default function ProfilePage() {
 
         <Card>
           <div className="flex items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-              <IconSound size={17} />
-            </span>
+            <IconTile tone="ink" scale="sm">
+              <IconSound size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />
+            </IconTile>
             <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-semibold text-slate-800">
+              <p className="font-display text-[13.5px] font-bold tracking-tight text-ink-900">
                 Sounds &amp; haptics
               </p>
-              <p className="text-[12px] text-slate-500">
+              <p className="mt-0.5 text-[12px] text-ink-500">
                 Keypad ticks, a chime when money moves, a buzz on errors.
               </p>
             </div>
@@ -270,14 +289,14 @@ export default function ProfilePage() {
                 if (next) feedback.success();
               }}
               className={cx(
-                "relative h-7 w-12 shrink-0 rounded-full transition",
-                sound ? "bg-brand-600" : "bg-slate-200",
+                "relative h-7 w-12 shrink-0 rounded-[6px] ring-1 ring-inset transition focus-visible:ring-2 focus-visible:ring-ink-900/40 focus-visible:outline-none",
+                sound ? "bg-ink-900 ring-ink-900" : "bg-paper-200 ring-ink-300",
               )}
             >
               <span
                 className={cx(
-                  "absolute top-1 size-5 rounded-full bg-white shadow transition-all",
-                  sound ? "left-6" : "left-1",
+                  "absolute top-1 size-5 rounded-[4px] transition-all",
+                  sound ? "left-6 bg-paper-25" : "left-1 bg-paper-25 ring-1 ring-ink-200",
                 )}
               />
             </button>
@@ -295,50 +314,56 @@ export default function ProfilePage() {
         </Button>
 
         <Card tone="muted" className="space-y-3">
-          <p className="text-[13px] font-semibold text-slate-700">About Wallet Pay</p>
-          <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-slate-600">
+          <CardTitle>About WAULT</CardTitle>
+          <ul className="space-y-2 text-[12px] leading-relaxed text-ink-600">
             <li className="flex gap-2">
-              <IconWarning size={14} className="mt-0.5 shrink-0 text-amber-500" />
+              <IconWarning size={14} className="mt-0.5 shrink-0 text-seal-600" />
               A portfolio project, not a payment product. There is no NPCI/UPI
               integration and no connection to a real bank.
             </li>
             <li className="flex gap-2">
-              <IconInfo size={14} className="mt-0.5 shrink-0 text-slate-400" />
-              Balances live in Wallet Pay's own database and move only between accounts
+              <IconInfo size={14} className="mt-0.5 shrink-0 text-ink-400" />
+              Balances live in WAULT's own database and move only between accounts
               created here.
             </li>
             <li className="flex gap-2">
-              <IconInfo size={14} className="mt-0.5 shrink-0 text-slate-400" />
-              Sample accounts: <span className="font-mono">9000000001</span> and{" "}
-              <span className="font-mono">9000000002</span> — PIN{" "}
-              <span className="font-mono">1234</span>.
+              <IconInfo size={14} className="mt-0.5 shrink-0 text-ink-400" />
+              {/* One child, so the line wraps as a sentence instead of breaking
+                  into a flex row that cannot fold. */}
+              <span className="min-w-0">
+                Sample accounts: <span className="font-mono">9000000001</span> and{" "}
+                <span className="font-mono">9000000002</span> — PIN{" "}
+                <span className="font-mono">1234</span>.
+              </span>
             </li>
           </ul>
 
           {health ? (
-            <p className="border-t border-slate-200/70 pt-2.5 text-[11.5px] text-slate-500">
-              API healthy · database{" "}
-              <span className="font-mono font-semibold">{health.db}</span> · driver{" "}
-              <span className="font-mono font-semibold">{health.driver}</span>
-
-            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-ink-200 pt-2.5 text-[11.5px] text-ink-500">
+              <span>API healthy</span>
+              <span aria-hidden="true" className="h-3 w-px bg-ink-200" />
+              <span>
+                database{" "}
+                <span className="font-mono font-semibold text-ink-700">{health.db}</span>
+              </span>
+              <span aria-hidden="true" className="h-3 w-px bg-ink-200" />
+              <span>
+                driver{" "}
+                <span className="font-mono font-semibold text-ink-700">{health.driver}</span>
+              </span>
+            </div>
           ) : null}
 
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-block text-[12.5px] font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2"
-          >
-            Flask + React source on GitHub →
-          </a>
+          <TextLink href={REPO_URL} target="_blank" rel="noreferrer">
+            Flask + React source on GitHub
+          </TextLink>
         </Card>
       </div>
 
       <Sheet
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        title="Sign out of Wallet Pay?"
+        title="Sign out of WAULT?"
         description="Your session token will be discarded on this device. Balances stay untouched."
         footer={
           <div className="flex gap-2">
@@ -358,7 +383,7 @@ export default function ProfilePage() {
           </div>
         }
       >
-        <p className="text-[13px] leading-relaxed text-slate-600">
+        <p className="text-[13px] leading-relaxed text-ink-600">
           You can sign back in with your mobile number and OTP, or with the one-tap sample
           account.
         </p>

@@ -10,6 +10,8 @@ import type {
   AccountBalanceResponse,
   AppNotification,
   BalanceResponse,
+  CoinSnapshot,
+  CoinsRedeemedResponse,
   Contact,
   SampleLoginResponse,
   HealthResponse,
@@ -49,11 +51,21 @@ const API_PREFIX = "/api";
 
 export class ApiError extends Error {
   readonly status: number;
+  /**
+   * The rest of the response body, when there was one.
+   *
+   * Some refusals are not just a sentence — a rate limit is a *when*, and the
+   * only honest source for it is the server. The 429 from `start_login` carries
+   * `retry_after` and `resend_available_at`, and the verify screen reads them
+   * from here rather than guessing a window from the message it was handed.
+   */
+  readonly details: Record<string, unknown> | null;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, details: Record<string, unknown> | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.details = details;
   }
 
   /** True when the failure was a dead connection rather than an API response. */
@@ -123,10 +135,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    const message =
-      (payload as { message?: string } | null)?.message ?? messageForStatus(response.status);
+    const body = payload as { message?: string } | null;
+    const message = body?.message ?? messageForStatus(response.status);
     if (response.status === 401) authFailureListener?.();
-    throw new ApiError(message, response.status);
+    throw new ApiError(
+      message,
+      response.status,
+      body && typeof body === "object" ? (body as Record<string, unknown>) : null,
+    );
   }
 
   return payload as T;
@@ -229,17 +245,30 @@ export const api = {
     }),
 
   /**
-   * The statement as a file, not JSON, so it bypasses `request()`. Reads the
-   * filename the server chose from Content-Disposition.
+   * The branded PDF statement. A file, not JSON, so it bypasses `request()`;
+   * the filename comes from the Content-Disposition header the server chose.
+   * `from`/`to` are inclusive calendar days (YYYY-MM-DD) in the user's own
+   * timezone; omitting both asks for the whole statement.
    */
-  statementCsv: async (signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> => {
+  statementPdf: async (
+    range: { from?: string; to?: string } = {},
+    signal?: AbortSignal,
+  ): Promise<{ blob: Blob; filename: string }> => {
     const token = readToken();
     if (!token) throw new ApiError("Your session expired. Please sign in again.", 401);
 
-    const response = await fetch(`${API_BASE}${API_PREFIX}/statements.csv`, {
-      headers: { Accept: "text/csv", Authorization: `Bearer ${token}` },
-      signal,
-    });
+    const query = new URLSearchParams();
+    if (range.from) query.set("from", range.from);
+    if (range.to) query.set("to", range.to);
+    const search = query.toString();
+
+    const response = await fetch(
+      `${API_BASE}${API_PREFIX}/statements.pdf${search ? `?${search}` : ""}`,
+      {
+        headers: { Accept: "application/pdf", Authorization: `Bearer ${token}` },
+        signal,
+      },
+    );
     if (!response.ok) {
       if (response.status === 401) authFailureListener?.();
       throw new ApiError(messageForStatus(response.status), response.status);
@@ -249,7 +278,7 @@ export const api = {
       blob: await response.blob(),
       filename:
         filenameFromDisposition(response.headers.get("Content-Disposition")) ??
-        "walletpay-statement.csv",
+        "okwault-statement.pdf",
     };
   },
 
@@ -366,6 +395,24 @@ export const api = {
 
   /** Offers with this user's progress, counted from the ledger server-side. */
   rewards: (signal?: AbortSignal) => request<Reward[]>("/rewards", { auth: true, signal }),
+
+  /** The coin balance, its worth and the progress to the next coin. A pure read. */
+  coins: (signal?: AbortSignal) => request<CoinSnapshot>("/coins", { auth: true, signal }),
+
+  /**
+   * Spends coins on wallet credit.
+   *
+   * There is no amount to choose: a redemption takes the whole coin balance at
+   * ₹1 a coin, gated at ten. The server refuses anything else, so the client
+   * cannot ask for a payout the wallet would never make.
+   */
+  redeemCoins: (signal?: AbortSignal) =>
+    request<CoinsRedeemedResponse>("/coins/redeem", {
+      method: "POST",
+      body: {},
+      auth: true,
+      signal,
+    }),
 
   /** What's left of today's cap: the numbers the ledger enforces on a debit. */
   limits: (signal?: AbortSignal) => request<LimitsResponse>("/limits", { auth: true, signal }),

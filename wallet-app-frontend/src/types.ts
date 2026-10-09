@@ -4,10 +4,13 @@
  */
 
 /**
- * `cashback` is money the rewards engine credited: a real ledger row with no
- * counterparty, because it comes from Wallet Pay rather than from a person.
+ * `coins` is a coin redemption: real money, with no counterparty, because it
+ * comes from WAULT rather than from a person. `cashback` is the same thing by an
+ * older route — offers used to credit rupees straight into the balance and now
+ * pay coins instead, so this type still exists to render the rows already in
+ * people's histories.
  */
-export type TransactionType = "topup" | "transfer" | "cashback";
+export type TransactionType = "topup" | "transfer" | "cashback" | "coins";
 export type TransactionStatus = "success" | "pending" | "failed";
 
 /** What we persist in localStorage after a successful sign-in. */
@@ -46,6 +49,18 @@ export interface StartLoginResponse {
   message: string;
   /** Present only when the server runs with DEMO_MODE=true. */
   dev_otp?: string;
+  /**
+   * How many of the free resend requests are left before the wait starts.
+   * Zero means the next request is the one that has to wait.
+   */
+  requests_remaining?: number;
+  /**
+   * The instant the next OTP may be requested, as an ISO timestamp — null
+   * while requests are still free. The verify screen's countdown runs on this
+   * rather than on a window of its own, so it survives a refresh and agrees
+   * with the server that will enforce it.
+   */
+  resend_available_at?: string | null;
 }
 
 export interface VerifyOtpResponse {
@@ -160,11 +175,59 @@ export interface Contact {
   last_paid_at: string | null;
 }
 
-/** A cashback credited inside the same commit as the payment that earned it. */
+/**
+ * The coin scheme, as the header chip and the rewards sheet render it.
+ *
+ * `coins` earned are counted from the ledger server-side, so nothing here is
+ * computed on the client and two screens can't disagree.
+ */
+export interface CoinSnapshot {
+  /** Coins in hand. */
+  coins: number;
+  /** What those coins are worth in rupees. */
+  value: number;
+  /** Lifetime coins drawn from payments. */
+  earned: number;
+  /** Lifetime coins spent. */
+  redeemed: number;
+  /** What one coin is worth. */
+  coin_value: number;
+  /** The smallest payout, in coins. */
+  min_redeem: number;
+  /** The largest payout available right now, in coins (0 below the minimum). */
+  redeemable: number;
+  redeemable_value: number;
+  /**
+   * What the last few awards paid out, newest first — a payment's draw, the
+   * welcome bonus, or an offer. `label` is the server's wording for `reason`,
+   * so "where did these coins come from" has one answer rather than one per
+   * screen.
+   */
+  awards: Array<{ coins: number; reason: string; label: string; at: string }>;
+}
+
+/** The result of spending coins: the credit, and the coins left over. */
+export interface CoinsRedeemedResponse {
+  message: string;
+  coins_redeemed: number;
+  amount: number;
+  new_balance: number | null;
+  txn_id: string;
+  coins: CoinSnapshot;
+}
+
+/**
+ * An offer paid inside the same commit as the payment that completed it.
+ *
+ * Offers pay in coins, so `coins` is the payout and `amount` is what those
+ * coins are worth — the same figure, because a coin redeems at ₹1, but sent by
+ * the server rather than assumed here.
+ */
 export interface CreditedReward {
   code: string;
   title: string;
-  /** Rupees. */
+  coins: number;
+  /** Rupees the coins are worth. */
   amount: number;
 }
 
@@ -175,6 +238,8 @@ export interface TransferResponse {
   amount: number;
   txn_id: string;
   note: string | null;
+  /** Coins this payment drew — the amount the scratch card reveals. */
+  coins_earned?: number;
   /** Present only when this payment completed an offer. */
   rewards?: CreditedReward[];
 }
@@ -229,7 +294,9 @@ export interface Reward {
   title: string;
   headline: string;
   detail: string;
-  /** Rupees the offer pays out. */
+  /** Coins the offer pays out — every offer pays in coins. */
+  coins: number;
+  /** Rupees those coins are worth. */
   reward: number;
   target: number;
   progress: number;
@@ -291,6 +358,8 @@ export interface RequestPaymentResponse {
   to: number;
   note: string | null;
   timestamp: string;
+  /** Coins this payment drew — the amount the scratch card reveals. */
+  coins_earned?: number;
   /** Present only when paying the request completed an offer. */
   rewards?: CreditedReward[];
 }
@@ -304,7 +373,9 @@ export interface Receipt {
   counterpartyVpa: string | null;
   note: string | null;
   timestamp: string;
-  /** Cashback credited alongside this payment, shown as the reward line. */
+  /** Coins this payment drew, before any offer's coins are added to them. */
+  coinsEarned?: number;
+  /** Offers paid alongside this payment, shown as the reward line. */
   cashback?: CreditedReward[];
 }
 

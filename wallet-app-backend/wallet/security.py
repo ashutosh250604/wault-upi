@@ -7,7 +7,7 @@ from flask import current_app, g, jsonify, request
 
 from .extensions import db
 from .models import User
-from .timeutils import as_utc, utcnow
+from .timeutils import as_utc, to_ist, utcnow
 
 MOBILE_RE = re.compile(r"^[6-9]\d{9}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -29,18 +29,43 @@ def verify_secret(hashed: str, secret: str) -> bool:
     return check_password_hash(hashed, secret)
 
 
-def issue_token(user_id: int) -> str:
+def token_ttl() -> timedelta:
+    """How long a freshly issued session lasts."""
+    return timedelta(minutes=current_app.config["JWT_EXPIRES_MINUTES"])
+
+
+def token_expiry(now: datetime | None = None) -> datetime:
+    """When a session issued at `now` lapses, as an aware UTC instant."""
+    return (now or datetime.now(timezone.utc)) + token_ttl()
+
+
+def issue_token(user_id: int, expires_at: datetime | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + timedelta(hours=current_app.config["JWT_EXPIRES_HOURS"]),
+        "exp": expires_at or token_expiry(now),
     }
     return jwt.encode(
         payload,
         current_app.config["SECRET_KEY"],
         algorithm=current_app.config["JWT_ALGORITHM"],
     )
+
+
+def session_payload(user_id: int) -> dict:
+    """A new token, plus when it lapses — spelled out, in IST.
+
+    Every sign-in response carries this. The client could read `exp` out of the
+    token itself, but a session that says when it ends is one the UI can count
+    down honestly instead of discovering the expiry with a 401 mid-payment.
+    """
+    expires_at = token_expiry()
+    return {
+        "token": issue_token(user_id, expires_at),
+        "expires_at": to_ist(expires_at).isoformat(),
+        "expires_in": int(token_ttl().total_seconds()),
+    }
 
 
 def decode_token(token: str):

@@ -6,4 +6,7 @@ SQLAlchemy>=2.0,<3
 alembic>=1.13,<2
 psycopg2-binary>=2.9,<3
 PyJWT>=2.9,<3
+# Branded PDF statements. The only heavy dependency, imported lazily by
+# wallet/statement.py.
+reportlab>=4.2,<5
 gunicorn>=23,<24

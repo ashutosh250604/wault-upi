@@ -32,9 +32,9 @@ export function CopyButton({
         onCopied?.(ok);
       }}
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-lg font-semibold transition",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-1",
-        copied ? "text-emerald-600" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+        "inline-flex items-center gap-1.5 rounded-[5px] font-semibold transition",
+        "focus-visible:ring-2 focus-visible:ring-ink-900/35 focus-visible:outline-none",
+        copied ? "text-credit-700" : "text-ink-400 hover:bg-paper-100 hover:text-ink-700",
         children ? "px-2 py-1 text-[12px]" : "p-1.5",
         className,
       )}

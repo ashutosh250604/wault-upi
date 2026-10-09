@@ -2,25 +2,45 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { LinkedAccount } from "../types";
 import { api, errorMessage } from "../lib/api";
-import { saveBlob } from "../lib/download";
+import { avatarToneFor } from "../lib/avatar";
 import { feedback } from "../lib/feedback";
 import { formatCurrency, formatDateTime } from "../lib/format";
 import { useToast } from "../hooks/toast";
 import { useAppSession } from "../session/context";
 import { AppBar, AppShell } from "../components/AppShell";
 import { PinPad } from "../components/PinPad";
-import { Badge } from "../components/ui/Avatar";
+import { StatementDownload } from "../components/StatementDownload";
+import { Avatar, Badge } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
-import {
-  IconDownload,
-  IconEye,
-  IconInfo,
-  IconLock,
-  IconWallet,
-} from "../components/ui/Icons";
+import { IconEye, IconInfo, IconLock, IconWallet } from "../components/ui/Icons";
 import { Sheet } from "../components/ui/Sheet";
 import { EmptyState, ErrorState } from "../components/ui/States";
+
+/**
+ * A bank stamp reads like a bank mark, not a person's initials: "HDFC", "SBI".
+ * All-caps first words are already brand marks; otherwise take initial letters.
+ */
+const STOP_WORDS = new Set(["of", "and", "the", "for", "&", "co", "ltd", "limited"]);
+
+function bankMark(name: string): string {
+  const words = name
+    .replace(/[^A-Za-z ]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((word) => Boolean(word) && !STOP_WORDS.has(word.toLowerCase()));
+  if (words.length === 0) return "BK";
+  const first = words[0];
+  if (first.length <= 6 && first === first.toUpperCase()) return first;
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase();
+  }
+  return first.slice(0, 2).toUpperCase();
+}
 
 /**
  * Linked accounts. The balance is behind a PIN on purpose: in UPI, seeing a bank
@@ -39,7 +59,8 @@ export default function AccountsPage() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [shakeToken, setShakeToken] = useState(0);
   const [checking, setChecking] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  // Bumped by the retry card so the effect re-runs without a full page reload.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,7 +74,7 @@ export default function AccountsPage() {
       }
     })();
     return () => controller.abort();
-  }, []);
+  }, [reloadKey]);
 
   if (!userId) return <Navigate to="/login" replace />;
 
@@ -106,34 +127,12 @@ export default function AccountsPage() {
     }
   };
 
-  const exportStatement = async () => {
-    setExporting(true);
-    try {
-      const { blob, filename } = await api.statementCsv();
-      saveBlob(blob, filename);
-      toast.success(`Statement saved as ${filename}`);
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   return (
     <AppShell
       header={<AppBar title="Linked accounts" showBack />}
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <Button
-            size="lg"
-            fullWidth
-            variant="secondary"
-            loading={exporting}
-            leftIcon={<IconDownload size={17} />}
-            onClick={() => void exportStatement()}
-          >
-            Download statement (CSV)
-          </Button>
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <StatementDownload variant="secondary" size="lg" fullWidth />
         </div>
       }
     >
@@ -142,10 +141,10 @@ export default function AccountsPage() {
           <Card className="space-y-3" aria-hidden="true">
             {Array.from({ length: 2 }).map((_, index) => (
               <div key={index} className="flex items-center gap-3">
-                <div className="size-12 animate-pulse rounded-2xl bg-slate-200/80" />
+                <div className="size-12 animate-pulse rounded-[10px] bg-paper-200" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3.5 w-32 animate-pulse rounded bg-slate-200/80" />
-                  <div className="h-3 w-40 animate-pulse rounded bg-slate-200/80" />
+                  <div className="h-3.5 w-32 animate-pulse rounded-[3px] bg-paper-200" />
+                  <div className="h-3 w-40 animate-pulse rounded-[3px] bg-paper-200" />
                 </div>
               </div>
             ))}
@@ -154,7 +153,13 @@ export default function AccountsPage() {
 
         {error && accounts === null ? (
           <Card>
-            <ErrorState message={error} onRetry={() => window.location.reload()} />
+            <ErrorState
+              message={error}
+              onRetry={() => {
+                setError(null);
+                setReloadKey((key) => key + 1);
+              }}
+            />
           </Card>
         ) : null}
 
@@ -173,24 +178,29 @@ export default function AccountsPage() {
           const isBusy = busyId === account.id;
 
           return (
-            <Card key={account.id} className="space-y-3">
+            <Card key={account.id} className="space-y-3.5">
               <div className="flex items-center gap-3">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-[15px] font-bold text-brand-700">
-                  {account.bank_name.replace(/[^A-Za-z ]/g, "").trim().split(/\s+/)[0]
-                    ?.slice(0, 2)
-                    .toUpperCase() ?? "BK"}
-                </span>
+                <Avatar
+                  label={bankMark(account.bank_name)}
+                  size="lg"
+                  tone={avatarToneFor(`${account.bank_name}${account.masked_number}`)}
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 text-[14.5px] font-semibold text-slate-900">
+                  <p className="flex items-center gap-2 font-display text-[14.5px] font-bold tracking-tight text-ink-900">
                     <span className="truncate">{account.bank_name}</span>
                     {account.is_default ? <Badge tone="brand">Default</Badge> : null}
                   </p>
-                  <p className="truncate text-[12.5px] text-slate-500 tabular-nums">
-                    {account.masked_number}
-                    {account.ifsc ? ` · ${account.ifsc}` : ""}
+                  <p className="mt-0.5 flex items-center gap-2 font-mono text-[12px] text-ink-500">
+                    <span className="truncate tabular-nums">{account.masked_number}</span>
+                    {account.ifsc ? (
+                      <>
+                        <span aria-hidden="true" className="h-3 w-px shrink-0 bg-ink-200" />
+                        <span className="min-w-0 truncate">{account.ifsc}</span>
+                      </>
+                    ) : null}
                   </p>
                   {account.holder_name ? (
-                    <p className="truncate text-[11.5px] text-slate-400">
+                    <p className="mt-0.5 truncate text-[11.5px] text-ink-400">
                       {account.holder_name}
                     </p>
                   ) : null}
@@ -198,14 +208,12 @@ export default function AccountsPage() {
               </div>
 
               {shown ? (
-                <div className="rounded-xl bg-emerald-50 px-3.5 py-2.5">
-                  <p className="text-[11px] font-semibold tracking-wide text-emerald-700 uppercase">
-                    Available balance
-                  </p>
-                  <p className="mt-0.5 text-[19px] font-bold tabular-nums text-emerald-700">
+                <div className="rounded-[8px] bg-credit-50 px-3.5 py-3 ring-1 ring-credit-100 ring-inset">
+                  <p className="text-[12px] font-medium text-credit-700">Available balance</p>
+                  <p className="mt-1 font-display text-[21px] leading-none font-extrabold tracking-[-0.02em] tabular-nums text-credit-700">
                     {formatCurrency(shown.balance)}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-emerald-700/70">
+                  <p className="mt-1.5 text-[11.5px] text-credit-700/75">
                     Checked {formatDateTime(shown.at)}
                   </p>
                 </div>
@@ -237,15 +245,15 @@ export default function AccountsPage() {
         })}
 
         <Card tone="muted" className="flex gap-2.5">
-          <IconLock size={16} className="mt-px shrink-0 text-slate-400" />
-          <p className="text-[12.5px] leading-relaxed text-slate-600">
+          <IconLock size={16} className="mt-px shrink-0 text-ink-500" />
+          <p className="text-[12.5px] leading-relaxed text-ink-600">
             Balances stay hidden until you enter your PIN — the same server check that
             authorises a payment. Only the last four digits of an account number are ever
             stored.
           </p>
         </Card>
 
-        <p className="flex items-start gap-2 px-1 text-[11.5px] leading-relaxed text-slate-400">
+        <p className="flex items-start gap-2 px-1 text-[11.5px] leading-relaxed text-ink-500">
           <IconInfo size={14} className="mt-px shrink-0" />
           Top-up money is debited from your default account, so its balance drops as your
           wallet grows.
@@ -273,7 +281,7 @@ export default function AccountsPage() {
           busyLabel="Checking balance…"
           autoSubmit={!checking}
         />
-        <p className="mt-5 text-center text-[11.5px] leading-relaxed text-slate-400">
+        <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ink-500">
           Five wrong attempts lock the PIN for 15 minutes. The lockout is enforced by the
           server, not just this screen.
         </p>

@@ -12,7 +12,7 @@ import { AppBar, AppShell } from "../components/AppShell";
 import { PinPad } from "../components/PinPad";
 import { RequestComposerSheet, RequestRow } from "../components/Requests";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
+import { Card, SectionTitle } from "../components/ui/Card";
 import { IconPlus, IconReceipt, IconRefresh } from "../components/ui/Icons";
 import { Sheet } from "../components/ui/Sheet";
 import { Spinner } from "../components/ui/Spinner";
@@ -60,8 +60,12 @@ export default function RequestsPage() {
     setPinError(null);
     try {
       const result = await api.payRequest(payTarget.id, enteredPin);
-      feedback.success();
-      for (const reward of result.rewards ?? []) toast.success(`${reward.title} credited`);
+      // Paying a request is a payment: it gets the payment tick, not the quiet
+      // "something was written" blip.
+      feedback.paid();
+      // "Earned": an offer pays coins, which live in the coin balance until
+      // they are redeemed.
+      for (const reward of result.rewards ?? []) toast.success(`${reward.title} earned`);
       replace(result.request);
       if (profile) {
         patchProfile({ balance: Math.max(0, profile.balance - result.amount) });
@@ -79,6 +83,9 @@ export default function RequestsPage() {
             counterpartyVpa: result.request.counterparty.vpa,
             note: result.note,
             timestamp: result.timestamp,
+            // Paying a request is a payment, so it draws coins too — and those
+            // coins get the same scratch card an ordinary transfer gets.
+            coinsEarned: result.coins_earned,
             cashback: result.rewards,
           },
         },
@@ -127,7 +134,7 @@ export default function RequestsPage() {
               onClick={reload}
               disabled={status === "loading"}
               aria-label="Refresh requests"
-              className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-60"
+              className="rounded-[6px] p-2 text-ink-500 transition hover:bg-paper-100 hover:text-ink-700 disabled:opacity-60"
             >
               {status === "loading" ? <Spinner size={17} /> : <IconRefresh size={17} />}
             </button>
@@ -136,7 +143,7 @@ export default function RequestsPage() {
       }
       onRefresh={reload}
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button
             size="lg"
             fullWidth
@@ -150,30 +157,26 @@ export default function RequestsPage() {
     >
       <div className="space-y-5 px-5 pt-4 pb-6">
         {incoming.length > 0 || outgoing.length > 0 ? (
-          <Card className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
-                You owe
-              </p>
-              <p className="mt-1 text-[17px] font-bold tabular-nums text-rose-600">
+          <div className="grid grid-cols-2 divide-x divide-ink-200 rounded-[10px] border-[1.5px] border-ink-900/75 bg-paper-25 px-4 py-3.5">
+            <div className="pr-3">
+              <p className="text-[12px] font-medium text-ink-500">You owe</p>
+              <p className="mt-1 font-display text-[19px] leading-none font-extrabold tracking-[-0.02em] tabular-nums text-seal-700">
                 {formatCurrency(owed)}
               </p>
-              <p className="mt-0.5 text-[11.5px] text-slate-400">
+              <p className="mt-1.5 text-[11.5px] text-ink-400">
                 {incoming.length} open ask{incoming.length === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="border-l border-slate-100 pl-3">
-              <p className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
-                Coming to you
-              </p>
-              <p className="mt-1 text-[17px] font-bold tabular-nums text-emerald-600">
+            <div className="pl-4">
+              <p className="text-[12px] font-medium text-ink-500">Coming to you</p>
+              <p className="mt-1 font-display text-[19px] leading-none font-extrabold tracking-[-0.02em] tabular-nums text-credit-600">
                 {formatCurrency(expected)}
               </p>
-              <p className="mt-0.5 text-[11.5px] text-slate-400">
+              <p className="mt-1.5 text-[11.5px] text-ink-400">
                 {outgoing.length} awaiting them
               </p>
             </div>
-          </Card>
+          </div>
         ) : null}
 
         {status === "error" && requests === null ? (
@@ -204,10 +207,17 @@ export default function RequestsPage() {
         ) : null}
 
         {incoming.length > 0 ? (
-          <section className="space-y-3">
-            <h2 className="px-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
+          <section className="space-y-2.5">
+            <SectionTitle
+              className="px-1"
+              action={
+                <span className="font-mono text-[11.5px] tabular-nums text-ink-400">
+                  {incoming.length}
+                </span>
+              }
+            >
               Waiting for you
-            </h2>
+            </SectionTitle>
             {incoming.map((request) => (
               <RequestRow
                 key={request.id}
@@ -221,10 +231,17 @@ export default function RequestsPage() {
         ) : null}
 
         {outgoing.length > 0 ? (
-          <section className="space-y-3">
-            <h2 className="px-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
+          <section className="space-y-2.5">
+            <SectionTitle
+              className="px-1"
+              action={
+                <span className="font-mono text-[11.5px] tabular-nums text-ink-400">
+                  {outgoing.length}
+                </span>
+              }
+            >
               You asked for
-            </h2>
+            </SectionTitle>
             {outgoing.map((request) => (
               <RequestRow
                 key={request.id}
@@ -237,10 +254,17 @@ export default function RequestsPage() {
         ) : null}
 
         {history.length > 0 ? (
-          <section className="space-y-3">
-            <h2 className="px-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
-              History
-            </h2>
+          <section className="space-y-2.5">
+            <SectionTitle
+              className="px-1"
+              action={
+                <span className="font-mono text-[11.5px] tabular-nums text-ink-400">
+                  {history.length}
+                </span>
+              }
+            >
+              Settled
+            </SectionTitle>
             {history.map((request) => (
               <RequestRow key={request.id} request={request} />
             ))}
@@ -273,7 +297,7 @@ export default function RequestsPage() {
           busyLabel="Paying request…"
           autoSubmit={!paying}
         />
-        <p className="mt-5 text-center text-[11.5px] leading-relaxed text-slate-400">
+        <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ink-500">
           Approving sends the money immediately. The PIN is checked on the server before the
           debit, and the request closes in the same transaction as the payment.
         </p>

@@ -5,7 +5,7 @@ import { Spinner } from "./ui/Spinner";
 export function RouteFallback({ title, nav = false }: { title?: string; nav?: boolean }) {
   return (
     <AppShell nav={nav} header={title ? <AppBar title={title} /> : undefined}>
-      <div className="flex flex-col items-center gap-3 py-24 text-slate-400">
+      <div className="flex flex-col items-center gap-3 py-24 text-ink-400">
         <Spinner size={24} />
         <p className="text-[13px]">Loading…</p>
       </div>

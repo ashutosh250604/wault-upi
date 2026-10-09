@@ -7,11 +7,12 @@
 import type { CreditedReward, PaymentIntent, Receipt } from "../types";
 
 /**
- * Cashback rows carried on a receipt.
+ * Offer payouts carried on a receipt.
  *
  * This guard exists because the parser *rebuilds* the object rather than
- * trusting it, which means any field it forgets is silently dropped — a reward
- * credited by the server can otherwise never reach the celebration on screen.
+ * trusting it, which means any field it forgets is silently dropped — a payout
+ * made by the server can otherwise never reach the celebration on screen. The
+ * coin count is the one that matters most: it is what the scratch card counts.
  */
 function parseCreditedRewards(raw: unknown): CreditedReward[] | undefined {
   if (!Array.isArray(raw)) return undefined;
@@ -24,6 +25,7 @@ function parseCreditedRewards(raw: unknown): CreditedReward[] | undefined {
       {
         code: typeof item.code === "string" ? item.code : "reward",
         title: item.title,
+        coins: typeof item.coins === "number" ? item.coins : 0,
         amount: item.amount,
       },
     ];
@@ -78,6 +80,10 @@ export function parseReceipt(state: unknown): Receipt | null {
     note: typeof receipt.note === "string" ? receipt.note : null,
     timestamp:
       typeof receipt.timestamp === "string" ? receipt.timestamp : new Date().toISOString(),
+    coinsEarned:
+      typeof receipt.coinsEarned === "number" && receipt.coinsEarned > 0
+        ? Math.floor(receipt.coinsEarned)
+        : undefined,
     cashback: parseCreditedRewards(receipt.cashback),
   };
 }

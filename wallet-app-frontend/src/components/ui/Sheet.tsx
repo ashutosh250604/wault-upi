@@ -67,7 +67,7 @@ export function Sheet({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 animate-fade-in bg-slate-900/45 backdrop-blur-[2px]"
+        className="absolute inset-0 animate-fade-in bg-ink-950/55 backdrop-blur-[2px]"
         onClick={() => dismissible && onClose()}
         aria-hidden="true"
       />
@@ -78,21 +78,25 @@ export function Sheet({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descriptionId : undefined}
         className={cx(
-          "relative flex max-h-[92dvh] w-full flex-col overflow-hidden bg-white shadow-2xl",
-          "animate-slide-up rounded-t-3xl sm:max-w-sm sm:rounded-3xl",
+          "relative flex max-h-[92dvh] w-full flex-col overflow-hidden bg-paper-25",
+          "shadow-[0_30px_70px_-28px_rgba(15,15,13,0.6)]",
+          "animate-slide-up rounded-t-[16px] sm:max-w-sm sm:rounded-[14px]",
           "pb-[env(safe-area-inset-bottom)]",
           className,
         )}
       >
-        <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-slate-200 sm:hidden" />
+        <div className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-ink-300 sm:hidden" />
         {title ? (
           <div className="flex items-start gap-3 px-5 pt-4">
             <div className="min-w-0 flex-1">
-              <h2 id={titleId} className="text-[17px] font-bold text-slate-900">
+              <h2
+                id={titleId}
+                className="font-display text-[18px] font-bold tracking-tight text-ink-900"
+              >
                 {title}
               </h2>
               {description ? (
-                <p id={descriptionId} className="mt-1 text-[13px] text-slate-500">
+                <p id={descriptionId} className="mt-1 text-[12.5px] leading-relaxed text-ink-500">
                   {description}
                 </p>
               ) : null}
@@ -102,7 +106,7 @@ export function Sheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="-mt-1 -mr-1 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                className="-mt-1 -mr-1 rounded-[6px] p-1.5 text-ink-400 transition hover:bg-paper-100 hover:text-ink-700"
               >
                 <IconClose size={18} />
               </button>
@@ -111,7 +115,7 @@ export function Sheet({
         ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-5">{children}</div>
         {footer ? (
-          <div className="border-t border-slate-100 bg-white px-5 py-4">{footer}</div>
+          <div className="border-t border-ink-200 bg-paper-50 px-5 py-4">{footer}</div>
         ) : null}
       </div>
     </div>,

@@ -1,17 +1,95 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { api, errorMessage } from "../lib/api";
+import { ApiError, api, errorMessage } from "../lib/api";
 import { formatMobile } from "../lib/format";
+import { otpNotice } from "../lib/otp";
 import { OTP_RE } from "../lib/validation";
 import { useToast } from "../hooks/toast";
 import { useAppSession } from "../session/context";
-import { AppShell, AppBar } from "../components/AppShell";
+import { AppShell, AppBar, BrandSeal } from "../components/AppShell";
+import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { IconTile } from "../components/ui/IconTile";
 import { Button } from "../components/ui/Button";
 import { IconRefresh, IconSpark } from "../components/ui/Icons";
 import { Spinner } from "../components/ui/Spinner";
 
 const OTP_LENGTH = 6;
-const RESEND_SECONDS = 45;
+
+/**
+ * Where the resend deadline is kept between renders of this screen.
+ *
+ * `location.state` is gone the moment the page is reloaded — the browser keeps a
+ * history entry, not its payload — so a refresh would otherwise hand the screen a
+ * blank slate and re-enable Resend while the server was still refusing. Writing
+ * the same instant to `sessionStorage` is what makes the wait survive a reload,
+ * and it is the *server's* instant either way: this screen stores a timestamp, it
+ * never invents one.
+ */
+const RESEND_KEY = "okwault.otpResendAt";
+
+function readStoredDeadline(): number | null {
+  try {
+    const raw = sessionStorage.getItem(RESEND_KEY);
+    if (!raw) return null;
+    const at = Number(raw);
+    return Number.isFinite(at) ? at : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * When a server-stamped instant falls, in epoch milliseconds.
+ *
+ * The server is the only clock this screen trusts: it sends back the instant a
+ * request may be made again, and everything below counts towards that instant
+ * rather than towards a number of seconds the screen decided on. An unreadable
+ * or absent stamp means "no wait", which is what the first few requests get.
+ */
+function deadlineFrom(stamp: string | null | undefined): number | null {
+  if (!stamp) return null;
+  const at = Date.parse(stamp);
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
+ * The seconds left on a deadline, recomputed from the clock every tick.
+ *
+ * Deliberately not a counter: a `setTimeout` chain that decrements is a second
+ * clock running beside the server's, and it drifts — it pauses in a background
+ * tab, so a phone left on this screen for a minute comes back still saying 45.
+ * Subtracting `Date.now()` from the deadline instead means the number shown is
+ * always the truth, however long the timer was asleep, and the visibility and
+ * focus listeners just make it catch up the moment the screen is looked at
+ * again instead of waiting for the next tick.
+ */
+function useCountdown(deadline: number | null): number {
+  const [remaining, setRemaining] = useState(() => secondsLeft(deadline));
+
+  useEffect(() => {
+    if (deadline === null) {
+      setRemaining(0);
+      return;
+    }
+    const sync = () => setRemaining(secondsLeft(deadline));
+    sync();
+    const timer = window.setInterval(sync, 1000);
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, [deadline]);
+
+  return remaining;
+}
+
+function secondsLeft(deadline: number | null): number {
+  if (deadline === null) return 0;
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+}
 
 export default function VerifyOtpPage() {
   const navigate = useNavigate();
@@ -19,10 +97,14 @@ export default function VerifyOtpPage() {
   const toast = useToast();
   const { isAuthenticated, signIn } = useAppSession();
 
-  const routeState = location.state as { mobile?: string; devOtp?: string | null } | null;
+  const routeState = location.state as {
+    mobile?: string;
+    devOtp?: string | null;
+    resendAvailableAt?: string | null;
+  } | null;
 
   const [mobile] = useState(
-    () => routeState?.mobile ?? sessionStorage.getItem("walletpay.pendingMobile") ?? "",
+    () => routeState?.mobile ?? sessionStorage.getItem("okwault.pendingMobile") ?? "",
   );
   const [digits, setDigits] = useState<string[]>(() =>
     Array.from({ length: OTP_LENGTH }, () => ""),
@@ -30,7 +112,24 @@ export default function VerifyOtpPage() {
   const [devOtp, setDevOtp] = useState<string | null>(routeState?.devOtp ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  // The instant the next request may be made, straight from the server. Null
+  // while requests are still free, which is why there is no countdown on the
+  // first few attempts: there is nothing to count down to.
+  const [resendAt, setResendAt] = useState<number | null>(
+    () => deadlineFrom(routeState?.resendAvailableAt) ?? readStoredDeadline(),
+  );
+  const resendIn = useCountdown(resendAt);
+
+  // Keep the stored copy in step, so a reload lands on the same instant this
+  // render is counting towards.
+  useEffect(() => {
+    try {
+      if (resendAt === null) sessionStorage.removeItem(RESEND_KEY);
+      else sessionStorage.setItem(RESEND_KEY, String(resendAt));
+    } catch {
+      // Storage is optional; the in-memory deadline still governs this visit.
+    }
+  }, [resendAt]);
 
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const submitted = useRef(false);
@@ -39,12 +138,9 @@ export default function VerifyOtpPage() {
   // sends brand-new users straight to the wallet, skipping onboarding.
   const wasAuthenticated = useRef(isAuthenticated);
   const code = digits.join("");
-
-  useEffect(() => {
-    if (resendIn <= 0) return;
-    const timer = window.setTimeout(() => setResendIn((value) => value - 1), 1000);
-    return () => window.clearTimeout(timer);
-  }, [resendIn]);
+  // Delivery-agnostic copy: on-screen now, "sent by SMS" as soon as the server
+  // stops returning dev_otp (see lib/otp.ts).
+  const notice = otpNotice(devOtp);
 
   const verify = useCallback(
     async (value: string) => {
@@ -62,6 +158,13 @@ export default function VerifyOtpPage() {
           vpa: data.vpa,
         });
         toast.success(data.message);
+        // The sign-in is done, so the wait it was tracking is over: clearing the
+        // stored deadline means the next visit to this screen starts clean.
+        try {
+          sessionStorage.removeItem(RESEND_KEY);
+        } catch {
+          // Storage is optional.
+        }
         // New users pick a name and a PIN before they can pay anyone.
         navigate(data.ask_name ? "/onboarding/name" : "/home", { replace: true });
       } catch (err) {
@@ -83,16 +186,29 @@ export default function VerifyOtpPage() {
 
   const resend = async () => {
     setError(null);
-    setResendIn(RESEND_SECONDS);
     submitted.current = false;
     try {
       const result = await api.startLogin(mobile);
       setDevOtp(result.dev_otp ?? null);
+      // Whatever the server says the window is now — none while the free
+      // requests last, sixty seconds once they are used up. The screen never
+      // sets this itself, which is why a refusal can't leave it counting down
+      // from a number that never came from anywhere.
+      setResendAt(deadlineFrom(result.resend_available_at));
       toast.success("A new OTP has been sent");
       setDigits(Array.from({ length: OTP_LENGTH }, () => ""));
       inputs.current[0]?.focus();
     } catch (err) {
-      setError(errorMessage(err));
+      if (err instanceof ApiError && err.status === 429) {
+        // Refused, and told exactly how long for. The live line under the code
+        // reads the countdown, so nothing on screen goes stale while it runs.
+        setResendAt(
+          deadlineFrom(err.details?.resend_available_at as string | undefined) ??
+            Date.now() + (Number(err.details?.retry_after) || 60) * 1000,
+        );
+      } else {
+        setError(errorMessage(err));
+      }
     }
   };
 
@@ -117,7 +233,7 @@ export default function VerifyOtpPage() {
     <AppShell
       header={<AppBar title="Verify your number" showBack />}
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button
             fullWidth
             size="lg"
@@ -130,46 +246,65 @@ export default function VerifyOtpPage() {
         </div>
       }
     >
-      <div className="px-5 py-6">
-        <h2 className="text-[20px] font-bold tracking-tight text-slate-900">
-          Enter the 6-digit code
-        </h2>
-        <p className="mt-1.5 text-[13.5px] text-slate-500">
-          Sent to{" "}
-          <span className="font-semibold text-slate-700 tabular-nums">
-            {formatMobile(mobile)}
+      <div className="px-5 pt-5 pb-6">
+        {/*
+         * A composed head rather than a bare heading. The screen used to open on
+         * two lines of type and then a lot of nothing, which is what made it feel
+         * unfinished: the mark now sits over it at the top, the code entry is one
+         * inked slip instead of six loose boxes, and the resend line has
+         * something to hang from. No new facts are introduced — the number, the
+         * delivery note and the resend control are the ones that were already
+         * here.
+         */}
+        <div className="flex flex-col items-center border-b border-dashed border-ink-300 pb-5 text-center">
+          <span className="flex size-16 items-center justify-center overflow-hidden rounded-[16px] shadow-[3px_3px_0_0_rgba(25,25,22,0.55)]">
+            <BrandSeal size={64} />
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.removeItem("walletpay.pendingMobile");
-              navigate("/login");
-            }}
-            className="ml-2 font-semibold text-brand-700 underline decoration-brand-300 underline-offset-2"
-          >
-            Edit
-          </button>
-        </p>
+          <h2 className="mt-3.5 font-display text-[21px] font-bold tracking-tight text-ink-900">
+            Enter the 6-digit code
+          </h2>
+          {/* The number and the way out of it are one line, not two: the number
+              is what the code was sent to, and "edit" belongs at the end of
+              that sentence rather than under it, where it read as a footnote
+              instead of the only escape from a wrong number. */}
+          <div className="mt-2 flex w-full items-center justify-between gap-3 px-0.5">
+            <p className="min-w-0 truncate text-left text-[13.5px] text-ink-500">
+              {notice.destinationLabel}{" "}
+              <span className="font-mono font-semibold text-ink-700">
+                {formatMobile(mobile)}
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.removeItem("okwault.pendingMobile");
+                navigate("/login");
+              }}
+              className="shrink-0 rounded-[7px] border-[1.5px] border-ink-900/25 bg-paper-100 px-3 py-1.5 text-[12.5px] font-semibold text-ink-700 transition hover:border-ink-900/60 hover:bg-paper-200 active:bg-paper-300 focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none"
+            >
+              Edit number
+            </button>
+          </div>
+        </div>
 
-        {devOtp ? (
-          <div className="mt-5 flex items-center gap-3 rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-3.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-              <IconSpark size={17} />
-            </span>
+        {notice.previewCode ? (
+          <div className="mt-5 flex items-center gap-3 rounded-[10px] border border-dashed border-pending-300 bg-pending-50 p-3.5">
+            <IconTile tone="pending" scale="sm">
+              <IconSpark size={TILE_GLYPH.sm} strokeWidth={TILE_STROKE} />
+            </IconTile>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold tracking-wide text-amber-800 uppercase">
-                Preview code
-              </p>
-              <p className="text-[13px] text-amber-900">
+              <p className="text-[12px] font-semibold text-pending-700">Preview code</p>
+              <p className="text-[13px] text-pending-700">
                 SMS delivery is off in this environment — use{" "}
-                <span className="font-mono font-bold tracking-widest">{devOtp}</span>
+                <span className="font-mono font-bold tracking-widest">
+                  {notice.previewCode}
+                </span>
               </p>
             </div>
             <Button
-              variant="secondary"
               size="sm"
               onClick={() => {
-                applyDigits(devOtp, 0);
+                applyDigits(notice.previewCode ?? "", 0);
                 inputs.current[OTP_LENGTH - 1]?.focus();
               }}
             >
@@ -178,8 +313,20 @@ export default function VerifyOtpPage() {
           </div>
         ) : null}
 
+        {/* The six boxes are one object, not six: an inked slip with the code
+            pressed into it, the way the QR code sits in its well on the QR
+            screen.
+
+            The slip is a warm `paper-100` mat and the boxes are set on the
+            page's own `paper-50` — no step in this stack climbs towards white.
+            It used to be the other way round, a `paper-25` slip holding
+            `paper-100` wells, and between the brightest sheet in the palette and
+            the glow of a lit display the fields read as six white tiles pasted
+            onto the theme. The digits were never the problem (ink on cream
+            still carries the code at a glance); the paper behind them was. */}
+        <div className="mt-5 rounded-[14px] border-[1.5px] border-ink-900/70 bg-paper-100 px-3.5 pt-4 pb-3 shadow-[3px_3px_0_0_rgba(25,25,22,0.55)]">
         <div
-          className="mt-6 flex justify-between gap-2"
+          className="flex justify-between gap-2"
           onPaste={(event) => {
             event.preventDefault();
             applyDigits(event.clipboardData.getData("text"), 0);
@@ -217,40 +364,43 @@ export default function VerifyOtpPage() {
                   inputs.current[index + 1]?.focus();
                 }
               }}
-              className="h-14 w-full min-w-0 rounded-xl border border-slate-200 bg-white text-center text-[22px] font-bold text-slate-900 shadow-xs transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 focus:outline-none disabled:bg-slate-50 aria-invalid:border-rose-300"
+              className="h-14 w-full min-w-0 rounded-[10px] border-[1.5px] border-ink-900/45 bg-paper-50 text-center font-display text-[22px] font-bold text-ink-900 shadow-[inset_0_1.5px_3px_rgba(15,15,13,0.09)] transition tabular-nums placeholder:text-ink-400 focus:border-ink-900 focus:ring-4 focus:ring-ink-900/12 focus:outline-none disabled:bg-paper-200 disabled:opacity-70 aria-invalid:border-seal-500"
             />
           ))}
         </div>
 
-        <div className="mt-4 flex min-h-6 items-center justify-center" aria-live="polite">
+        <div className="mt-3 flex min-h-6 items-center justify-center" aria-live="polite">
           {busy ? (
-            <span className="inline-flex items-center gap-2 text-[13px] font-medium text-slate-500">
+            <span className="inline-flex items-center gap-2 text-[13px] font-medium text-ink-500">
               <Spinner size={14} /> Checking the code…
             </span>
+          ) : resendIn > 0 ? (
+            <span className="text-[13px] font-medium text-seal-700">
+              Please wait {resendIn} seconds before requesting a new OTP.
+            </span>
           ) : error ? (
-            <span role="alert" className="text-[13px] font-medium text-rose-600">
+            <span role="alert" className="text-[13px] font-medium text-seal-700">
               {error}
             </span>
           ) : null}
         </div>
+        </div>
 
         <div className="mt-4 flex items-center justify-center gap-1.5">
-          <span className="text-[13px] text-slate-500">Didn't get it?</span>
+          <span className="text-[13px] text-ink-500">Didn't get it?</span>
           <button
             type="button"
-            disabled={resendIn > 0}
+            disabled={resendIn > 0 || busy}
             onClick={() => void resend()}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-semibold text-brand-700 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-transparent"
+            className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-[13px] font-semibold text-seal-700 transition hover:bg-seal-50 disabled:cursor-not-allowed disabled:text-ink-400 disabled:hover:bg-transparent"
           >
             <IconRefresh size={14} />
             {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend OTP"}
           </button>
         </div>
 
-        <p className="mt-8 text-center text-[11.5px] leading-relaxed text-slate-400">
-          Codes normally arrive by SMS. Without an SMS gateway configured, this
-          environment returns the code in the API response instead — and after three wrong
-          attempts you'll need a fresh one.
+        <p className="mt-6 text-center text-[11.5px] leading-relaxed text-ink-400">
+          {notice.footnote}
         </p>
       </div>
     </AppShell>

@@ -79,7 +79,7 @@ export default function SetPinPage() {
         />
       }
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <PinPad
             value={value}
             onChange={setValue}
@@ -94,31 +94,27 @@ export default function SetPinPage() {
       }
     >
       <div className="px-5 py-5">
-        <h2 className="text-[20px] font-bold tracking-tight text-slate-900">
+        <h2 className="font-display text-[21px] font-bold tracking-tight text-ink-900">
           {isConfirm ? "Enter it once more" : "Choose a 4-digit PIN"}
         </h2>
-        <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-500">
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-500">
           {isConfirm
             ? "Confirm the PIN you just chose so we know it wasn't a typo."
             : "You'll enter this PIN to approve every payment. Keep it private — you'll need it for every transfer."}
         </p>
 
         <div className="mt-6 space-y-3">
-          <Card
-            tone="muted"
-            className="flex gap-2.5"
-            aria-live="polite"
-          >
-            <IconWarning size={16} className="mt-px shrink-0 text-amber-500" />
-            <p className="text-[12.5px] leading-relaxed text-slate-600">
+          <Card tone="muted" className="flex gap-2.5" aria-live="polite">
+            <IconWarning size={16} className="mt-px shrink-0 text-pending-600" />
+            <p className="text-[12.5px] leading-relaxed text-ink-600">
               Five wrong attempts lock the PIN for 15 minutes. That lockout is enforced
               by the server, not just the screen.
             </p>
           </Card>
 
           <Card className="flex gap-2.5">
-            <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
-            <p className="text-[12.5px] leading-relaxed text-slate-600">
+            <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
+            <p className="text-[12.5px] leading-relaxed text-ink-600">
               Your PIN is stored as a salted scrypt hash — the plain PIN is never
               written to the database, and no API response ever returns it.
             </p>

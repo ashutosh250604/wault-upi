@@ -6,6 +6,7 @@ export interface StepDotsProps {
   current: number;
 }
 
+/** Onboarding progress as rule marks — a sequence, so numbering is honest. */
 export function StepDots({ total, current }: StepDotsProps) {
   return (
     <span
@@ -17,8 +18,8 @@ export function StepDots({ total, current }: StepDotsProps) {
         <span
           key={index}
           className={cx(
-            "h-1.5 rounded-full transition-all",
-            index + 1 === current ? "w-5 bg-brand-600" : "w-1.5 bg-slate-200",
+            "h-[3px] w-6 rounded-full transition-colors",
+            index + 1 === current ? "bg-seal-500" : "bg-ink-200",
           )}
         />
       ))}

@@ -97,7 +97,7 @@ def limit_error(user_id: int, paise: int, now: datetime | None = None) -> str | 
     if remaining <= 0:
         return (
             f"You've reached today's limit of ₹{paise_to_rupees(limit_paise):,.0f}. "
-            "It resets at midnight."
+            "It resets at midnight IST."
         )
     return (
         f"Only ₹{paise_to_rupees(remaining):,.2f} of today's "

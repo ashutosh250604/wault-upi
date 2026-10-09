@@ -61,7 +61,7 @@ export default function SetNamePage() {
         />
       }
       footer={
-        <div className="shrink-0 border-t border-slate-100 bg-white px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-ink-200 bg-paper-50 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button fullWidth size="lg" loading={busy} onClick={() => void submit()}>
             Continue
           </Button>
@@ -70,18 +70,25 @@ export default function SetNamePage() {
     >
       <div className="px-5 py-5">
         <div className="flex items-center gap-3">
-          <Avatar name={name} size="lg" tone="gradient" />
+          <Avatar name={name} size="lg" tone="ink" />
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold text-slate-900">
+            <p className="truncate font-display text-[15.5px] font-bold tracking-tight text-ink-900">
               {name.trim() || "Your name"}
             </p>
-            <p className="text-[12.5px] text-slate-500">
-              {session?.mobile ? `+91 ${session.mobile}` : "New Wallet Pay account"}
+            <p className="font-mono text-[12px] text-ink-500">
+              {session?.mobile ? `+91 ${session.mobile}` : "New WAULT account"}
             </p>
           </div>
         </div>
 
-        <div className="mt-6 space-y-5">
+        <h2 className="mt-6 font-display text-[21px] font-bold tracking-tight text-ink-900">
+          What should people see?
+        </h2>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-500">
+          Your name is shown to whoever you pay, and to anyone paying you.
+        </p>
+
+        <div className="mt-5 space-y-5">
           <Field
             label="Full name"
             error={nameIssue}
@@ -126,17 +133,19 @@ export default function SetNamePage() {
           </Field>
 
           {formError ? (
-            <p role="alert" className="text-[13px] font-medium text-rose-600">
+            <p role="alert" className="text-[13px] font-medium text-seal-700">
               {formError}
             </p>
           ) : null}
 
           <Card tone="muted" className="flex gap-2.5">
-            <IconInfo size={16} className="mt-px shrink-0 text-slate-400" />
-            <p className="text-[12.5px] leading-relaxed text-slate-600">
+            <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
+            <p className="text-[12.5px] leading-relaxed text-ink-600">
               We'll create your UPI-style ID from your mobile number — for example{" "}
-              <span className="font-mono font-semibold">9000000001@okwalletpay</span>. Next
-              you'll set the 4-digit PIN that approves every payment.
+              <span className="font-mono font-semibold text-ink-800">
+                9000000001@okwault
+              </span>
+              . Next you'll set the 4-digit PIN that approves every payment.
             </p>
           </Card>
         </div>

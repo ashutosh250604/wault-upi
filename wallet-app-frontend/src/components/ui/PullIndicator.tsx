@@ -18,14 +18,14 @@ export function PullIndicator({ distance, progress, refreshing }: PullIndicatorP
 
   return (
     <div
-      className="flex shrink-0 items-center justify-center overflow-hidden bg-white"
+      className="flex shrink-0 items-center justify-center overflow-hidden bg-paper-50"
       style={{ height: distance }}
       role={refreshing ? "status" : undefined}
     >
-      <div className="flex items-center gap-2 text-slate-400">
+      <div className="flex items-center gap-2 text-ink-400">
         <IconRefresh
           size={16}
-          className={refreshing ? "animate-spin text-brand-600" : undefined}
+          className={refreshing ? "animate-spin text-seal-600" : undefined}
           style={
             refreshing
               ? undefined

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { cx } from "../lib/cx";
 import { formatCurrency } from "../lib/format";
 import { useCopy } from "../hooks/useCopy";
 import { BalanceSkeleton } from "./ui/States";
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconRefresh } from "./ui/Icons";
 import { Spinner } from "./ui/Spinner";
 
-const HIDE_KEY = "walletpay.hideBalance";
+const HIDE_KEY = "okwault.hideBalance";
 
 function readHidden(): boolean {
   try {
@@ -16,25 +15,54 @@ function readHidden(): boolean {
   }
 }
 
+/**
+ * The refresh control, on its own.
+ *
+ * It used to live inside the balance's label row, opposite "Available balance" —
+ * a capsule sitting directly above the right-hand end of the hero numeral, at
+ * the same weight as the label, so the two fought over the same line. The
+ * greeting is the row with space in it, so that is where it goes now: the
+ * balance block keeps one label, one numeral and one handle, and nothing else
+ * interrupts it.
+ */
+export function BalanceRefresh({
+  refreshing = false,
+  onRefresh,
+}: {
+  refreshing?: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRefresh}
+      disabled={refreshing}
+      aria-label="Refresh balance and transactions"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-[7px] bg-ink-800 px-2.5 py-1 text-[11.5px] font-semibold text-ink-200 ring-1 ring-ink-700 transition hover:bg-ink-700 hover:text-ink-100 active:bg-ink-900 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ink-25 focus-visible:outline-none"
+    >
+      {refreshing ? <Spinner size={13} /> : <IconRefresh size={13} />}
+      {refreshing ? "Refreshing" : "Refresh"}
+    </button>
+  );
+}
+
 export interface BalanceCardProps {
   balance: number | null;
   vpa: string | null;
   loading?: boolean;
-  refreshing?: boolean;
-  onRefresh?: () => void;
 }
 
 /**
- * The balance block that lives inside the home screen's brand gradient, so the
- * most important number sits in the coloured hero rather than on a white card.
+ * The balance block that lives inside the home screen's ink hero: the amount is
+ * the hero numeral, the handle is machine data, and everything else gets out of
+ * their way.
+ *
+ * Three stacked pieces, in descending size and ascending distance from the eye:
+ * a small label, the numeral, then the handle as a pill you can copy. The eye
+ * toggle rides at the end of the numeral rather than above it, because hiding
+ * the balance is a property of the amount and reads as one gesture with it.
  */
-export function BalanceCard({
-  balance,
-  vpa,
-  loading = false,
-  refreshing = false,
-  onRefresh,
-}: BalanceCardProps) {
+export function BalanceCard({ balance, vpa, loading = false }: BalanceCardProps) {
   const [hidden, setHidden] = useState(readHidden);
   const { copied, copy } = useCopy();
 
@@ -50,29 +78,17 @@ export function BalanceCard({
 
   return (
     <div>
-      <div className="flex items-start justify-between">
-        <p className="text-[11px] font-semibold tracking-[0.14em] text-white/70 uppercase">
-          Available balance
-        </p>
-        {onRefresh ? (
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            aria-label="Refresh balance and history"
-            className="-mt-1.5 -mr-1 rounded-full p-2 text-white/80 transition hover:bg-white/15 hover:text-white disabled:opacity-60"
-          >
-            {refreshing ? <Spinner size={16} /> : <IconRefresh size={16} />}
-          </button>
-        ) : null}
-      </div>
+      <p className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-400">
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-credit-600" />
+        Available balance
+      </p>
 
       <div className="mt-1 flex items-center gap-2.5">
         {loading ? (
           <BalanceSkeleton />
         ) : (
           <>
-            <p className="text-[2.1rem] leading-tight font-bold tracking-tight tabular-nums">
+            <p className="font-display text-[2.5rem] leading-none font-extrabold tracking-[-0.035em] tabular-nums text-ink-25">
               {hidden ? "₹ ••••••" : formatCurrency(balance ?? 0)}
             </p>
             <button
@@ -80,9 +96,9 @@ export function BalanceCard({
               onClick={toggleHidden}
               aria-label={hidden ? "Show balance" : "Hide balance"}
               aria-pressed={hidden}
-              className="rounded-full p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
+              className="-mt-0.5 rounded-[6px] p-1.5 text-ink-400 transition hover:bg-ink-800 hover:text-ink-100 focus-visible:ring-2 focus-visible:ring-ink-25 focus-visible:outline-none"
             >
-              {hidden ? <IconEyeOff size={18} /> : <IconEye size={18} />}
+              {hidden ? <IconEyeOff size={17} /> : <IconEye size={17} />}
             </button>
           </>
         )}
@@ -93,15 +109,13 @@ export function BalanceCard({
           type="button"
           onClick={() => void copy(vpa)}
           aria-label={`Copy UPI ID ${vpa}`}
-          className={cx(
-            "mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-[12.5px] font-medium backdrop-blur transition hover:bg-white/25",
-          )}
+          className="mt-2.5 inline-flex items-center gap-2 rounded-[6px] bg-ink-800 px-2.5 py-1.5 font-mono text-[12px] text-ink-200 transition hover:bg-ink-700 hover:text-ink-100 focus-visible:ring-2 focus-visible:ring-ink-25 focus-visible:outline-none"
         >
           <span className="tabular-nums">{vpa}</span>
           {copied ? (
-            <IconCheck size={14} className="text-emerald-200" />
+            <IconCheck size={14} className="text-credit-100" />
           ) : (
-            <IconCopy size={14} className="text-white/70" />
+            <IconCopy size={14} className="text-ink-400" />
           )}
         </button>
       ) : null}

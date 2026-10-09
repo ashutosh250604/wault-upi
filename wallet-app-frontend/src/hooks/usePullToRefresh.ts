@@ -4,6 +4,12 @@ const TRIGGER_DISTANCE = 64;
 const MAX_DISTANCE = 96;
 /** Movement below this is treated as a scroll, not a pull. */
 const DEAD_ZONE = 6;
+/**
+ * How long the indicator stays up once a refresh starts, at minimum. On a warm
+ * local server the request resolves in tens of milliseconds, and a spinner that
+ * flashes for two frames reads as a glitch rather than as work being done.
+ */
+const MIN_VISIBLE_MS = 450;
 
 export interface PullToRefresh {
   /** Attach to the scrolling element. */
@@ -40,7 +46,10 @@ export function usePullToRefresh(
     setRefreshing(true);
     setDistance(TRIGGER_DISTANCE);
     try {
-      await refreshRef.current();
+      await Promise.all([
+        refreshRef.current(),
+        new Promise((resolve) => window.setTimeout(resolve, MIN_VISIBLE_MS)),
+      ]);
     } finally {
       setRefreshing(false);
       setDistance(0);

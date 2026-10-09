@@ -4,8 +4,16 @@ The strip on the home screen used to be decoration: tapping a card apologised
 that rewards were not live. This module makes the promise real. An offer is a
 target, a payout and an expiry date; progress is counted from the ledger rather
 than kept in a counter, so it can't drift from what actually happened; and the
-payout is a normal credit through `credit_wallet`, which means a cashback shows
-up in the balance, in the history and in the CSV statement like any other money.
+payout lands in the coin balance, through the one function that writes coin
+awards (`coins.grant`).
+
+**Offers pay in coins, not cashback.** They used to credit rupees straight into
+the balance, which meant two reward currencies on one screen — a cashback strip
+that quietly moved your money, and a coins chip that was a separate game of its
+own. There is now one reward currency. Because a coin redeems at ₹1, an offer
+worth ₹25 pays 25 coins and is worth exactly what it always was; the difference
+is that the payout is visible where every other payout is, and the coin balance
+is the only number a user has to watch.
 
 The catalogue lives here, in code, and not in the database: an offer is a promise
 with terms, and terms belong somewhere reviewable.
@@ -13,26 +21,26 @@ with terms, and terms belong somewhere reviewable.
 
 from datetime import datetime, timedelta
 
+from . import coins
 from .events import notify
 from .extensions import db
-from .ledger import credit_wallet
-from .models import Notification, Reward, Transaction
+from .models import CoinAward, Notification, Reward, Transaction
 from .money import paise_to_rupees
 from .timeutils import as_utc, utcnow
 
 # The offers shown to every account. `metric` names the ledger fact that counts
 # towards the target, and `min_paise` is the size an event has to reach to
-# qualify (a ₹1 top-up should not unlock a ₹25 cashback).
+# qualify (a ₹1 top-up should not unlock a 25-coin payout).
 OFFERS = (
     {
         "code": "first_topup",
-        "title": "₹25 cashback",
+        "title": "25 coins",
         "headline": "On your first top-up",
         "detail": (
-            "Add ₹100 or more to your wallet for the first time and ₹25 lands back "
-            "in your balance. One per account."
+            "Add ₹100 or more to your wallet for the first time and 25 coins land "
+            "in your coin balance. One per account."
         ),
-        "reward_paise": 2500,
+        "reward_coins": 25,
         "target": 1,
         "metric": "topup",
         "min_paise": 10000,
@@ -41,13 +49,13 @@ OFFERS = (
     },
     {
         "code": "three_payments",
-        "title": "₹50 cashback",
+        "title": "50 coins",
         "headline": "On your next 3 payments",
         "detail": (
-            "Send money to anyone three times — any amount, any payee — and ₹50 is "
-            "credited as soon as the third payment settles."
+            "Send money to anyone three times — any amount, any payee — and 50 coins "
+            "are credited as soon as the third payment settles."
         ),
-        "reward_paise": 5000,
+        "reward_coins": 50,
         "target": 3,
         "metric": "transfer_out",
         "min_paise": 0,
@@ -56,13 +64,13 @@ OFFERS = (
     },
     {
         "code": "first_money_in",
-        "title": "₹10 cashback",
+        "title": "10 coins",
         "headline": "When someone pays you",
         "detail": (
-            "The first time another Wallet Pay account sends you money, ₹10 is "
+            "The first time another WAULT account sends you money, 10 coins are "
             "credited on top. Ask for it with a money request, or share your QR."
         ),
-        "reward_paise": 1000,
+        "reward_coins": 10,
         "target": 1,
         "metric": "transfer_in",
         "min_paise": 0,
@@ -108,8 +116,9 @@ def progress(reward: Reward) -> int:
     """Qualifying events so far, capped at the target.
 
     Counted from `started_at`, so an offer taken up today never claims credit for
-    payments made last week. A cashback credit is `type="cashback"` and so can
-    never count towards a transfer target itself.
+    payments made last week. Every payable ledger type is a `transfer` or a
+    `topup`, and a coin payout is neither, so an offer can never count its own
+    payout towards its own target.
     """
     offer = OFFERS_BY_CODE.get(reward.code)
     if offer is None:
@@ -152,12 +161,20 @@ def ensure_rewards(user_id: int, now: datetime | None = None) -> list[Reward]:
 
 
 def settle_due(user_id: int, now: datetime | None = None) -> list[Reward]:
-    """Credit every offer this user has just completed.
+    """Pay out every offer this user has just completed.
 
     Called from the payment paths while the money's own transaction is still
-    open, so a cashback lands in the same commit as the payment that earned it —
+    open, so the coins land in the same commit as the payment that earned them —
     there is no window where a payment succeeded and its reward silently did not.
     Idempotent: a credited row is skipped, so replaying a payment can't pay twice.
+
+    `now` should be the instant of the event being settled (`txn.timestamp`),
+    not the wall clock. An account's offers are activated on first sight, which
+    for a brand-new user happens inside the very first payment or top-up — and
+    activation at `utcnow()` would stamp `started_at` *after* the transaction
+    that triggered it, so the event would be disqualified from its own offer and
+    a new account's first top-up would silently earn nothing. Passing the
+    event's own timestamp makes the offer start at the event it is about.
 
     The caller owns the commit, as everywhere else money moves.
     """
@@ -171,23 +188,22 @@ def settle_due(user_id: int, now: datetime | None = None) -> list[Reward]:
         if offer is None or progress(reward) < offer["target"]:
             continue
 
-        txn = credit_wallet(
+        # The award carries the offer's own code, so a coin in the balance can
+        # always be traced back to the promise that paid it.
+        coins.grant(
             user_id,
-            offer["reward_paise"],
-            txn_type="cashback",
-            note=f"{offer['title']} — {offer['headline']}",
-            when=moment,
+            offer["reward_coins"],
+            f"{CoinAward.OFFER_PREFIX}{offer['code']}",
+            moment,
         )
         reward.status = Reward.CREDITED
         reward.credited_at = moment
-        reward.transaction_id = txn.id
         reward.updated_at = moment
         notify(
             user_id,
             Notification.REWARD,
-            f"{offer['title']} credited",
-            f"{offer['headline']} · added to your balance",
-            transaction=txn,
+            f"{offer['title']} earned",
+            f"{offer['headline']} · added to your coin balance",
             when=moment,
         )
         credited.append(reward)
@@ -208,7 +224,12 @@ def describe(reward: Reward, now: datetime | None = None) -> dict | None:
         "title": offer["title"],
         "headline": offer["headline"],
         "detail": offer["detail"],
-        "reward": paise_to_rupees(offer["reward_paise"]),
+        # The payout, as coins and as what those coins are worth. Both are sent
+        # because the card leads with the coins and the receipt may want the
+        # money — and because a coin's redemption rate is not the client's to
+        # assume.
+        "coins": offer["reward_coins"],
+        "reward": paise_to_rupees(offer["reward_coins"] * coins.COIN_VALUE_PAISE),
         "target": offer["target"],
         "progress": done,
         "unit": offer["unit"],
@@ -252,7 +273,8 @@ def credited_summary(rewards: list[Reward]) -> list[dict]:
             {
                 "code": reward.code,
                 "title": offer["title"],
-                "amount": paise_to_rupees(offer["reward_paise"]),
+                "coins": offer["reward_coins"],
+                "amount": paise_to_rupees(offer["reward_coins"] * coins.COIN_VALUE_PAISE),
             }
         )
     return summary

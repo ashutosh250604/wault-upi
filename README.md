@@ -1,13 +1,17 @@
-# Wallet Pay — UPI-Style Digital Wallet
+# WAULT — UPI-Style Digital Wallet
 
 A full-stack, UPI-inspired wallet: mobile-number sign-in with OTP, a 4-digit UPI PIN, a
-unique VPA (`mobile@okwalletpay`) rendered as a scannable QR code, balance, top-up, P2P
+unique VPA (`mobile@okwault`) rendered as a scannable QR code, balance, top-up, P2P
 transfers, money requests and a transaction history.
 
+Every time the app shows is **IST**, every date is **DD-MM-YYYY**, and every session lasts
+at most **30 minutes** — see [Time and sessions](#time-and-sessions).
+
 > **Portfolio project — not real UPI.** There is no NPCI/UPI integration, no real money and
-> no real payment rail. Handles use the made-up suffix `@okwalletpay` and payments only
-> move balances between accounts inside this app's own database. The app itself is written
-> as a product; this note is the only place it says so.
+> no real payment rail. Handles use the made-up suffix `@okwault` and payments only
+> move balances between accounts inside this app's own database. The Profile screen repeats
+> this in its "About WAULT" card, along with the sample logins and the live API/database
+> status, so anyone who lands in the app is told the same thing.
 
 **Live demo:** [upi-wallet-demo.onrender.com](https://upi-wallet-demo.onrender.com) (see [Deploy](#deploy))
 
@@ -18,11 +22,11 @@ transfers, money requests and a transaction history.
 
 | Account | Mobile | VPA | PIN | Balance |
 | --- | --- | --- | --- | --- |
-| Aarav Sharma | `9000000001` | `9000000001@okwalletpay` | `1234` | ₹5,000 (+ seeded history) |
-| Meera Iyer | `9000000002` | `9000000002@okwalletpay` | `1234` | ₹2,500 |
-| Rohan Verma | `9000000004` | `9000000004@okwalletpay` | `1234` | ₹1,800 |
-| Ananya Desai | `9000000005` | `9000000005@okwalletpay` | `1234` | ₹950 |
-| Gupta Kirana Store | `9000000006` | `9000000006@okwalletpay` | `1234` | ₹4,200 |
+| Aarav Sharma | `9000000001` | `9000000001@okwault` | `1234` | ₹5,000 (+ seeded history) |
+| Meera Iyer | `9000000002` | `9000000002@okwault` | `1234` | ₹2,500 |
+| Rohan Verma | `9000000004` | `9000000004@okwault` | `1234` | ₹1,800 |
+| Ananya Desai | `9000000005` | `9000000005@okwault` | `1234` | ₹950 |
+| Gupta Kirana Store | `9000000006` | `9000000006@okwault` | `1234` | ₹4,200 |
 
 The extra accounts exist so the address book, the "Send money to" strip and the
 frequent-payer ranking have something real to show on a fresh install. Anyone in that table
@@ -34,12 +38,13 @@ Two ways to get in:
 - Normal flow with a mobile number → in demo mode the OTP is shown on screen (no SMS provider).
 
 Try a payment: **tap a face under "Send money to" → amount → PIN `1234`**, or **Scan QR →
-type `9000000002@okwalletpay`**. Cameras need HTTPS, which the deployed URL provides; typed
+type `9000000002@okwault`**. Cameras need HTTPS, which the deployed URL provides; typed
 numbers and UPI IDs work with or without a camera.
 
 ## Features
 
-- OTP login with expiry, attempt limits and resend timer (with auto-submit and paste)
+- OTP login with expiry, attempt limits and a resend cooldown enforced server-side (with
+  auto-submit and paste)
 - Guided onboarding: name/email → auto-generated VPA → 4-digit PIN (with confirm step)
 - Wallet home: balance card with hide/show, quick actions, **"Send money to" avatar strip** of
   people you pay, offers, recent activity
@@ -53,12 +58,23 @@ numbers and UPI IDs work with or without a camera.
 - **The PIN is verified by the server on every debit** (payments, request approvals and
   top-ups), sharing one attempt counter and lockout, so a stolen token alone can't move money
 - **Notification inbox** with an unread badge on the home screen: every payment, top-up, money
-  request, cashback and sign-in writes a line, derived from the ledger rather than typed by hand,
+  request, reward and sign-in writes a line, derived from the ledger rather than typed by hand,
   and each line links through to the screen that owns the detail
+- **Coins, and one currency for every reward.** Each successful payment draws 1–50 coins from a
+  server-side, weighted draw (mostly 1–5, a big number is genuinely rare), recorded against the
+  transaction that earned it; a coin is worth **₹1**, and 10 coins is the floor to clear — above
+  it a redemption takes the **whole balance** (11 coins pay ₹11, 37 pay ₹37) through the same
+  ledger every other credit goes through, so no coin is ever rounded off and kept. A new account
+  is handed a **50-coin welcome bonus** on its first verified code,
+  and every offer pays in coins too — so the balance chip is the only number to watch, and it is
+  the sum of one award log rather than a total anybody maintains
+- **A scratch card for the coins a payment wins.** A square card, the cover is the app's own icon
+  artwork on a canvas, scratched with the finger, and a twelfth of it is enough to lift by itself — the coins
+  underneath are visible from the first stroke. The draw, the reveal and the balance are the
+  server's; the card only decides how the number is told
 - **Offers that actually pay out.** Progress towards each offer is counted from the ledger, and
-  the cashback is credited as a normal wallet transaction *in the same commit as the payment
-  that earned it* — so it appears in the balance, the history and the CSV statement, and a
-  replay of the same payment can never pay it twice
+  the coins land *in the same commit as the payment that earned them* — no window where a payment
+  succeeded and its reward silently did not, and a replay of the same payment can never pay twice
 - **Enforced daily sending limit** (default ₹1,00,000), measured in IST so it resets at local
   midnight, checked by the ledger on every debit and reported to the amount screen from the same
   function — the limit a user is shown and the limit that is applied can't disagree
@@ -72,7 +88,7 @@ numbers and UPI IDs work with or without a camera.
 - History with money-in/out filters, day grouping and tap-through receipts
 - Money stored as **integer paise**; transfers use an **atomic conditional debit** so
   concurrent requests cannot overdraw a wallet
-- JWT sessions, scrypt-hashed PINs/OTPs, PIN lockout after 5 wrong attempts,
+- JWT sessions capped at 30 minutes, scrypt-hashed PINs/OTPs, PIN lockout after 5 wrong attempts,
   ownership checks on every wallet endpoint
 
 ## Frontend notes
@@ -86,8 +102,8 @@ numbers and UPI IDs work with or without a camera.
   amount, PIN and ownership rule.
 - **Accessible by default:** labelled inputs, `aria-live` errors, Escape-to-close sheets with
   focus management, and `prefers-reduced-motion` support.
-- **Fast first paint:** the barcode-decoding engine is code-split, so the scanner's ~150 kB
-  chunk only downloads when someone opens the scanner (initial bundle ≈ 359 kB / 111 kB gzip).
+- **Fast first paint:** the barcode-decoding engine is code-split, so the scanner's ~156 kB
+  chunk only downloads when someone opens the scanner (initial bundle ≈ 430 kB / 129 kB gzip).
 - **Honest states:** skeleton loaders, empty states with a next step, retryable error states,
   and a top-level error boundary.
 
@@ -116,7 +132,8 @@ wallet-app-backend/
     money.py         paise conversion + transaction references
     ledger.py        the one place money moves: atomic debit/credit + inbox rows
     limits.py        the daily cap window, its enforcement and its snapshot
-    rewards.py       the offer catalogue, ledger-derived progress, cashback settlement
+    rewards.py       the offer catalogue, ledger-derived progress, coin settlement
+    coins.py         the coin award log: the draw, the welcome bonus, redemption
     events.py        the single helper every notification is written through
     seed.py          idempotent demo data
     blueprints/      auth.py, wallet.py, people.py, requests.py, accounts.py, inbox.py
@@ -175,21 +192,37 @@ health checks.
 | POST | `/api/notifications/read-all` | Bearer | clear the badge |
 | DELETE | `/api/notifications/<id>` | Bearer | forget a row (never touches the money it describes) |
 | GET | `/api/rewards` | Bearer | this account's offers with progress counted from the ledger |
+| GET | `/api/coins` | Bearer | the coin balance, what it is worth, and where the last few came from |
+| POST | `/api/coins/redeem` | Bearer | coins → wallet credit (the whole balance, 10 coins minimum) |
+| GET | `/api/statements.pdf` | Bearer | the branded PDF statement |
+
+Coins ride along on the responses that earn them: `/api/transfer` and
+`/api/requests/<id>/pay` return `coins_earned` (this payment's draw) and `rewards`
+(any offer it completed, each with its `coins`), which is what the scratch card
+reveals. A new account's 50 coins are granted by `/api/verify_otp`, once.
 
 ## Local development
 
-Backend (SQLite by default — no database setup needed):
+### Backend (SQLite by default — no database setup needed)
 
 ```bash
 cd wallet-app-backend
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements-dev.txt   # Linux/macOS: .venv/bin/python
-.venv/Scripts/python -m flask db upgrade
-.venv/Scripts/python -m flask seed-demo
-.venv/Scripts/python -m flask run --port 5000
+export FLASK_APP=app.py DEMO_MODE=true       # DEMO_MODE seeds no data itself, but it is
+                                             # what makes /demo_login work and returns
+                                             # the OTP in the response instead of the log
+.venv/Scripts/python -m flask db upgrade     # required: the demo database needs the
+.venv/Scripts/python -m flask seed-demo      # accounts, so run the seed once too
 ```
 
-Frontend:
+Use `python -m flask`, not the `flask` shim: on Windows `.venv/Scripts/flask.exe` can exit
+1 with no output at all, which looks like a broken install.
+
+To sign in without `DEMO_MODE`, the OTP is written to the server log (`OTP for 9000000001:
+…`) because no SMS gateway is configured locally.
+
+### Frontend
 
 ```bash
 cd wallet-app-frontend
@@ -200,8 +233,33 @@ npm run lint         # eslint (flat config, TypeScript-aware)
 npm run build        # production bundle into dist/
 ```
 
-The production bundle is served by Flask itself, so `npm run build` then visiting
-`http://localhost:5000` reproduces the deployed setup exactly (same origin, no CORS).
+`npm run dev` needs **Node 20.19+ or 22.12+** (Vite 7 opens the dev server with
+`crypto.hash`, which older Node lacks — on Node 20.4 it dies with `TypeError: crypto.hash
+is not a function`). `npm run build` still works on older Node, so on an old toolchain use
+the single-origin path below, or upgrade Node.
+
+### Single origin (the deployed setup)
+
+Flask serves `dist/` itself, so this reproduces production exactly — same origin, no CORS,
+and no Vite dev server. Flask only looks for the bundle in `STATIC_FOLDER`, which defaults
+to `wallet-app-backend/static_frontend` (the directory the Docker build creates), so point
+it at `dist` or copy the files there. A path that does not exist silently disables the SPA
+and `/` answers 404.
+
+```bash
+cd wallet-app-frontend && npm run build
+cd ../wallet-app-backend
+# either copy the bundle where Flask already looks for it…
+cp -r ../wallet-app-frontend/dist ./static_frontend
+# …or leave it in place and point Flask at it instead
+export STATIC_FOLDER="$(cd ../wallet-app-frontend/dist && pwd)"
+export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+.venv/Scripts/python -m flask run --port 5000
+```
+
+Then open <http://127.0.0.1:5000> and use the demo account: mobile `9000000001`, PIN
+`1234` (or the one-tap *Explore with a ready-made account* button when `DEMO_MODE=true`).
+Rebuild after every frontend change — Flask serves static files, it does not watch them.
 
 To demo from your phone on the same Wi-Fi, point `VITE_API_BASE` in
 `wallet-app-frontend/.env.development` at your machine's LAN IP and allow that origin in
@@ -213,6 +271,30 @@ Tests:
 cd wallet-app-backend && .venv/Scripts/python -m pytest
 ```
 
+## Time and sessions
+
+The app has one rule about clocks: **store and compare in UTC, show in IST.**
+
+- Every timestamp in the database is UTC, and every window a query filters on is converted
+to UTC before it reaches SQL.
+- Everything a person reads is rendered in `Asia/Kolkata`: transaction times, day headings,
+month banners on statements, the CSV/PDF exports and the greeting on the home screen. A
+fixed +05:30 offset is used rather than a timezone database, since India has had no daylight
+saving since 1945.
+- Dates are printed **DD-MM-YYYY** everywhere. Month banner rows on a statement keep the
+month's name, because that is a period label rather than a date.
+- The statement window is the user's calendar month, not the server's: `2026-09` runs from
+18:30 UTC on 31 August (midnight IST on 1 September) to the same instant on 30 September. A
+UTC-boundary month would file a 1am IST payment under the previous month.
+- Reference codes (`TXN20261006K7Q2MP`) carry an IST date for the same reason.
+
+Sessions last **30 minutes**, and that ceiling is enforced in code
+(`wallet/config.py` clamps `JWT_EXPIRES_MINUTES`), not only in the default — setting the
+environment variable to `720` still yields 30 minutes. The client counts the same window down
+from the token's `exp` and signs out the moment it lapses, rather than discovering the expiry
+with a 401 half-way through a payment. Sign-in responses also return `expires_at` (IST) and
+`expires_in` (seconds) so any other client can do the same.
+
 ## Environment variables
 
 | Variable | Default | Notes |
@@ -221,11 +303,17 @@ cd wallet-app-backend && .venv/Scripts/python -m pytest
 | `SECRET_KEY` | dev value | JWT signing key; use 32+ random bytes |
 | `DEMO_MODE` | `false` | seeds demo data, enables `/demo_login`, returns OTP in the API |
 | `DEMO_MOBILE` | `9000000001` | account used by one-tap demo login |
-| `VPA_SUFFIX` | `okwalletpay` | suffix for generated UPI IDs |
+| `VPA_SUFFIX` | `okwault` | suffix for generated UPI IDs |
 | `MAX_DAILY_RUPEES` | `100000` | daily sending cap per account; `0` lifts it |
 | `LIMIT_TZ_OFFSET_MINUTES` | `330` | minutes added to UTC to find the limit day's local midnight (330 = IST) |
+| `MAX_TRANSFER_RUPEES` | `100000` | ceiling for a single debit (a payment or a request approval) |
+| `OTP_TTL_MINUTES` | `5` | how long a login code stays valid |
+| `OTP_FREE_REQUESTS` | `5` | codes a number may ask for in a row before the wait starts |
+| `OTP_RESEND_SECONDS` | `60` | seconds between codes once the free requests are used up |
 | `CORS_ORIGINS` | `localhost:5173` | comma-separated extra browser origins |
-| `JWT_EXPIRES_HOURS` | `12` | session lifetime |
+| `JWT_EXPIRES_MINUTES` | `30` | session lifetime in minutes; a larger value is clamped to 30 |
+| `STATIC_FOLDER` | `<backend>/static_frontend` | directory of the built SPA that the API serves alongside itself |
+| `PORT` | `8000` in the container (`5000` for `python app.py`) | port the server binds to; a `0` falls back to the default |
 
 ## Deploy
 
@@ -245,6 +333,16 @@ Notes: on Render's free plan the service sleeps after ~15 minutes idle, so the f
 after a pause takes a few seconds to wake up. Camera QR scanning works because Render serves
 HTTPS.
 
+Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`, a camera-only `Permissions-Policy` and HSTS, so put the
+container behind TLS (Render terminates it for you) — over plain HTTP the HSTS header is
+simply ignored by browsers, which is what keeps local development on `http://` working.
+
+The frontend is built in the first Docker stage and served from the same origin, so the only
+things a fresh deploy needs to set are `DATABASE_URL` and `SECRET_KEY`. A missing asset is an
+honest 404: the SPA fallback only answers extension-less client routes, never a URL that looks
+like a file.
+
 ## Roadmap
 
 - [ ] Double-entry ledger for every money movement + idempotency keys on transfers
@@ -252,7 +350,8 @@ HTTPS.
 - [x] Address book: saved contacts, favourites, nicknames, recent-payer ranking
 - [x] Money requests: ask, pay with PIN, decline, cancel
 - [x] Linked accounts, PIN-gated balance check, CSV statements
-- [x] Notification inbox, offers that credit real cashback, enforced daily limit
+- [x] Notification inbox, offers that pay in coins, enforced daily limit
+- [x] Coin rewards with a scratch card, a 50-coin sign-up bonus and PIN-free redemption
 - [ ] Split a bill between several people at once, PDF receipts, date-range statements
 - [ ] KYC/verification progress, autopay/mandates and a UPI-Lite-style small-value balance
 - [ ] Playwright end-to-end tests plus a GitHub Actions job running typecheck, lint, build and pytest

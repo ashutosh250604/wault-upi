@@ -5,17 +5,18 @@ missing. History is only written when the ledger is completely empty, so a
 production-ish database is never re-seeded underneath its owner.
 """
 
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 from flask import current_app
 
+from . import coins
 from .events import notify
 from .extensions import db
 from .models import Contact, LinkedAccount, Notification, Transaction, User, Wallet
 from .money import make_reference
 from .rewards import ensure_rewards
 from .security import hash_secret
-from .timeutils import utcnow
+from .timeutils import ist_now
 
 # The first two are the documented demo pair; the rest exist so the "Send money
 # to" row, the contacts screen and the frequent-payer ranking aren't empty on a
@@ -24,35 +25,35 @@ DEMO_USERS = [
     {
         "mobile": "9000000001",
         "name": "Aarav Sharma",
-        "email": "aarav@walletpay.app",
+        "email": "aarav@okwault.app",
         "pin": "1234",
         "balance_paise": 500000,  # ₹5,000
     },
     {
         "mobile": "9000000002",
         "name": "Meera Iyer",
-        "email": "meera@walletpay.app",
+        "email": "meera@okwault.app",
         "pin": "1234",
         "balance_paise": 250000,  # ₹2,500
     },
     {
         "mobile": "9000000004",
         "name": "Rohan Verma",
-        "email": "rohan@walletpay.app",
+        "email": "rohan@okwault.app",
         "pin": "1234",
         "balance_paise": 180000,  # ₹1,800
     },
     {
         "mobile": "9000000005",
         "name": "Ananya Desai",
-        "email": "ananya@walletpay.app",
+        "email": "ananya@okwault.app",
         "pin": "1234",
         "balance_paise": 95000,  # ₹950
     },
     {
         "mobile": "9000000006",
         "name": "Gupta Kirana Store",
-        "email": "kirana@walletpay.app",
+        "email": "kirana@okwault.app",
         "pin": "1234",
         "balance_paise": 420000,  # ₹4,200
     },
@@ -97,6 +98,26 @@ def seed_demo():
     _seed_contacts()
     _seed_accounts()
     _seed_notifications()
+    # After the inbox is built, never before: `_seed_notifications` only runs on
+    # an empty inbox, and a welcome-bonus note would make it look non-empty.
+    _seed_welcome_bonuses()
+    _seed_rewards()
+
+
+def _seed_welcome_bonuses():
+    """Hand every seeded account the same welcome coins a real sign-up gets.
+
+    Idempotent, as everything in this module has to be, and it keeps the demo's
+    coin balance from being an empty state on first run.
+    """
+    for spec in DEMO_USERS:
+        user = User.query.filter_by(mobile=spec["mobile"]).first()
+        if user is not None:
+            coins.grant_signup_bonus(user.id)
+    db.session.commit()
+    _seed_contacts()
+    _seed_accounts()
+    _seed_notifications()
     _seed_rewards()
 
 
@@ -116,9 +137,13 @@ def _seed_history():
     ananya = people["9000000005"]
     kirana = people["9000000006"]
 
-    now = utcnow()
+    now = ist_now()
     history = [
-        # (days ago, (hour, minute) UTC, type, sender, receiver, rupees, note)
+        # (days ago, (hour, minute) IST, type, sender, receiver, rupees, note)
+        #
+        # Authored on the clock the app displays: the times below are the times
+        # the demo history reads as, and they are converted to UTC for storage
+        # like every other timestamp in the app.
         (14, (10, 24), "topup", None, aarav.id, 3000, None),
         (12, (19, 5), "topup", None, meera.id, 2500, None),
         (9, (18, 40), "topup", None, rohan.id, 1800, None),
@@ -133,8 +158,10 @@ def _seed_history():
     ]
     for days_ago, (hour, minute), kind, sender_id, receiver_id, rupees, note in history:
         # Vary the clock time too, so the history doesn't read as generated at once.
-        when = (now - timedelta(days=days_ago)).replace(
-            hour=hour, minute=minute, second=0, microsecond=0
+        when = (
+            (now - timedelta(days=days_ago))
+            .replace(hour=hour, minute=minute, second=0, microsecond=0)
+            .astimezone(timezone.utc)
         )
         db.session.add(
             Transaction(
@@ -224,7 +251,7 @@ def _seed_notifications():
             txn.receiver_id,
             Notification.MONEY_RECEIVED,
             f"Money received from {sender.name if sender else 'another account'}",
-            txn.note or "Tap to see the reference",
+            txn.note or "Completed",
             transaction=txn,
             when=txn.timestamp,
         )
@@ -232,7 +259,7 @@ def _seed_notifications():
             txn.sender_id,
             Notification.MONEY_SENT,
             f"Money sent to {receiver.name if receiver else 'another account'}",
-            txn.note or "Tap to see the reference",
+            txn.note or "Completed",
             transaction=txn,
             when=txn.timestamp,
         )

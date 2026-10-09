@@ -27,6 +27,14 @@ const STATUS_TONES = {
   cancelled: "neutral",
 } as const;
 
+/** The coloured edge on an ask says its state before you read a word. */
+const STATUS_EDGES = {
+  pending: "border-l-seal-500",
+  paid: "border-l-credit-600",
+  declined: "border-l-ink-300",
+  cancelled: "border-l-ink-300",
+} as const;
+
 export interface RequestRowProps {
   request: MoneyRequest;
   /** Disables this row's actions while its own request is in flight. */
@@ -47,11 +55,11 @@ export function RequestRow({
   className,
 }: RequestRowProps) {
   const other = request.counterparty;
-  const label = other.name ?? "Wallet Pay user";
+  const label = other.name ?? "WAULT user";
   const isOpen = request.status === "pending";
 
   return (
-    <Card className={cx("space-y-3", className)}>
+    <Card className={cx("space-y-3 border-l-4", STATUS_EDGES[request.status], className)}>
       <div className="flex items-start gap-3">
         <Avatar
           name={label}
@@ -59,32 +67,33 @@ export function RequestRow({
           tone={avatarToneFor(other.vpa ?? other.mobile ?? String(other.user_id))}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] leading-snug text-slate-600">
+          <p className="text-[13.5px] leading-snug text-ink-600">
             {request.direction === "incoming" ? (
               <>
-                <span className="font-semibold text-slate-900">{label}</span> asked you for
+                <span className="font-semibold text-ink-900">{label}</span> asked you for
                 money
               </>
             ) : (
               <>
-                You asked <span className="font-semibold text-slate-900">{label}</span>
+                You asked <span className="font-semibold text-ink-900">{label}</span>
               </>
             )}
           </p>
-          <p className="mt-1 text-[20px] leading-none font-bold tabular-nums text-slate-900">
+          <p className="mt-1 font-display text-[20px] leading-none font-extrabold tracking-[-0.02em] tabular-nums text-ink-900">
             {formatCurrency(request.amount)}
           </p>
-          <p className="mt-1.5 text-[11.5px] text-slate-400">
-            {formatTime(request.created_at ?? new Date().toISOString())} ·{" "}
-            {requestSubtitle(request)}
+          <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-ink-400">
+            <span>{formatTime(request.created_at ?? new Date().toISOString())}</span>
+            <span aria-hidden="true" className="h-2.5 w-px shrink-0 bg-ink-200" />
+            <span className="truncate">{requestSubtitle(request)}</span>
           </p>
         </div>
         <Badge tone={STATUS_TONES[request.status]}>{STATUS_LABELS[request.status]}</Badge>
       </div>
 
       {request.note ? (
-        <p className="rounded-xl bg-slate-50 px-3 py-2 text-[12.5px] leading-relaxed text-slate-600">
-          “{request.note}”
+        <p className="rounded-[8px] bg-paper-100 px-3 py-2.5 text-[12.5px] leading-relaxed text-ink-600 ring-1 ring-ink-200/70 ring-inset">
+          {request.note}
         </p>
       ) : null}
 
@@ -116,7 +125,7 @@ export function RequestRow({
           )}
         </div>
       ) : request.status === "paid" && request.resolved_at ? (
-        <p className="text-[11.5px] text-slate-400">
+        <p className="text-[11.5px] text-ink-400">
           Settled {formatDateTime(request.resolved_at)}
         </p>
       ) : null}
@@ -147,7 +156,7 @@ export function RequestsBanner({ requests, onOpen, className }: RequestsBannerPr
       type="button"
       onClick={onOpen}
       className={cx(
-        "flex w-full items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-fuchsia-50/60 p-3.5 text-left transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50",
+        "flex w-full items-center gap-3 rounded-[10px] border-[1.5px] border-ink-900/75 border-l-4 border-l-seal-500 bg-paper-25 p-3.5 text-left transition active:translate-y-px focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none",
         className,
       )}
     >
@@ -157,16 +166,16 @@ export function RequestsBanner({ requests, onOpen, className }: RequestsBannerPr
         tone={avatarToneFor(other.vpa ?? other.mobile ?? String(other.user_id))}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13.5px] font-semibold text-brand-900">
+        <span className="block truncate text-[13.5px] font-semibold text-ink-900">
           {other.name ?? "Someone"} asked you for {formatCurrency(first.amount)}
         </span>
-        <span className="block text-[12px] leading-snug text-brand-900/70">
+        <span className="block text-[12px] leading-snug text-ink-500">
           {waiting.length > 1
-            ? `${waiting.length} requests waiting · ${formatCurrency(total)} in total`
+            ? `${waiting.length} requests waiting, ${formatCurrency(total)} in total`
             : "Tap to review, then pay it with your PIN"}
         </span>
       </span>
-      <IconChevronRight size={17} className="shrink-0 text-brand-700" />
+      <IconChevronRight size={17} className="shrink-0 text-ink-400" />
     </button>
   );
 }
@@ -242,7 +251,8 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
         value,
         note.trim() || null,
       );
-      feedback.success();
+      // Asking is its own cue: two even knocks, nothing resolved.
+      feedback.requested();
       toast.success(created.message);
       onCreated(created);
       onClose();
@@ -273,9 +283,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
     >
       <div className="space-y-5">
         <div>
-          <p className="mb-1 text-[11.5px] font-bold tracking-wide text-slate-400 uppercase">
-            People you pay
-          </p>
+          <p className="mb-1.5 text-[12px] font-semibold text-ink-500">People you pay</p>
           <PeopleStrip
             people={people}
             status={status}
@@ -289,17 +297,15 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
         </div>
 
         {target ? (
-          <div className="flex items-center gap-3 rounded-2xl bg-brand-50 p-3.5">
+          <div className="flex items-center gap-3 rounded-[10px] bg-paper-100 p-3.5 ring-1 ring-ink-200/70 ring-inset">
             <Avatar name={target.name} size="md" tone={avatarToneFor(target.vpa)} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-bold text-brand-900">
+              <p className="truncate font-display text-[14.5px] font-bold tracking-tight text-ink-900">
                 {personLabel(target)}
               </p>
-              <p className="truncate font-mono text-[11.5px] text-brand-900/70">
-                {target.vpa ?? "—"}
-              </p>
+              <p className="truncate font-mono text-[11.5px] text-ink-500">{target.vpa ?? "—"}</p>
             </div>
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white text-brand-700">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-ink-900 text-ink-25">
               <IconCheck size={15} />
             </span>
           </div>
@@ -307,7 +313,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
           <Field
             label="Or a mobile number / UPI ID"
             error={lookupIssue}
-            hint="Try 9000000004, or 9000000002@okwalletpay"
+            hint="Try 9000000004, or 9000000002@okwault"
           >
             {({ id, describedBy }) => (
               <div className="flex gap-2">
@@ -315,7 +321,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
                   id={id}
                   aria-describedby={describedBy}
                   inputMode="tel"
-                  placeholder="9000000004 or name@okwalletpay"
+                  placeholder="9000000004 or name@okwault"
                   value={identifier}
                   invalid={Boolean(lookupIssue)}
                   onChange={(event) => {
@@ -358,8 +364,8 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
                 className={cx(
                   "rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
                   value === preset
-                    ? "bg-brand-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                    ? "bg-ink-900 text-ink-25"
+                    : "border border-ink-300 text-ink-700 hover:border-ink-400",
                 )}
               >
                 ₹{preset}
@@ -371,9 +377,9 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
         <div>
           <label
             htmlFor="request-note"
-            className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-medium text-slate-600"
+            className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-700"
           >
-            <IconNote size={14} className="text-slate-400" /> What's it for? (optional)
+            <IconNote size={14} className="text-ink-400" /> What's it for? (optional)
           </label>
           <TextArea
             id="request-note"
@@ -385,15 +391,15 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
           />
         </div>
 
-        <p className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[11.5px] leading-relaxed text-slate-600">
-          <IconInfo size={14} className="mt-px shrink-0 text-slate-400" />
+        <p className="flex items-start gap-2 rounded-[10px] bg-paper-100 p-3 text-[11.5px] leading-relaxed text-ink-600 ring-1 ring-ink-200/70 ring-inset">
+          <IconInfo size={14} className="mt-px shrink-0 text-ink-400" />
           Asking never moves money. It stays a request they can pay or decline, and it can't
           touch your balance.
         </p>
 
-        <p className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-[11.5px] leading-relaxed text-slate-600">
-          <IconInfo size={14} className="mt-px shrink-0 text-slate-400" />
-          Only mobile numbers and UPI IDs already registered with Wallet Pay can be found.
+        <p className="flex items-start gap-2 rounded-[10px] bg-paper-100 p-3 text-[11.5px] leading-relaxed text-ink-600 ring-1 ring-ink-200/70 ring-inset">
+          <IconInfo size={14} className="mt-px shrink-0 text-ink-400" />
+          Only mobile numbers and UPI IDs already registered with WAULT can be found.
         </p>
       </div>
     </Sheet>

@@ -24,12 +24,6 @@ export function mobileError(value: string): string | null {
   return null;
 }
 
-export function otpError(value: string): string | null {
-  if (!value) return "Enter the 6-digit OTP";
-  if (!OTP_RE.test(value)) return "OTP is 6 digits";
-  return null;
-}
-
 export function pinError(value: string): string | null {
   if (!value) return "Enter your 4-digit PIN";
   if (!PIN_RE.test(value)) return "PIN is exactly 4 digits";
@@ -79,19 +73,10 @@ export function payeeIdentifierError(value: string): string | null {
 
   const local = normaliseMobile(text);
   if (!local || local.length !== 10) {
-    return "Enter a 10-digit mobile number, or a UPI ID like name@okwalletpay";
+    return "Enter a 10-digit mobile number, or a UPI ID like name@okwault";
   }
   if (!MOBILE_RE.test(local)) return "Indian mobile numbers start with 6-9";
   return null;
-}
-
-/** "9000000001@okwalletpay" -> { handle: "9000000001", suffix: "okwalletpay" } */
-export function splitVpa(vpa: string | null | undefined): {
-  handle: string;
-  suffix: string;
-} {
-  const [handle = "", suffix = ""] = (vpa ?? "").split("@");
-  return { handle, suffix };
 }
 
 /** Strip everything a numeric keypad shouldn't produce and cap at 2 decimals. */

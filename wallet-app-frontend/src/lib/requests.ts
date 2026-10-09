@@ -4,18 +4,10 @@ import type { MoneyRequest, RequestStatus } from "../types";
 
 export type RequestsStatus = "loading" | "ready" | "error";
 
-/** "Meera Iyer asked you for ₹250" / "You asked Rohan Verma for ₹250". */
-export function requestHeadline(request: MoneyRequest): string {
-  const who = request.counterparty.name ?? "Someone";
-  return request.direction === "incoming"
-    ? `${who} asked you for money`
-    : `You asked ${who} for money`;
-}
-
 /** The line under the amount in a request row. */
 export function requestSubtitle(request: MoneyRequest): string {
   if (request.status === "paid" && request.transfer_reference) {
-    return `Paid · ${request.transfer_reference}`;
+    return `Paid, ${request.transfer_reference}`;
   }
   if (request.status === "declined") return "Declined";
   if (request.status === "cancelled") return "Cancelled";

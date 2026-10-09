@@ -6,12 +6,12 @@
 
 import type { Session } from "../types";
 
-const STORAGE_KEY = "walletpay.session.v1";
+const STORAGE_KEY = "okwault.session.v1";
 
 /** localStorage throws in some privacy modes — never let that crash the app. */
 function storage(): Storage | null {
   try {
-    const probe = "__walletpay__";
+    const probe = "__okwault__";
     window.localStorage.setItem(probe, "1");
     window.localStorage.removeItem(probe);
     return window.localStorage;

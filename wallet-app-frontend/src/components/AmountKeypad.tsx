@@ -47,7 +47,7 @@ export function AmountKeypad({ value, onChange, disabled = false }: AmountKeypad
   const hasDecimal = value.includes(".");
 
   return (
-    <div className="mx-auto grid w-full max-w-[17rem] grid-cols-3 gap-1">
+    <div className="mx-auto grid w-full max-w-[17.5rem] grid-cols-3 gap-1">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
         <KeypadButton
           key={digit}
@@ -64,7 +64,7 @@ export function AmountKeypad({ value, onChange, disabled = false }: AmountKeypad
         aria-label="Decimal point"
         onClick={() => append(".")}
       >
-        <span className="text-xl font-semibold">.</span>
+        <span className="font-display text-[23px] font-semibold">.</span>
       </KeypadButton>
       <KeypadButton disabled={disabled} aria-label="0" onClick={() => append("0")}>
         0

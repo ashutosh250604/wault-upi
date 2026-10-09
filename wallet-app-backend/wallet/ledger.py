@@ -162,7 +162,9 @@ def _announce(txn: Transaction, sender_id: int, receiver_id: int, settled_at) ->
     }
     sender_name = people[sender_id].name if people.get(sender_id) else None
     receiver_name = people[receiver_id].name if people.get(receiver_id) else None
-    fallback = txn.note or "Tap to see the reference"
+    # No note means nothing to quote, so the body carries the one fact the row
+    # does not already show: that the money actually moved.
+    fallback = txn.note or "Completed"
 
     notify(
         receiver_id,

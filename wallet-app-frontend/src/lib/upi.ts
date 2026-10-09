@@ -11,7 +11,11 @@ export interface ScannedPayment {
   note?: string;
 }
 
-/** The `upi://pay?...` string our "My QR" screen generates. */
+/**
+ * The `upi://pay?...` string the "My QR" screen encodes — the one place the app
+ * builds a deep link, so the scanner, the gallery upload and the QR renderer all
+ * agree on its shape.
+ */
 export function buildPaymentPayload(
   vpa: string,
   name: string | null | undefined,
@@ -20,7 +24,7 @@ export function buildPaymentPayload(
 ): string {
   const params = new URLSearchParams({
     pa: vpa,
-    pn: name?.trim() || "Wallet Pay user",
+    pn: name?.trim() || "WAULT user",
     cu: "INR",
   });
   if (amount && amount > 0) params.set("am", amount.toFixed(2));
@@ -61,11 +65,4 @@ export function parsePaymentCode(raw: string | null | undefined): ScannedPayment
 
   if (/^[^\s@]+@[^\s@]+$/.test(text)) return { vpa: text.toLowerCase() };
   return null;
-}
-
-/** A 10-digit Indian mobile number, with or without +91 / spaces. */
-export function parseMobileInput(raw: string): string | null {
-  const digits = (raw ?? "").replace(/\D/g, "");
-  const local = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
-  return /^[6-9]\d{9}$/.test(local) ? local : null;
 }

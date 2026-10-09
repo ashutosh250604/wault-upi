@@ -2,6 +2,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import or_, update
 from sqlalchemy.orm import aliased
 
+from ..coins import announce_payment as announce_coins
 from ..directory import classify_identifier, find_payee
 from ..events import notify
 from ..extensions import db
@@ -99,10 +100,11 @@ def topup():
         else "From a linked source",
         transaction=txn,
     )
-    # A top-up can be the very event that completes an offer, so the cashback is
-    # credited in the same commit as the money that earned it rather than in a
-    # later, best-effort sweep.
-    credited = settle_due(user_id)
+    # A top-up can be the very event that completes an offer, so the coins are
+    # credited in the same commit as the money that earned them rather than in a
+    # later, best-effort sweep. The event's own timestamp, so the top-up that
+    # activates a brand-new account's offers still counts towards them.
+    credited = settle_due(user_id, txn.timestamp)
     db.session.commit()
 
     wallet = Wallet.query.filter_by(user_id=user_id).first()
@@ -156,8 +158,12 @@ def transfer():
     # Settle the payer's offers (this transfer may be their third), then the
     # payee's: being paid for the first time is an offer of its own. Only the
     # payer's are reported back, because only the payer is reading this response.
-    credited = settle_due(sender_id)
-    settle_due(receiver_id)
+    credited = settle_due(sender_id, txn.timestamp)
+    settle_due(receiver_id, txn.timestamp)
+    # Every payment draws coins, and a large draw is the point of the scheme.
+    # Queued here, in the same commit as the payment itself, so a payment can't
+    # succeed and its coins silently not exist.
+    coins = announce_coins(sender_id, txn.id, txn.timestamp)
     db.session.commit()
 
     payload = {
@@ -168,6 +174,8 @@ def transfer():
         "txn_id": txn.reference,
         "note": note,
     }
+    if coins:
+        payload["coins_earned"] = coins
     if credited:
         payload["rewards"] = credited_summary(credited)
     return jsonify(payload), 200
@@ -188,10 +196,11 @@ def daily_limits():
 @bp.post("/vpas/resolve")
 @require_auth
 def resolve_vpa():
-    """Turn a scanned/typed UPI ID into a wallet the user can pay.
+    """Turn a typed or scanned UPI ID into a wallet the user can pay.
 
-    Kept as the narrow, UPI-ID-only entry point (the scanner still uses it);
-    /payees/resolve in the people blueprint handles UPI IDs *and* mobiles.
+    The narrow, UPI-ID-only lookup from the API table. The scanner, pay sheet
+    and address book all go through /payees/resolve in the people blueprint,
+    which also accepts mobile numbers.
     """
     data = request.get_json(silent=True) or {}
     vpa, _ = classify_identifier(data.get("vpa") or data.get("identifier"))

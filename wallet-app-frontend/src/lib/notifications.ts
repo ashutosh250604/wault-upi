@@ -22,7 +22,7 @@ export function notificationTarget(kind: NotificationKind): string {
     case "request_declined":
       return "/requests";
     case "reward":
-      // The offers strip, and the balance the cashback landed in.
+      // The offers strip, the coin chip and the scratch card all live there.
       return "/home";
     case "security":
       return "/profile";

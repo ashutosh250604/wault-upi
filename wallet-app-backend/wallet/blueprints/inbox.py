@@ -1,17 +1,21 @@
 """The inbox: what the wallet has to say, and what it still owes you.
 
-Two closely related things live here because they are read together — the bell
-and the offers strip sit on the same screen.
+Three closely related things live here because they are read together — the bell,
+the offers strip and the coin chip all sit on the home screen.
 
 Notifications are a log of things that already happened and can be deleted
 freely; rewards are a promise about things that haven't happened yet and are
-settled by the payment paths, not by this screen.
+settled by the payment paths, not by this screen; coins are the sum of an award
+log that only `wallet/coins.py` writes, and of the two things a caller can do
+here, only a redemption writes anything at all.
 """
 
 from flask import Blueprint, g, jsonify, request
 
+from ..coins import CoinError, redeem, snapshot
 from ..extensions import db
-from ..models import Notification
+from ..models import Notification, Wallet
+from ..money import paise_to_rupees
 from ..rewards import ensure_rewards, list_for
 from ..security import require_auth
 
@@ -130,3 +134,47 @@ def list_rewards():
     if db.session.new or db.session.dirty:
         db.session.commit()
     return jsonify(list_for(rows)), 200
+
+
+@bp.get("/coins")
+@require_auth
+def coin_snapshot():
+    """The coin chip's numbers: balance, worth, and progress to the next coin.
+
+    A pure read — coins earned are counted from the ledger, so nothing here has
+    to be kept up to date or reconciled.
+    """
+    return jsonify(snapshot(g.user_id)), 200
+
+
+@bp.post("/coins/redeem")
+@require_auth
+def redeem_coins():
+    """Spend coins for wallet credit.
+
+    The credit, the redemption record and the inbox note are queued in one
+    commit, so coins can't be marked spent without the money arriving.
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        coins, txn = redeem(g.user_id, data.get("coins"))
+    except CoinError as refusal:
+        return jsonify({"message": refusal.message}), refusal.status
+
+    db.session.commit()
+
+    wallet = Wallet.query.filter_by(user_id=g.user_id).first()
+    return (
+        jsonify(
+            {
+                "message": f"₹{paise_to_rupees(txn.amount_paise):,.2f} added from "
+                f"{coins} {'coin' if coins == 1 else 'coins'}",
+                "coins_redeemed": coins,
+                "amount": paise_to_rupees(txn.amount_paise),
+                "new_balance": paise_to_rupees(wallet.balance_paise) if wallet else None,
+                "txn_id": txn.reference,
+                "coins": snapshot(g.user_id),
+            }
+        ),
+        200,
+    )
