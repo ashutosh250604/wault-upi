@@ -56,6 +56,21 @@ export default function PaymentResultPage() {
   const headline = isTopUp ? "Money added" : "Payment successful";
 
   /**
+   * Where these coins came from.
+   *
+   * A top-up completes an offer without drawing anything — only money sent to
+   * someone else draws — so the draw is named only when there was one. It used
+   * to be promised unconditionally, which had a ₹100 top-up claiming a draw as
+   * well as the 25 coins its offer paid.
+   */
+  const offerTitles = (receipt.cashback ?? []).map((item) => item.title).join(", ");
+  const rewardLine = offerTitles
+    ? `${offerTitles} from your offers${
+        (receipt.coinsEarned ?? 0) > 0 ? ", plus this payment's own draw" : ""
+      }.`
+    : "This payment's draw.";
+
+  /**
    * The card has been opened on this screen, so say so.
    *
    * The reveal is local and instant; this only writes the fact down, which is
@@ -160,9 +175,7 @@ export default function PaymentResultPage() {
                 {coinsWon === 1 ? "1 coin earned" : `${coinsWon} coins earned`}
               </p>
               <p className="mt-0.5 text-[12px] leading-relaxed text-seal-800/80">
-                {receipt.cashback && receipt.cashback.length > 0
-                  ? `${receipt.cashback.map((item) => item.title).join(", ")} from your offers, plus this payment's own draw.`
-                  : "This payment's draw."}{" "}
+                {rewardLine}{" "}
                 Coins sit in your coin balance, not your wallet — 10 redeem for ₹10.
               </p>
             </div>

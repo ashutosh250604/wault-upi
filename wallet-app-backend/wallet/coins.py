@@ -74,6 +74,28 @@ def award_label(reason: str) -> str:
     )
 
 
+def card_caption(reason: str) -> str:
+    """What won a card, in one line — for the cards that are not payments.
+
+    A payment's card names the payment instead (the client has the payee and the
+    amount for that). This is the reason's own line: the welcome bonus, or the
+    offer that paid it — the offer's headline rather than its amount, because
+    the card already shows the coins.
+    """
+    if reason == CoinAward.REASON_SIGNUP:
+        return "Welcome bonus"
+    if reason.startswith(CoinAward.OFFER_PREFIX):
+        code = reason[len(CoinAward.OFFER_PREFIX) :]
+        # Imported here rather than at the top of the file: `rewards` imports
+        # this module to pay its offers, so the catalogue can only be read
+        # lazily, once both modules are loaded.
+        from .rewards import OFFERS_BY_CODE
+
+        offer = OFFERS_BY_CODE.get(code)
+        return offer["headline"] if offer else "Offer reward"
+    return award_label(reason)
+
+
 class CoinError(Exception):
     """A redemption the wallet will not make, with the reason and HTTP status."""
 
@@ -243,6 +265,15 @@ def grant_signup_bonus(user_id: int, when: datetime | None = None) -> int:
     return SIGNUP_BONUS_COINS
 
 
+def _payee_name(txn_id: int) -> str | None:
+    """Who a payment went to, for the note that names them."""
+    txn = db.session.get(Transaction, txn_id)
+    if txn is None or not txn.receiver_id:
+        return None
+    payee = db.session.get(User, txn.receiver_id)
+    return payee.name if payee else None
+
+
 def announce_payment(user_id: int, txn_id: int, when: datetime | None = None) -> int:
     """Pay out and tell the payer. Returns the coins awarded.
 
@@ -262,6 +293,18 @@ def announce_payment(user_id: int, txn_id: int, when: datetime | None = None) ->
         f"That payment paid out {earned}. You have {total} "
         f"{'coin' if total == 1 else 'coins'} — worth ₹{total * COIN_VALUE_PAISE // 100}. "
         f"Redeem from {REDEEM_MIN_COINS} coins.",
+        when=moment,
+    )
+    # And the card itself, which nobody has opened yet. A second note rather
+    # than a line on the first: this one is a thing to do, and the inbox links
+    # it to the collection so it can be done from the bell.
+    payee = _payee_name(txn_id)
+    notify(
+        user_id,
+        Notification.SCRATCH_CARD,
+        "A scratch card is waiting",
+        f"Your payment to {payee or 'someone'} left a card under its cover — "
+        f"open your scratch cards to lift it.",
         when=moment,
     )
     return earned
@@ -376,6 +419,10 @@ def _card_payload(card: CoinAward, txn: Transaction | None, name: str | None) ->
     return {
         "id": card.id,
         "at": as_utc(card.created_at).isoformat(),
+        # Where it came from, and what won it: a payment's card is named by its
+        # payee and amount, everything else by its reason's own line.
+        "reason": card.reason,
+        "caption": card_caption(card.reason),
         "coins": card.coins,
         "scratched": card.scratched_at is not None,
         "scratched_at": as_utc(card.scratched_at).isoformat() if card.scratched_at else None,
@@ -415,15 +462,13 @@ def _card_payloads(cards: list[CoinAward]) -> list[dict]:
 def card_collection(user_id: int, limit: int = 100) -> dict:
     """Every scratch card this user holds, newest first.
 
-    One card per payment: the draw that payment made. The welcome bonus and an
-    offer's payout are deliberately not cards — they are credited and announced
-    outright, with nothing left under a cover to lift.
+    Every coin award is a card: the draw a payment makes, each offer's payout,
+    and the welcome bonus. They are one collection because they are one balance
+    — the coins land the moment they are won, and a card is the telling of a
+    payout rather than the payout itself.
     """
     rows = (
-        CoinAward.query.filter(
-            CoinAward.user_id == user_id,
-            CoinAward.reason == CoinAward.REASON_PAYMENT,
-        )
+        CoinAward.query.filter(CoinAward.user_id == user_id)
         .order_by(CoinAward.created_at.desc(), CoinAward.id.desc())
         .limit(limit)
         .all()
@@ -445,7 +490,7 @@ def scratch_card(user_id: int, card_id: int, when: datetime | None = None) -> Co
     a second tap is a second tap, not a second prize.
     """
     card = db.session.get(CoinAward, card_id)
-    if card is None or card.user_id != user_id or card.reason != CoinAward.REASON_PAYMENT:
+    if card is None or card.user_id != user_id:
         raise CoinError("Scratch card not found", 404)
     if card.scratched_at is None:
         card.scratched_at = when or utcnow()

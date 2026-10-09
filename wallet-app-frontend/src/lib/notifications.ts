@@ -24,6 +24,10 @@ export function notificationTarget(kind: NotificationKind): string {
     case "reward":
       // The offers strip, the coin chip and the scratch card all live there.
       return "/home";
+    case "scratch_card":
+      // A card nobody has opened: the note is a thing to do, not a record, so
+      // it goes straight to the collection rather than to the home screen.
+      return "/scratch-cards";
     case "security":
       return "/profile";
   }

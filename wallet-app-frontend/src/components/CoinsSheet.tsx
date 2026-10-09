@@ -214,7 +214,7 @@ export function CoinsSheet({
                 Scratch cards
               </span>
               <span className="mt-0.5 block text-[11.5px] text-ink-500">
-                Every card a payment has won
+                Every card you have won, under its cover or opened
               </span>
             </span>
             <IconChevronRight size={16} className="shrink-0 text-ink-400" />

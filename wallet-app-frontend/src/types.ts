@@ -264,6 +264,7 @@ export type NotificationKind =
   | "request_received"
   | "request_declined"
   | "reward"
+  | "scratch_card"
   | "security";
 
 /** One row in the inbox. A note about something that happened, never the money itself. */
@@ -397,6 +398,10 @@ export interface ScratchCard {
   id: number;
   /** When the card was won. */
   at: string;
+  /** What won it: "payment", "signup" or "offer:<code>". */
+  reason: string;
+  /** What won it, in a line — the fallback caption for a card with no payment. */
+  caption: string;
   /** What the card paid, or null for one whose payment is out of reach. */
   coins: number | null;
   scratched: boolean;

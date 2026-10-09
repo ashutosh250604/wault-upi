@@ -250,6 +250,10 @@ class Notification(db.Model):
     # party to closed without money moving, and the title says which happened.
     REQUEST_DECLINED = "request_declined"
     REWARD = "reward"
+    #: A payment left a scratch card under its cover, so there is something to
+    #: open. Its own kind rather than another `reward`: this one is a call to
+    #: action that the inbox links to the collection.
+    SCRATCH_CARD = "scratch_card"
     SECURITY = "security"
 
     id = db.Column(db.Integer, primary_key=True)

@@ -1224,10 +1224,12 @@ def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
     card_id = paid["coin_card_id"]
 
     collection = client.get("/api/scratch-cards", headers=headers).get_json()
-    assert collection["total"] == 1
-    assert collection["unscratched"] == 1
-    card = collection["cards"][0]
-    assert card["id"] == card_id
+    # Every award is a card: this payment's draw and the welcome bonus the
+    # account was handed when it signed in.
+    assert collection["total"] == 2
+    assert collection["unscratched"] == 2
+    card = next(item for item in collection["cards"] if item["id"] == card_id)
+    assert collection["cards"][0]["reference"] == paid["txn_id"]  # newest first
     # The amount travels with an unscratched card — the cover is the screen's,
     # and the coins were credited with the payment either way.
     assert card["coins"] == paid["coins_earned"]
@@ -1257,15 +1259,56 @@ def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
     assert again.get_json()["card"]["coins"] == paid["coins_earned"]
 
     settled = client.get("/api/scratch-cards", headers=headers).get_json()
-    assert settled["unscratched"] == 0
-    assert settled["cards"][0]["coins"] == paid["coins_earned"]
+    assert settled["unscratched"] == 1  # the welcome bonus, still under its cover
+    payment_card = next(item for item in settled["cards"] if item["id"] == card_id)
+    assert payment_card["coins"] == paid["coins_earned"]
+
+    bonus = next(item for item in settled["cards"] if item["reason"] == "signup")
+    assert bonus["caption"] == "Welcome bonus"
+    assert bonus["coins"] == SIGNUP_BONUS_COINS
+    assert bonus["reference"] is None and bonus["amount"] is None
+    assert (
+        client.post(f"/api/scratch-cards/{bonus['id']}/scratch", headers=headers).status_code
+        == 200
+    )
 
     # A top-up draws no coins, so it hands over no card.
     topped = client.post(
         "/api/topup", json={"user_id": demo_auth["user_id"], "amount": 50}, headers=headers
     ).get_json()
     assert "coin_card_id" not in topped
-    assert client.get("/api/scratch-cards", headers=headers).get_json()["total"] == 1
+    assert client.get("/api/scratch-cards", headers=headers).get_json()["total"] == 2
+
+    # The inbox says there is a card to open, and points at the collection.
+    inbox = client.get("/api/notifications", headers=headers).get_json()["notifications"]
+    waiting = [row for row in inbox if row["kind"] == "scratch_card"]
+    assert waiting, "a payment that drew coins writes a note about its card"
+    assert waiting[0]["title"] == "A scratch card is waiting"
+    assert "Meera Iyer" in waiting[0]["body"]
+
+
+def test_an_offer_pays_out_as_a_card_with_its_own_caption(client, demo_auth):
+    """A card won by an offer says which offer paid it."""
+    headers = demo_auth["headers"]
+    before = client.get("/api/scratch-cards", headers=headers).get_json()["total"]
+
+    # ₹100 is the first-top-up threshold, so the offer pays 25 coins inside the
+    # top-up's own commit — and those coins are a card like any other.
+    topped = client.post(
+        "/api/topup",
+        json={"user_id": demo_auth["user_id"], "amount": 100, "pin": PIN},
+        headers=headers,
+    ).get_json()
+    assert topped["rewards"][0]["coins"] == 25
+
+    collection = client.get("/api/scratch-cards", headers=headers).get_json()
+    assert collection["total"] == before + 1
+    offer_card = collection["cards"][0]
+    assert offer_card["caption"] == "On your first top-up"
+    assert offer_card["coins"] == 25
+    assert offer_card["scratched"] is False
+    assert offer_card["paid_to"] is None
+    assert offer_card["reason"] == "offer:first_topup"
 
 
 def test_scratch_cards_are_owner_scoped_and_need_a_token(client, demo_auth):
@@ -1283,7 +1326,10 @@ def test_scratch_cards_are_owner_scoped_and_need_a_token(client, demo_auth):
     assert client.get("/api/scratch-cards").status_code == 401
 
     stranger = onboard(client, "9000000931", "Card Thief")
-    assert client.get("/api/scratch-cards", headers=stranger["headers"]).get_json()["total"] == 0
+    theirs = client.get("/api/scratch-cards", headers=stranger["headers"]).get_json()
+    # Their own welcome bonus and nothing else — not the other wallet's card.
+    assert theirs["total"] == 1
+    assert all(item["id"] != card_id for item in theirs["cards"])
     # 404 rather than 403: the collection is not a way to confirm which ids exist.
     assert (
         client.post(

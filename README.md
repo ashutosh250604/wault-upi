@@ -59,7 +59,8 @@ numbers and UPI IDs work with or without a camera.
   top-ups), sharing one attempt counter and lockout, so a stolen token alone can't move money
 - **Notification inbox** with an unread badge on the home screen: every payment, top-up, money
   request, reward and sign-in writes a line, derived from the ledger rather than typed by hand,
-  and each line links through to the screen that owns the detail
+  and each line links through to the screen that owns the detail — including a note when a
+  payment leaves a scratch card waiting, which opens the collection rather than the receipt
 - **Coins, and one currency for every reward.** Each successful payment draws 1–50 coins from a
   server-side, weighted draw (mostly 1–5, a big number is genuinely rare), recorded against the
   transaction that earned it; a coin is worth **₹1**, and 10 coins is the floor to clear — above
@@ -72,12 +73,12 @@ numbers and UPI IDs work with or without a camera.
   artwork on a canvas, scratched with the finger, and a twelfth of it is enough to lift by itself — the coins
   underneath are visible from the first stroke. The draw, the reveal and the balance are the
   server's; the card only decides how the number is told
-- **Every card you have won, in one place.** A payment's receipt hands over a scratch
-  card; the collection screen lists them newest first, with the ones still under their
-  cover drawn covered and scratchable again, and the scratched ones keeping what they
-  paid, the payment they came from and the date. The cover is remembered server-side, so
-  a card opened on a receipt does not come back covered — and `/api/scratch-cards` is
-  reachable from the coins sheet as well as from the receipt
+- **Every card you have won, in one place.** Every coin award is a card — a payment's
+  draw, an offer's payout and the 50-coin welcome bonus — and the collection screen lists
+  them newest first: the ones still under their cover drawn covered and scratchable
+  again, the scratched ones keeping what they paid, what won them and the date. The cover
+  is remembered server-side, so a card opened on a receipt does not come back covered,
+  and `/api/scratch-cards` is reachable from the coins sheet as well as from the receipt
 - **Offers that actually pay out.** Progress towards each offer is counted from the ledger, and
   the coins land *in the same commit as the payment that earned them* — no window where a payment
   succeeded and its reward silently did not, and a replay of the same payment can never pay twice
@@ -200,7 +201,7 @@ health checks.
 | GET | `/api/rewards` | Bearer | this account's offers with progress counted from the ledger |
 | GET | `/api/coins` | Bearer | the coin balance, what it is worth, and where the last few came from |
 | POST | `/api/coins/redeem` | Bearer | coins → wallet credit (the whole balance, 10 coins minimum) |
-| GET | `/api/scratch-cards` | Bearer | every card a payment has won, newest first |
+| GET | `/api/scratch-cards` | Bearer | every card the wallet has won, newest first |
 | POST | `/api/scratch-cards/<id>/scratch` | Bearer | record that a card's cover has been lifted |
 | GET | `/api/statements.pdf` | Bearer | the branded PDF statement |
 

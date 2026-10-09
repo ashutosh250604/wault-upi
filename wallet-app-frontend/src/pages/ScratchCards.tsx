@@ -14,22 +14,23 @@ import { IconSpark } from "../components/ui/Icons";
 import { EmptyState, ErrorState, SkeletonCard } from "../components/ui/States";
 
 /**
- * The scratch card collection: every card a payment has won, newest first.
+ * The scratch card collection: every card the wallet has won, newest first.
  *
- * The receipt hands over one card at a time — that is where a draw is won —
- * and this is where the cards live afterwards. An unscratched one is drawn
- * covered, exactly as it was handed over, and can be scratched here instead;
- * a scratched one keeps what it paid, so the screen reads as a history of what
- * paying has been worth rather than as a pile of unopened envelopes.
+ * The receipt hands over a payment's card at the moment the draw is won — and
+ * this is where the cards live afterwards. An unscratched one is drawn covered,
+ * exactly as it was handed over, and can be scratched here instead; a scratched
+ * one keeps what it paid, so the screen reads as a history of what the wallet
+ * has given back rather than as a pile of unopened envelopes.
  *
- * The cards are payment draws only. The welcome bonus and an offer's payout are
- * credited and announced outright, with nothing under a cover to lift, so they
- * are told about in the inbox instead of being listed as cards nobody can open.
+ * Every coin award is here, not only the draws: an offer's payout and the
+ * welcome bonus are the same kind of thing — coins that landed the moment they
+ * were earned — so they arrive as cards too. Those have no payment behind them
+ * and are named by their reason instead.
  */
 
-/** "₹25 to Meera Iyer" — the payment behind a card, as one line. */
-function paymentLine(card: ScratchCardModel): string {
-  if (card.amount === null) return "A payment you made";
+/** "₹25 to Meera Iyer" for a payment's card, the reason's own line for the rest. */
+function cardLine(card: ScratchCardModel): string {
+  if (card.reason !== "payment" || card.amount === null) return card.caption;
   const amount = formatCurrency(card.amount);
   return card.paid_to ? `${amount} to ${card.paid_to}` : `${amount} paid`;
 }
@@ -110,7 +111,7 @@ export default function ScratchCardsPage() {
             icon={<IconSpark size={TILE_GLYPH.lg} strokeWidth={TILE_STROKE} />}
             iconTone="pending"
             title="No scratch cards yet"
-            description="Every payment draws 1 to 50 coins and lands here as a card. Pay someone and the first one arrives."
+            description="Every payment draws 1 to 50 coins, every offer pays in coins, and each payout lands here as a card. Earn one and it arrives."
             action={
               <Button size="lg" onClick={() => navigate("/scan")}>
                 Make a payment
@@ -147,7 +148,7 @@ export default function ScratchCardsPage() {
                             : `${card.coins} ${card.coins === 1 ? "coin" : "coins"} won`}
                         </p>
                         <p className="mt-0.5 truncate text-[11.5px] text-ink-500">
-                          {paymentLine(card)} · {formatDateTime(card.at)}
+                          {cardLine(card)} · {formatDateTime(card.at)}
                         </p>
                       </div>
                       <span className="shrink-0 text-[11px] font-semibold text-credit-600">
@@ -160,7 +161,7 @@ export default function ScratchCardsPage() {
                     <div className="mx-auto w-full max-w-[17rem] space-y-2">
                       <div className="flex items-baseline justify-between gap-3">
                         <p className="min-w-0 truncate text-[12.5px] font-semibold text-ink-700">
-                          {paymentLine(card)}
+                          {cardLine(card)}
                         </p>
                         <span className="shrink-0 text-[11px] text-ink-400 tabular-nums">
                           {formatDateTime(card.at)}

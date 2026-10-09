@@ -18,6 +18,7 @@ import {
   IconReceived,
   IconRefresh,
   IconSent,
+  IconSpark,
   IconTrash,
   IconWallet,
   IconWarning,
@@ -49,6 +50,7 @@ const NEWS: Record<
     // to fill the same box.
     Glyph: ({ size }) => <Coin size={(size ?? TILE_GLYPH.sm) + 3} />,
   },
+  scratch_card: { tone: "pending", Glyph: IconSpark },
   request_received: { tone: "seal", Glyph: IconNote },
   request_declined: { tone: "muted", Glyph: IconWarning },
   security: { tone: "pending", Glyph: IconLock },
