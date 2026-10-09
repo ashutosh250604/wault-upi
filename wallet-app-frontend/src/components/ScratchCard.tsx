@@ -79,7 +79,10 @@ function paintCover(canvas: HTMLCanvasElement, tile: HTMLImageElement | null) {
   canvas.height = height;
   canvas.dataset.cover = painted;
 
-  const ctx = canvas.getContext("2d");
+  // The same context the coverage sampler reads: this canvas is painted once
+  // and then read many times a second while a finger is on it, which is exactly
+  // the case `willReadFrequently` exists for.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return;
 
   ctx.globalCompositeOperation = "source-over";
@@ -116,6 +119,18 @@ export function ScratchCard({ coins, revealed, onRevealed, className }: ScratchC
   const [tileReady, setTileReady] = useState(false);
   // The card stops asking to be scratched the moment it is.
   const [touched, setTouched] = useState(false);
+  // Coverage is measured every few moves and again on release, so the moment
+  // the cover is judged gone arrives several times. The caller is told once:
+  // one card is one scratch, not one call per sample.
+  const announced = useRef(false);
+
+  // A fresh card in the same mount is a fresh card: the cover is back on, so
+  // both the hint and the announcement start over.
+  useEffect(() => {
+    if (revealed) return;
+    announced.current = false;
+    setTouched(false);
+  }, [revealed]);
 
   // The cover's artwork is a file, so it arrives a frame or two after the sheet
   // does. Painting is keyed off this rather than off a timer.
@@ -151,7 +166,7 @@ export function ScratchCard({ coins, revealed, onRevealed, className }: ScratchC
 
   /** How much of the cover is gone, sampled on a coarse grid — 0 to 1. */
   const coverage = useCallback((canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return 0;
     const { width, height } = canvas;
     const { data } = ctx.getImageData(0, 0, width, height);
@@ -167,10 +182,14 @@ export function ScratchCard({ coins, revealed, onRevealed, className }: ScratchC
     return sampled === 0 ? 0 : gone / sampled;
   }, []);
 
-  /** Lift the cover if enough of it has gone. */
+  /** Lift the cover if enough of it has gone — and say so exactly once. */
   const check = useCallback(
     (canvas: HTMLCanvasElement) => {
-      if (coverage(canvas) >= REVEAL_AT) onRevealed();
+      if (announced.current) return;
+      if (coverage(canvas) >= REVEAL_AT) {
+        announced.current = true;
+        onRevealed();
+      }
     },
     [coverage, onRevealed],
   );
@@ -343,10 +362,13 @@ export function ScratchSheet({
   open,
   coins,
   onClose,
+  onScratched,
 }: {
   open: boolean;
   coins: number;
   onClose: () => void;
+  /** Told once the cover is off, so the card can be marked as opened. */
+  onScratched?: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
   const alreadyRevealed = useRef(false);
@@ -368,6 +390,11 @@ export function ScratchSheet({
     // The coin drop belongs to the moment the cover comes off, not to the
     // moment the payment landed.
     feedback.coins();
+    // And the card is now open. Fire-and-forget on purpose: the coins are
+    // already in the balance, so the worst a failed call costs is a card that
+    // is still under its cover the next time the collection is read — which is
+    // the safe way round for a write whose only job is to remember.
+    onScratched?.();
   };
 
   const label = coins === 1 ? "1 coin" : `${coins} coins`;

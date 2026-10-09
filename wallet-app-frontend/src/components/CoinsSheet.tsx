@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { CoinSnapshot } from "../types";
 import { api, errorMessage } from "../lib/api";
 import { cx } from "../lib/cx";
@@ -9,6 +10,7 @@ import { Button } from "./ui/Button";
 import { Coin } from "./ui/Coin";
 import { Sheet } from "./ui/Sheet";
 import { SkeletonCard } from "./ui/States";
+import { IconChevronRight, IconSpark } from "./ui/Icons";
 
 export interface CoinsSheetProps {
   open: boolean;
@@ -197,6 +199,26 @@ export function CoinsSheet({
               </p>
             </div>
           </div>
+
+          {/* Where a payment's draw is handed over, again: the receipt shows
+              one card and this is the collection, so a card nobody opened is
+              still reachable after the receipt is closed. */}
+          <Link
+            to="/scratch-cards"
+            onClick={onClose}
+            className="mt-3 flex items-center gap-3 rounded-[12px] border-[1.5px] border-ink-900/20 bg-paper-100 px-4 py-3 transition hover:border-ink-900/45"
+          >
+            <IconSpark size={16} className="shrink-0 text-pending-600" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold text-ink-900">
+                Scratch cards
+              </span>
+              <span className="mt-0.5 block text-[11.5px] text-ink-500">
+                Every card a payment has won
+              </span>
+            </span>
+            <IconChevronRight size={16} className="shrink-0 text-ink-400" />
+          </Link>
 
           {/* What earned them. Short by design: five rows, no running totals. */}
           {coins.awards.length > 0 ? (

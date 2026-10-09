@@ -185,6 +185,9 @@ export default function AmountEntryPage() {
             // scratch card has something to hide.
             coinsEarned: result.coins_earned,
             cashback: result.rewards,
+            // The card itself, so scratching it on the receipt closes the same
+            // card on the collection screen.
+            cardId: result.coin_card_id,
           },
         },
       });

@@ -25,6 +25,8 @@ import type {
   RequestPaymentResponse,
   ResolvedVpa,
   Reward,
+  ScratchCard,
+  ScratchCardCollection,
   SetNameResponse,
   StartLoginResponse,
   TopUpResponse,
@@ -413,6 +415,28 @@ export const api = {
       auth: true,
       signal,
     }),
+
+  /**
+   * Every scratch card this user holds, newest first.
+   *
+   * One card per payment — the draw that payment made. The welcome bonus and
+   * offer payouts are not cards: they are credited and announced outright.
+   */
+  scratchCards: (signal?: AbortSignal) =>
+    request<ScratchCardCollection>("/scratch-cards", { auth: true, signal }),
+
+  /**
+   * Lifts the cover on one card.
+   *
+   * Nothing moves: the coins were credited with the payment that drew them, and
+   * this only records that the user has seen them — which is what takes the
+   * card out of the unscratched pile the next time the screen is opened.
+   */
+  scratchCard: (cardId: number, signal?: AbortSignal) =>
+    request<{ card: ScratchCard; coins: CoinSnapshot }>(
+      `/scratch-cards/${cardId}/scratch`,
+      { method: "POST", body: {}, auth: true, signal },
+    ),
 
   /** What's left of today's cap: the numbers the ledger enforces on a debit. */
   limits: (signal?: AbortSignal) => request<LimitsResponse>("/limits", { auth: true, signal }),

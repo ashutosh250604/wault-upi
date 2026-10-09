@@ -20,6 +20,7 @@ import AccountsPage from "./pages/Accounts";
 import AmountEntryPage from "./pages/AmountEntry";
 import PaymentResultPage from "./pages/PaymentResult";
 import ShowQrPage from "./pages/ShowQr";
+import ScratchCardsPage from "./pages/ScratchCards";
 import ProfilePage from "./pages/Profile";
 import NotFoundPage from "./pages/NotFound";
 
@@ -155,6 +156,14 @@ export default function App() {
                 }
               />
               <Route
+                path="/scratch-cards"
+                element={
+                  <RequireSession>
+                    <ScratchCardsPage />
+                  </RequireSession>
+                }
+              />
+              <Route
                 path="/profile"
                 element={
                   <RequireSession>
@@ -193,6 +202,10 @@ export default function App() {
               <Route path="/set-pin" element={<Navigate to="/onboarding/pin" replace />} />
               <Route path="/amount-entry" element={<Navigate to="/pay/amount" replace />} />
               <Route path="/alerts" element={<Navigate to="/notifications" replace />} />
+              <Route
+                path="/scratchcard"
+                element={<Navigate to="/scratch-cards" replace />}
+              />
               <Route
                 path="/payment-result"
                 element={<Navigate to="/pay/result" replace />}

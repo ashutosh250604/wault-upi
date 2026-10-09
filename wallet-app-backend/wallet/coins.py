@@ -41,9 +41,9 @@ from sqlalchemy import func
 from .events import notify
 from .extensions import db
 from .ledger import credit_wallet
-from .models import CoinAward, CoinRedemption, Notification, Transaction
+from .models import CoinAward, CoinRedemption, Notification, Transaction, User
 from .money import paise_to_rupees
-from .timeutils import utcnow
+from .timeutils import as_utc, utcnow
 
 #: What one coin is worth when it is redeemed. Also the rate an offer pays at:
 #: an offer worth ₹25 is worth 25 coins, so the two can never disagree.
@@ -344,6 +344,119 @@ def redeem(user_id: int, coins: int | None = None, when: datetime | None = None)
     return coins, txn
 
 
+# --------------------------------------------------------------------------- #
+# Scratch cards
+#
+# Every payment's draw is handed over under a cover: the card is the receipt's
+# flourish, and the coins are already in the balance the moment the payment
+# settles. What `scratched_at` adds is memory — a card that was never scratched
+# is still a card, so the whole collection can be shown again in one place,
+# newest first, with the unscratched ones still hiding what they paid.
+# --------------------------------------------------------------------------- #
+
+
+def card_for_transaction(user_id: int, txn_id: int) -> CoinAward | None:
+    """The card a payment drew, so its receipt can hand the same card over."""
+    return CoinAward.query.filter_by(user_id=user_id, transaction_id=txn_id).first()
+
+
+def _card_payload(card: CoinAward, txn: Transaction | None, name: str | None) -> dict:
+    """One card as the screen draws it.
+
+    The coins travel with an unscratched card as well as a scratched one. They
+    are the user's own and are already in their balance — the cover is the
+    screen's device for handing a prize over, not a secret being kept — and
+    sending them is what lets the cover lift on the first stroke instead of
+    waiting for a round trip to find out what is underneath.
+    """
+    # `as_utc` at the edge, like every other timestamp the API hands out: SQLite
+    # returns a naive datetime for a UTC column, and a naive string on the wire
+    # is read as the browser's own zone — which put a card won at 11:40 pm IST
+    # on the screen at 6:10 pm.
+    return {
+        "id": card.id,
+        "at": as_utc(card.created_at).isoformat(),
+        "coins": card.coins,
+        "scratched": card.scratched_at is not None,
+        "scratched_at": as_utc(card.scratched_at).isoformat() if card.scratched_at else None,
+        "reference": txn.reference if txn else None,
+        "paid_to": name,
+        "amount": paise_to_rupees(txn.amount_paise) if txn else None,
+        "note": txn.note if txn else None,
+    }
+
+
+def _card_payloads(cards: list[CoinAward]) -> list[dict]:
+    """Payloads for a set of cards, with their payments read in two queries."""
+    if not cards:
+        return []
+
+    txn_ids = [card.transaction_id for card in cards if card.transaction_id]
+    transactions = {
+        txn.id: txn
+        for txn in Transaction.query.filter(Transaction.id.in_(txn_ids)).all()
+    } if txn_ids else {}
+
+    payee_ids = {txn.receiver_id for txn in transactions.values() if txn.receiver_id}
+    names = {
+        row.id: row.name
+        for row in (User.query.filter(User.id.in_(payee_ids)).all() if payee_ids else [])
+    }
+
+    payloads = []
+    for card in cards:
+        txn = transactions.get(card.transaction_id)
+        payloads.append(
+            _card_payload(card, txn, names.get(txn.receiver_id) if txn else None)
+        )
+    return payloads
+
+
+def card_collection(user_id: int, limit: int = 100) -> dict:
+    """Every scratch card this user holds, newest first.
+
+    One card per payment: the draw that payment made. The welcome bonus and an
+    offer's payout are deliberately not cards — they are credited and announced
+    outright, with nothing left under a cover to lift.
+    """
+    rows = (
+        CoinAward.query.filter(
+            CoinAward.user_id == user_id,
+            CoinAward.reason == CoinAward.REASON_PAYMENT,
+        )
+        .order_by(CoinAward.created_at.desc(), CoinAward.id.desc())
+        .limit(limit)
+        .all()
+    )
+    payloads = _card_payloads(rows)
+    return {
+        "cards": payloads,
+        "total": len(payloads),
+        "unscratched": sum(1 for card in payloads if not card["scratched"]),
+    }
+
+
+def scratch_card(user_id: int, card_id: int, when: datetime | None = None) -> CoinAward:
+    """Lift the cover on one card. The caller owns the commit.
+
+    Refuses a card that is not this user's exactly like one that does not exist,
+    so the collection cannot be probed for which ids are real. A card that has
+    already been scratched comes back as it is rather than being stamped again:
+    a second tap is a second tap, not a second prize.
+    """
+    card = db.session.get(CoinAward, card_id)
+    if card is None or card.user_id != user_id or card.reason != CoinAward.REASON_PAYMENT:
+        raise CoinError("Scratch card not found", 404)
+    if card.scratched_at is None:
+        card.scratched_at = when or utcnow()
+    return card
+
+
+def card_view(user_id: int, card: CoinAward) -> dict:
+    """One card's payload, for the response to scratching it."""
+    return _card_payloads([card])[0]
+
+
 def snapshot(user_id: int, history: int = 5) -> dict:
     """Everything the coin chip and the coins sheet render.
 
@@ -382,7 +495,7 @@ def snapshot(user_id: int, history: int = 5) -> dict:
                 "coins": row.coins,
                 "reason": row.reason,
                 "label": award_label(row.reason),
-                "at": row.created_at.isoformat(),
+                "at": as_utc(row.created_at).isoformat(),
             }
             for row in recent
         ],

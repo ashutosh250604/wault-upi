@@ -240,6 +240,8 @@ export interface TransferResponse {
   note: string | null;
   /** Coins this payment drew — the amount the scratch card reveals. */
   coins_earned?: number;
+  /** The scratch card this payment drew, so its receipt can open the same one. */
+  coin_card_id?: number;
   /** Present only when this payment completed an offer. */
   rewards?: CreditedReward[];
 }
@@ -360,6 +362,8 @@ export interface RequestPaymentResponse {
   timestamp: string;
   /** Coins this payment drew — the amount the scratch card reveals. */
   coins_earned?: number;
+  /** The scratch card this payment drew, so its receipt can open the same one. */
+  coin_card_id?: number;
   /** Present only when paying the request completed an offer. */
   rewards?: CreditedReward[];
 }
@@ -377,6 +381,39 @@ export interface Receipt {
   coinsEarned?: number;
   /** Offers paid alongside this payment, shown as the reward line. */
   cashback?: CreditedReward[];
+  /** The scratch card this payment drew, so scratching it here closes it there. */
+  cardId?: number;
+}
+
+/**
+ * One scratch card: a payment's draw, and whether its cover has been lifted.
+ *
+ * The coins are the user's own — credited with the payment that drew them — so
+ * they travel with the card rather than being withheld: the cover is the
+ * screen's device, not a secret. `scratched` is what the collection remembers,
+ * so a card opened on the receipt does not come back covered.
+ */
+export interface ScratchCard {
+  id: number;
+  /** When the card was won. */
+  at: string;
+  /** What the card paid, or null for one whose payment is out of reach. */
+  coins: number | null;
+  scratched: boolean;
+  scratched_at: string | null;
+  /** The payment's reference, so a card can be traced to its receipt. */
+  reference: string | null;
+  /** Who the payment went to, when the payment is still on record. */
+  paid_to: string | null;
+  amount: number | null;
+  note: string | null;
+}
+
+/** The whole collection, newest first. */
+export interface ScratchCardCollection {
+  cards: ScratchCard[];
+  total: number;
+  unscratched: number;
 }
 
 /** Router state for the amount-entry screen. */

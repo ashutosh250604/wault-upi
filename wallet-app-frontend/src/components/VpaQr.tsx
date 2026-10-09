@@ -192,15 +192,17 @@ export function VpaQr({ vpa, name }: VpaQrProps) {
         </dl>
       </div>
 
-      {/* Perforation: the actions tear off the bottom of the slip. */}
+      {/* Perforation: the actions tear off the bottom of the slip. The two holes
+          are inked like the receipt's, so a torn edge is the same mark wherever
+          this app draws one. */}
       <div className="relative mt-5 border-t border-dashed border-ink-300 px-4 pt-4 pb-4">
         <span
           aria-hidden="true"
-          className="absolute -top-[7px] left-4 size-3.5 rounded-full border border-ink-300 bg-paper-50"
+          className="absolute -top-[7px] left-4 size-3.5 rounded-full border-[1.5px] border-ink-900 bg-ink-900"
         />
         <span
           aria-hidden="true"
-          className="absolute -top-[7px] right-4 size-3.5 rounded-full border border-ink-300 bg-paper-50"
+          className="absolute -top-[7px] right-4 size-3.5 rounded-full border-[1.5px] border-ink-900 bg-ink-900"
         />
         <div className="grid w-full grid-cols-3 gap-2">
           <Button

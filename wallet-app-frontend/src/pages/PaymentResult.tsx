@@ -2,9 +2,8 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDateTime } from "../lib/format";
 import { feedback } from "../lib/feedback";
-import { buildReceiptText } from "../lib/transactions";
 import { parseReceipt } from "../lib/routing";
-import { shareText } from "../lib/clipboard";
+import { api } from "../lib/api";
 import { useMemo } from "react";
 import { useToast } from "../hooks/toast";
 import { useAppSession } from "../session/context";
@@ -15,7 +14,7 @@ import { DetailRow } from "../components/ui/DetailRow";
 import { Coin } from "../components/ui/Coin";
 import { TILE_GLYPH } from "../lib/tiles";
 import { IconTile } from "../components/ui/IconTile";
-import { IconCheck, IconShare } from "../components/ui/Icons";
+import { IconCheck, IconSpark } from "../components/ui/Icons";
 import { ScratchSheet } from "../components/ScratchCard";
 
 export default function PaymentResultPage() {
@@ -55,19 +54,20 @@ export default function PaymentResultPage() {
 
   const isTopUp = receipt.kind === "topup";
   const headline = isTopUp ? "Money added" : "Payment successful";
-  const shareBody = buildReceiptText({
-    headline,
-    amount: receipt.amount,
-    counterpartyName: isTopUp ? "your wallet" : receipt.counterpartyName,
-    reference: receipt.reference,
-    timestamp: formatDateTime(receipt.timestamp),
-    note: receipt.note,
-  });
 
-  const onShare = async () => {
-    const result = await shareText({ title: "WAULT receipt", text: shareBody });
-    if (result === "copied") toast.success("Receipt copied to clipboard");
-    if (result === "failed") toast.error("Couldn't share the receipt");
+  /**
+   * The card has been opened on this screen, so say so.
+   *
+   * The reveal is local and instant; this only writes the fact down, which is
+   * what stops the card from coming back covered on the collection screen. A
+   * refusal is reported rather than swallowed — the user should know their
+   * scratch was not remembered — but it never blocks the receipt.
+   */
+  const onCardScratched = () => {
+    if (!receipt.cardId) return;
+    void api
+      .scratchCard(receipt.cardId)
+      .catch(() => toast.error("Couldn't save that scratch card"));
   };
 
   return (
@@ -142,11 +142,11 @@ export default function PaymentResultPage() {
           {/* Perforation marks, so the slip reads as something torn off. */}
           <span
             aria-hidden="true"
-            className="absolute -bottom-[7px] left-4 h-3.5 w-3.5 rounded-full border border-ink-200 bg-paper-50"
+            className="absolute -bottom-[7px] left-4 h-3.5 w-3.5 rounded-full border-[1.5px] border-ink-900 bg-ink-900"
           />
           <span
             aria-hidden="true"
-            className="absolute -bottom-[7px] right-4 h-3.5 w-3.5 rounded-full border border-ink-200 bg-paper-50"
+            className="absolute -bottom-[7px] right-4 h-3.5 w-3.5 rounded-full border-[1.5px] border-ink-900 bg-ink-900"
           />
         </div>
 
@@ -170,14 +170,16 @@ export default function PaymentResultPage() {
         ) : null}
 
         <div className="mt-6 grid w-full grid-cols-2 gap-2">
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={() => void onShare()}
-            leftIcon={<IconShare size={17} />}
-          >
-            Share
-          </Button>
+          <Link to="/scratch-cards" className="contents">
+            <Button
+              variant="secondary"
+              size="lg"
+              fullWidth
+              leftIcon={<IconSpark size={17} />}
+            >
+              Scratch Card
+            </Button>
+          </Link>
           <Link to="/home" replace className="contents">
             <Button size="lg" fullWidth>
               Done
@@ -211,6 +213,7 @@ export default function PaymentResultPage() {
         open={scratching}
         coins={coinsWon}
         onClose={() => setScratching(false)}
+        onScratched={onCardScratched}
       />
     </AppShell>
   );

@@ -87,6 +87,7 @@ export default function RequestsPage() {
             // coins get the same scratch card an ordinary transfer gets.
             coinsEarned: result.coins_earned,
             cashback: result.rewards,
+            cardId: result.coin_card_id,
           },
         },
       });

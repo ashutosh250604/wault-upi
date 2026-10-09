@@ -3,6 +3,7 @@ from sqlalchemy import or_, update
 from sqlalchemy.orm import aliased
 
 from ..coins import announce_payment as announce_coins
+from ..coins import card_for_transaction
 from ..directory import classify_identifier, find_payee
 from ..events import notify
 from ..extensions import db
@@ -176,6 +177,11 @@ def transfer():
     }
     if coins:
         payload["coins_earned"] = coins
+        # The card this payment drew, by id, so the receipt can hand over the
+        # same card and scratching it there clears it from the collection too.
+        card = card_for_transaction(sender_id, txn.id)
+        if card is not None:
+            payload["coin_card_id"] = card.id
     if credited:
         payload["rewards"] = credited_summary(credited)
     return jsonify(payload), 200

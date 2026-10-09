@@ -16,6 +16,7 @@ from ..ledger import TransferRefused, settle_transfer
 from ..models import Notification, PaymentRequest, User
 from ..money import paise_to_rupees, rupees_to_paise
 from ..coins import announce_payment as announce_coins
+from ..coins import card_for_transaction
 from ..rewards import credited_summary, settle_due
 from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
@@ -250,6 +251,11 @@ def pay_request(request_id):
         payload["rewards"] = credited_summary(credited)
     if coins:
         payload["coins_earned"] = coins
+        # Settling a request hands over the same card a direct payment does, so
+        # the receipt can scratch it and the collection screen knows it is done.
+        card = card_for_transaction(payer.id, txn.id)
+        if card is not None:
+            payload["coin_card_id"] = card.id
     return jsonify(payload), 200
 
 

@@ -27,7 +27,6 @@ class User(db.Model):
     # code is verified, or once the previous code has lapsed — see
     # `blueprints/auth.py`, which is the only writer.
     otp_requests = db.Column(db.Integer, nullable=False, default=0)
-
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(
         db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
@@ -361,6 +360,12 @@ class CoinAward(db.Model):
         db.Integer, db.ForeignKey("transactions.id"), nullable=True, unique=True
     )
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    # When the user lifted the cover on this card. Null means the coins are
+    # still hidden: a payment's draw is decided and credited the moment the
+    # payment settles, but the card over it is the telling, and the telling is
+    # the user's to do. Scratched rather than "revealed" because a card is only
+    # ever revealed by scratching it, or by asking the app to do it for you.
+    scratched_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
 

@@ -72,6 +72,12 @@ numbers and UPI IDs work with or without a camera.
   artwork on a canvas, scratched with the finger, and a twelfth of it is enough to lift by itself — the coins
   underneath are visible from the first stroke. The draw, the reveal and the balance are the
   server's; the card only decides how the number is told
+- **Every card you have won, in one place.** A payment's receipt hands over a scratch
+  card; the collection screen lists them newest first, with the ones still under their
+  cover drawn covered and scratchable again, and the scratched ones keeping what they
+  paid, the payment they came from and the date. The cover is remembered server-side, so
+  a card opened on a receipt does not come back covered — and `/api/scratch-cards` is
+  reachable from the coins sheet as well as from the receipt
 - **Offers that actually pay out.** Progress towards each offer is counted from the ledger, and
   the coins land *in the same commit as the payment that earned them* — no window where a payment
   succeeded and its reward silently did not, and a replay of the same payment can never pay twice
@@ -194,12 +200,15 @@ health checks.
 | GET | `/api/rewards` | Bearer | this account's offers with progress counted from the ledger |
 | GET | `/api/coins` | Bearer | the coin balance, what it is worth, and where the last few came from |
 | POST | `/api/coins/redeem` | Bearer | coins → wallet credit (the whole balance, 10 coins minimum) |
+| GET | `/api/scratch-cards` | Bearer | every card a payment has won, newest first |
+| POST | `/api/scratch-cards/<id>/scratch` | Bearer | record that a card's cover has been lifted |
 | GET | `/api/statements.pdf` | Bearer | the branded PDF statement |
 
 Coins ride along on the responses that earn them: `/api/transfer` and
-`/api/requests/<id>/pay` return `coins_earned` (this payment's draw) and `rewards`
-(any offer it completed, each with its `coins`), which is what the scratch card
-reveals. A new account's 50 coins are granted by `/api/verify_otp`, once.
+`/api/requests/<id>/pay` return `coins_earned` (this payment's draw), `coin_card_id`
+(the card that draw was handed over on) and `rewards` (any offer it completed,
+each with its `coins`), which is what the scratch card reveals. A new account's
+50 coins are granted by `/api/verify_otp`, once.
 
 ## Local development
 

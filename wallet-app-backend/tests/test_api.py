@@ -1204,6 +1204,104 @@ def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_au
     )
 
 
+def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
+    client, demo_auth
+):
+    """The card is the receipt's, the collection is the user's, and the two
+    are the same card."""
+    headers = demo_auth["headers"]
+    payee = client.post(
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
+    ).get_json()["user_id"]
+
+    # A payment that draws coins hands over the card it drew.
+    paid = client.post(
+        "/api/transfer",
+        json={"receiver_id": payee, "amount": 25, "note": "chai", "pin": PIN},
+        headers=headers,
+    ).get_json()
+    assert paid["coins_earned"] >= AWARD_MIN_COINS
+    card_id = paid["coin_card_id"]
+
+    collection = client.get("/api/scratch-cards", headers=headers).get_json()
+    assert collection["total"] == 1
+    assert collection["unscratched"] == 1
+    card = collection["cards"][0]
+    assert card["id"] == card_id
+    # The amount travels with an unscratched card — the cover is the screen's,
+    # and the coins were credited with the payment either way.
+    assert card["coins"] == paid["coins_earned"]
+    assert card["scratched"] is False
+    assert card["paid_to"] == "Meera Iyer"
+    assert card["amount"] == 25.0
+    assert card["reference"] == paid["txn_id"]
+    # Timezone-aware and the moment of the payment. A naive string on the wire
+    # is read as the browser's own zone, which put a card won at 11:40 pm IST on
+    # screen at 6:10 pm — the bug this assertion exists to keep out.
+    stamp = datetime.fromisoformat(card["at"])
+    assert stamp.tzinfo is not None
+    assert abs((utcnow() - stamp).total_seconds()) < 120
+
+    # Scratching reveals it, and moves no money: the draw was already credited.
+    balance_before = client.get("/api/coins", headers=headers).get_json()
+    scratched = client.post(f"/api/scratch-cards/{card_id}/scratch", headers=headers)
+    assert scratched.status_code == 200
+    assert scratched.get_json()["card"]["coins"] == paid["coins_earned"]
+    assert scratched.get_json()["card"]["scratched"] is True
+    after = client.get("/api/coins", headers=headers).get_json()
+    assert after["coins"] == balance_before["coins"]
+
+    # A second look at the same card is not a second prize.
+    again = client.post(f"/api/scratch-cards/{card_id}/scratch", headers=headers)
+    assert again.status_code == 200
+    assert again.get_json()["card"]["coins"] == paid["coins_earned"]
+
+    settled = client.get("/api/scratch-cards", headers=headers).get_json()
+    assert settled["unscratched"] == 0
+    assert settled["cards"][0]["coins"] == paid["coins_earned"]
+
+    # A top-up draws no coins, so it hands over no card.
+    topped = client.post(
+        "/api/topup", json={"user_id": demo_auth["user_id"], "amount": 50}, headers=headers
+    ).get_json()
+    assert "coin_card_id" not in topped
+    assert client.get("/api/scratch-cards", headers=headers).get_json()["total"] == 1
+
+
+def test_scratch_cards_are_owner_scoped_and_need_a_token(client, demo_auth):
+    """Someone else's card is not a card you can open."""
+    headers = demo_auth["headers"]
+    payee = client.post(
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
+    ).get_json()["user_id"]
+    card_id = client.post(
+        "/api/transfer",
+        json={"receiver_id": payee, "amount": 25, "pin": PIN},
+        headers=headers,
+    ).get_json()["coin_card_id"]
+
+    assert client.get("/api/scratch-cards").status_code == 401
+
+    stranger = onboard(client, "9000000931", "Card Thief")
+    assert client.get("/api/scratch-cards", headers=stranger["headers"]).get_json()["total"] == 0
+    # 404 rather than 403: the collection is not a way to confirm which ids exist.
+    assert (
+        client.post(
+            f"/api/scratch-cards/{card_id}/scratch", headers=stranger["headers"]
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post("/api/scratch-cards/999999/scratch", headers=headers).status_code == 404
+    )
+
+    # The wallet that owns it can still open it.
+    assert (
+        client.post(f"/api/scratch-cards/{card_id}/scratch", headers=headers).status_code
+        == 200
+    )
+
+
 def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth, app):
     headers = demo_auth["headers"]
     user_id = demo_auth["user_id"]

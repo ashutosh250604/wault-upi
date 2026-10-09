@@ -12,7 +12,14 @@ here, only a redemption writes anything at all.
 
 from flask import Blueprint, g, jsonify, request
 
-from ..coins import CoinError, redeem, snapshot
+from ..coins import (
+    CoinError,
+    card_collection,
+    card_view,
+    redeem,
+    scratch_card,
+    snapshot,
+)
 from ..extensions import db
 from ..models import Notification, Wallet
 from ..money import paise_to_rupees
@@ -145,6 +152,40 @@ def coin_snapshot():
     to be kept up to date or reconciled.
     """
     return jsonify(snapshot(g.user_id)), 200
+
+
+@bp.get("/scratch-cards")
+@require_auth
+def list_scratch_cards():
+    """Every scratch card the user holds, newest first.
+
+    A pure read, and a card that has not been scratched deliberately does not
+    carry its coins: the cover is the point of the card, and the collection
+    screen exists to show which ones are still to be opened.
+    """
+    return jsonify(card_collection(g.user_id)), 200
+
+
+@bp.post("/scratch-cards/<int:card_id>/scratch")
+@require_auth
+def scratch_scratch_card(card_id):
+    """Reveal one card's coins.
+
+    Nothing moves here — the draw was credited with the payment that won it, in
+    that payment's own commit. This writes down only that the user has seen it,
+    which is what takes the card out of the unscratched pile; a card that is
+    already scratched, or is not the caller's, is refused rather than stamped.
+    """
+    try:
+        card = scratch_card(g.user_id, card_id)
+    except CoinError as refusal:
+        return jsonify({"message": refusal.message}), refusal.status
+
+    db.session.commit()
+    return (
+        jsonify({"card": card_view(g.user_id, card), "coins": snapshot(g.user_id)}),
+        200,
+    )
 
 
 @bp.post("/coins/redeem")
