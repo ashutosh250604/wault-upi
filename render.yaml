@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: upi-wallet-app
+    name: wault-upi
     runtime: docker
     plan: free
     dockerfilePath: ./wallet-app-backend/Dockerfile
