@@ -16,7 +16,7 @@ const SAMPLE_MOBILE = "9000000001";
 const SAMPLE_PIN = "1234";
 // The second seeded user, so a visitor can pay a real counterparty immediately.
 const SAMPLE_PAYEE = "9000000002@okwault";
-const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
+const REPO_URL = "https://github.com/ashutosh250604/wault-upi";
 
 export default function LoginPage() {
   const navigate = useNavigate();

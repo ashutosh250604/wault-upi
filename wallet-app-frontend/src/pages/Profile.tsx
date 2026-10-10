@@ -36,7 +36,7 @@ import {
   IconWarning,
 } from "../components/ui/Icons";
 
-const REPO_URL = "https://github.com/ashutosh250604/upi-wallet-app";
+const REPO_URL = "https://github.com/ashutosh250604/wault-upi";
 
 /** "28 minutes" / "1h 5m" — a 30-minute session reads badly as "0h 28m". */
 function countdown(minutes: number): string {
