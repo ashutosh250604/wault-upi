@@ -44,6 +44,43 @@ def onboard(client, mobile, name):
     return {"headers": headers, "user_id": payload["user_id"]}
 
 
+def claim_every_card(client, headers):
+    """Scratch every card still under a cover, returning the coins they paid.
+
+    A card is what a payout arrives as, and the coin balance moves only when it
+    is scratched — so a test about what a payout is worth has to open the cards
+    that payout produced, exactly as a user does. Returns the total credited, so
+    a caller can check it against what it expected the payouts to be.
+    """
+    credited = 0
+    for card in client.get("/api/scratch-cards", headers=headers).get_json()["cards"]:
+        if card["scratched"]:
+            continue
+        body = client.post(
+            f"/api/scratch-cards/{card['id']}/scratch", headers=headers
+        ).get_json()
+        credited += body["credited"]
+    return credited
+
+
+def grant_claimed(app, client, headers, user_id, amount):
+    """Write an award and claim it, which is the only way coins reach a balance.
+
+    `coins.grant` records a draw; the card over it is what counts the coins. A
+    test that wants an exact balance therefore has to do both halves, and this
+    does — through the same endpoint a user's scratch goes through.
+    """
+    with app.app_context():
+        award = CoinAward(user_id=user_id, coins=amount, reason=CoinAward.REASON_PAYMENT)
+        db.session.add(award)
+        db.session.commit()
+        card_id = award.id
+
+    body = client.post(f"/api/scratch-cards/{card_id}/scratch", headers=headers).get_json()
+    assert body["credited"] == amount
+    return body["coins"]
+
+
 def test_health(client):
     response = client.get("/healthz")
     assert response.status_code == 200
@@ -170,8 +207,20 @@ def test_topup_then_transfer(client, demo_auth):
     # moves the coin balance, and the wallet balance is only the top-up.
     assert topup.get_json()["new_balance"] == 6000.0
     assert topup.get_json()["rewards"] == [
-        {"code": "first_topup", "title": "25 coins", "coins": 25, "amount": 25.0}
+        {
+            "code": "first_topup",
+            "title": "25 coins",
+            "headline": "On your first top-up",
+            "coins": 25,
+            "amount": 25.0,
+        }
     ]
+    # Two cards and no coins: the welcome bonus and the offer are decided and
+    # stored, and neither counts until it is scratched.
+    pending = client.get("/api/coins", headers=headers).get_json()
+    assert pending["coins"] == 0
+    assert pending["cards_waiting"] == 2
+    assert claim_every_card(client, headers) == SIGNUP_BONUS_COINS + 25
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == (
         SIGNUP_BONUS_COINS + 25
     )
@@ -405,6 +454,10 @@ def test_request_lifecycle_ends_in_a_real_transfer(client, demo_auth):
         ]
         == 5300.0
     )
+    # The welcome bonus and the "when someone pays you" offer are cards; the
+    # offer's 10 coins count when Aarav scratches them.
+    assert client.get("/api/coins", headers=aarav["headers"]).get_json()["coins"] == 0
+    assert claim_every_card(client, aarav["headers"]) == SIGNUP_BONUS_COINS + 10
     assert client.get("/api/coins", headers=aarav["headers"]).get_json()["coins"] == (
         SIGNUP_BONUS_COINS + 10
     )
@@ -1180,12 +1233,12 @@ def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_au
     assert client.get("/api/limits").status_code == 401
 
     # The stranger's inbox holds only their own news — signing in, setting a PIN,
-    # and the welcome bonus every new account is handed — and none of Aarav's
-    # ledger activity leaks across.
+    # and the welcome scratch card every new account is handed — and none of
+    # Aarav's ledger activity leaks across.
     stranger_inbox = client.get("/api/notifications", headers=stranger["headers"]).get_json()
     assert {row["kind"] for row in stranger_inbox["notifications"]} == {
         "security",
-        "reward",
+        "scratch_card",
     }
     assert all(row["id"] != aarav_note for row in stranger_inbox["notifications"])
     assert all(row["amount"] is None for row in stranger_inbox["notifications"])
@@ -1205,24 +1258,33 @@ def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_au
     )
 
 
-def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
+def test_a_payment_hands_over_a_scratch_card_that_pays_when_it_is_scratched(
     client, demo_auth
 ):
-    """The card is the receipt's, the collection is the user's, and the two
-    are the same card."""
+    """The card is the receipt's, the collection is the user's, the two are the
+    same card — and it pays once, when it is opened."""
     headers = demo_auth["headers"]
     payee = client.post(
         "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
     ).get_json()["user_id"]
 
-    # A payment that draws coins hands over the card it drew.
+    before = client.get("/api/coins", headers=headers).get_json()
+
+    # A payment that draws a card hands over the card, and says nothing else:
+    # what it drew is under the cover.
     paid = client.post(
         "/api/transfer",
         json={"receiver_id": payee, "amount": 25, "note": "chai", "pin": PIN},
         headers=headers,
     ).get_json()
-    assert paid["coins_earned"] >= AWARD_MIN_COINS
+    assert paid["scratch_card_waiting"] is True
+    assert "coins_earned" not in paid
     card_id = paid["coin_card_id"]
+
+    # The balance has not moved. A draw nobody has been shown is not money.
+    unopened = client.get("/api/coins", headers=headers).get_json()
+    assert unopened["coins"] == before["coins"]
+    assert unopened["cards_waiting"] == before["cards_waiting"] + 1
 
     collection = client.get("/api/scratch-cards", headers=headers).get_json()
     # Every award is a card: this payment's draw and the welcome bonus the
@@ -1231,9 +1293,9 @@ def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
     assert collection["unscratched"] == 2
     card = next(item for item in collection["cards"] if item["id"] == card_id)
     assert collection["cards"][0]["reference"] == paid["txn_id"]  # newest first
-    # The amount travels with an unscratched card — the cover is the screen's,
-    # and the coins were credited with the payment either way.
-    assert card["coins"] == paid["coins_earned"]
+    # ...and the amount is not on the wire either, so a covered card cannot hand
+    # its prize over — not to a response, a screenshot or a failed cover.
+    assert card["coins"] is None
     assert card["scratched"] is False
     assert card["paid_to"] == "Meera Iyer"
     assert card["amount"] == 25.0
@@ -1245,32 +1307,41 @@ def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
     assert stamp.tzinfo is not None
     assert abs((utcnow() - stamp).total_seconds()) < 120
 
-    # Scratching reveals it, and moves no money: the draw was already credited.
-    balance_before = client.get("/api/coins", headers=headers).get_json()
+    # The scratch is the claim, and the only thing that counts the coins: the
+    # amount arrives in this response, and the balance moves by exactly it.
     scratched = client.post(f"/api/scratch-cards/{card_id}/scratch", headers=headers)
     assert scratched.status_code == 200
-    assert scratched.get_json()["card"]["coins"] == paid["coins_earned"]
-    assert scratched.get_json()["card"]["scratched"] is True
-    after = client.get("/api/coins", headers=headers).get_json()
-    assert after["coins"] == balance_before["coins"]
+    claimed = scratched.get_json()
+    won = claimed["card"]["coins"]
+    assert won is not None and AWARD_MIN_COINS <= won <= AWARD_MAX_COINS
+    assert claimed["card"]["scratched"] is True
+    assert claimed["credited"] == won
+    assert claimed["coins"]["coins"] == unopened["coins"] + won
+    assert claimed["coins"]["cards_waiting"] == 1  # the welcome bonus is left
 
-    # A second look at the same card is not a second prize.
+    # A second look at the same card is not a second prize: the same amount, and
+    # nothing credited again.
     again = client.post(f"/api/scratch-cards/{card_id}/scratch", headers=headers)
     assert again.status_code == 200
-    assert again.get_json()["card"]["coins"] == paid["coins_earned"]
+    assert again.get_json()["card"]["coins"] == won
+    assert again.get_json()["credited"] == 0
+    assert again.get_json()["coins"]["coins"] == unopened["coins"] + won
 
     settled = client.get("/api/scratch-cards", headers=headers).get_json()
     assert settled["unscratched"] == 1  # the welcome bonus, still under its cover
     payment_card = next(item for item in settled["cards"] if item["id"] == card_id)
-    assert payment_card["coins"] == paid["coins_earned"]
+    assert payment_card["coins"] == won
 
     bonus = next(item for item in settled["cards"] if item["reason"] == "signup")
     assert bonus["caption"] == "Welcome bonus"
-    assert bonus["coins"] == SIGNUP_BONUS_COINS
+    assert bonus["coins"] is None  # decided, and not a word of it on the wire
     assert bonus["reference"] is None and bonus["amount"] is None
+    opened = client.post(f"/api/scratch-cards/{bonus['id']}/scratch", headers=headers)
+    assert opened.status_code == 200
+    assert opened.get_json()["credited"] == SIGNUP_BONUS_COINS
     assert (
-        client.post(f"/api/scratch-cards/{bonus['id']}/scratch", headers=headers).status_code
-        == 200
+        opened.get_json()["coins"]["coins"]
+        == unopened["coins"] + won + SIGNUP_BONUS_COINS
     )
 
     # A top-up draws no coins, so it hands over no card.
@@ -1286,6 +1357,117 @@ def test_a_payment_hands_over_a_scratch_card_that_remembers_being_scratched(
     assert waiting, "a payment that drew coins writes a note about its card"
     assert waiting[0]["title"] == "A scratch card is waiting"
     assert "Meera Iyer" in waiting[0]["body"]
+
+
+def test_a_card_counts_only_when_it_is_scratched_and_only_once(client):
+    """The reward lifecycle, end to end, in one place.
+
+    A payment generates a card, the card is listed, nothing is credited and no
+    amount is anywhere until it is scratched, the scratch credits it exactly
+    once, and the scratch is remembered. A top-up below the offer threshold is
+    used so that the only cards in play are the payment's draw and the welcome
+    bonus — otherwise this test would be asserting the offer's arithmetic too.
+    """
+    payer = fresh_payer(client, "9000000911", "Lifecycle Payer", topup_rupees=50)
+    headers = payer["headers"]
+    payee = onboard(client, "9000000912", "Lifecycle Payee")
+
+    payment = client.post(
+        "/api/transfer",
+        json={"receiver_id": payee["user_id"], "amount": 12, "pin": PIN},
+        headers=headers,
+    ).get_json()
+    card_id = payment["coin_card_id"]
+
+    # 1-4: the card exists, and the amount is nowhere near the client.
+    listed = client.get("/api/scratch-cards", headers=headers).get_json()
+    assert listed["total"] == 2
+    assert listed["unscratched"] == 2
+    assert all(card["coins"] is None for card in listed["cards"])
+
+    # 4-5: the dashboard does not move when the card is generated.
+    chip = client.get("/api/coins", headers=headers).get_json()
+    assert chip["coins"] == 0
+    assert chip["earned"] == 0
+    assert chip["redeemable"] == 0
+    assert chip["awards"] == []
+    assert chip["cards_waiting"] == 2
+
+    # 6-7: the scratch credits it, and the fresh balance comes back with it.
+    claimed = client.post(
+        f"/api/scratch-cards/{card_id}/scratch", headers=headers
+    ).get_json()
+    won = claimed["card"]["coins"]
+    assert won is not None and 1 <= won <= AWARD_MAX_COINS
+    assert claimed["credited"] == won
+    assert claimed["coins"]["coins"] == won
+    assert claimed["coins"]["awards"] == [
+        {"coins": won, "reason": "payment", "label": "Payment rewarded", "at": claimed["coins"]["awards"][0]["at"]}
+    ]
+
+    # 6b: and not twice. A repeat is the same card, not a second prize.
+    repeat = client.post(
+        f"/api/scratch-cards/{card_id}/scratch", headers=headers
+    ).get_json()
+    assert repeat["credited"] == 0
+    assert repeat["coins"]["coins"] == won
+
+    # 8: revisiting shows the state it was left in — cover off, amount still there.
+    again = client.get("/api/scratch-cards", headers=headers).get_json()
+    reopened = next(card for card in again["cards"] if card["id"] == card_id)
+    assert reopened["scratched"] is True
+    assert reopened["coins"] == won
+    assert reopened["scratched_at"]
+    assert again["unscratched"] == 1
+
+    # A claim for a card that does not exist is refused and moves nothing.
+    before = client.get("/api/coins", headers=headers).get_json()["coins"]
+    assert (
+        client.post("/api/scratch-cards/987654/scratch", headers=headers).status_code == 404
+    )
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == before
+
+
+def test_two_claims_of_one_card_credit_it_once(client, demo_auth, app):
+    """The claim is atomic, so a race cannot pay for one card twice.
+
+    The endpoint test covers a second tap arriving later. This covers the same
+    instant: two claims of one card inside one session, which is what a refresh
+    and a swipe landing together look like to the database. Only the claim that
+    changes the row may count the coins — `claim_card` does the lift as a
+    conditional UPDATE and reads the row count, rather than a read-then-write
+    where both callers would see an unclaimed card and both would credit it.
+    """
+    headers = demo_auth["headers"]
+    user_id = demo_auth["user_id"]
+    payee = client.post(
+        "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
+    ).get_json()["user_id"]
+    card_id = client.post(
+        "/api/transfer",
+        json={"receiver_id": payee, "amount": 5, "pin": PIN},
+        headers=headers,
+    ).get_json()["coin_card_id"]
+
+    with app.app_context():
+        card, first = coins.claim_card(user_id, card_id)
+        assert first == card.coins
+        assert first >= AWARD_MIN_COINS
+
+        _, second = coins.claim_card(user_id, card_id)
+        assert second == 0
+        db.session.commit()
+
+    # One card, one prize: the balance equals the one credit.
+    wallet = client.get("/api/coins", headers=headers).get_json()
+    assert wallet["coins"] == first
+    with app.app_context():
+        award = db.session.get(CoinAward, card_id)
+        assert award.scratched_at is not None
+        assert sum(
+            row.coins
+            for row in CoinAward.query.filter(CoinAward.claimed_at.isnot(None)).all()
+        ) == first
 
 
 def test_an_offer_pays_out_as_a_card_with_its_own_caption(client, demo_auth):
@@ -1306,10 +1488,17 @@ def test_an_offer_pays_out_as_a_card_with_its_own_caption(client, demo_auth):
     assert collection["total"] == before + 1
     offer_card = collection["cards"][0]
     assert offer_card["caption"] == "On your first top-up"
-    assert offer_card["coins"] == 25
+    assert offer_card["coins"] is None  # under its cover like every other card
     assert offer_card["scratched"] is False
     assert offer_card["paid_to"] is None
     assert offer_card["reason"] == "offer:first_topup"
+
+    # An offer's payout is claimed exactly like a payment's draw.
+    opened = client.post(
+        f"/api/scratch-cards/{offer_card['id']}/scratch", headers=headers
+    ).get_json()
+    assert opened["credited"] == 25
+    assert opened["card"]["coins"] == 25
 
 
 def test_scratch_cards_are_owner_scoped_and_need_a_token(client, demo_auth):
@@ -1385,7 +1574,10 @@ def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth, 
     assert after["first_topup"]["reward"] == 25.0
 
     # The payout is a real coin award, tagged with the offer that made it —
-    # which is what keeps the coin balance one sum of one log.
+    # which is what keeps the coin balance one sum of one log — and it reaches
+    # the balance the way every payout does, by being scratched.
+    assert client.get("/api/coins", headers=headers).get_json()["coins"] == 0
+    assert claim_every_card(client, headers) == SIGNUP_BONUS_COINS + 25
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == (
         SIGNUP_BONUS_COINS + 25
     )
@@ -1448,7 +1640,13 @@ def test_the_third_payment_credits_fifty_coins_and_a_refusal_credits_nothing(
     assert "rewards" not in answers[0]
     assert "rewards" not in answers[1]
     assert answers[2]["rewards"] == [
-        {"code": "three_payments", "title": "50 coins", "coins": 50, "amount": 50.0}
+        {
+            "code": "three_payments",
+            "title": "50 coins",
+            "headline": "On your next 3 payments",
+            "coins": 50,
+            "amount": 50.0,
+        }
     ]
     # 5000 + 1000 top-up - 60 paid. Neither offer moved the wallet: the welcome
     # bonus, the ₹25 top-up offer and the ₹50 payments offer are all coins.
@@ -1548,29 +1746,39 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
     started = client.get("/api/coins", headers=headers).get_json()
     assert started["coin_value"] == 1.0
     assert started["min_redeem"] == 10
-    # A brand-new account holds two things and no more: the welcome bonus, and
-    # the 25 coins the ₹500 `fresh_payer` top-up earned for the first-top-up
-    # offer — the same top-up that put the offers in play, counted rather than
-    # discarded (see `settle_due`).
-    assert started["coins"] == SIGNUP_BONUS_COINS + 25
-    assert [row["reason"] for row in started["awards"]] == [
-        "offer:first_topup",
-        "signup",
-    ]
+    # A brand-new account holds two cards and no coins: the welcome bonus, and
+    # the 25 the ₹500 `fresh_payer` top-up earned for the first-top-up offer —
+    # the same top-up that put the offers in play, counted rather than
+    # discarded (see `settle_due`). Neither is spendable until it is scratched,
+    # so nothing of either is in the balance, the history or the total yet.
+    assert started["coins"] == 0
+    assert started["cards_waiting"] == 2
+    assert started["awards"] == []
 
-    awarded = 0
-    drawn: list[int] = []
+    # Four payments, each drawing a card and saying nothing about it.
     for _ in range(4):
         answer = client.post(
             "/api/transfer",
             json={"receiver_id": payee["user_id"], "amount": 5, "pin": PIN},
             headers=headers,
         ).get_json()
-        earned = answer["coins_earned"]
-        assert AWARD_MIN_COINS <= earned <= AWARD_MAX_COINS
-        drawn.append(earned)
-        awarded += earned
+        assert answer["scratch_card_waiting"] is True
+        assert "coins_earned" not in answer
 
+    # The draws are on record before anybody has looked at them...
+    with app.app_context():
+        rows = CoinAward.query.filter_by(
+            user_id=payer["user_id"], reason=CoinAward.REASON_PAYMENT
+        ).all()
+        assert len(rows) == 4
+        assert len({row.transaction_id for row in rows}) == 4
+        drawn = [row.coins for row in rows]
+        awarded = sum(drawn)
+        assert all(AWARD_MIN_COINS <= value <= AWARD_MAX_COINS for value in drawn)
+
+    # ...and it is scratching them that pays: the balance is exactly what the
+    # cards were worth, once each.
+    assert claim_every_card(client, headers) == SIGNUP_BONUS_COINS + 25 + awarded + 50
     after = client.get("/api/coins", headers=headers).get_json()
     # Four draws and the 50-coin offer the third payment completed, all on top
     # of the welcome bonus and the top-up offer.
@@ -1578,8 +1786,9 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
     assert (
         after["coins"]
         == after["earned"] - after["redeemed"]
-        == started["coins"] + awarded + 50
+        == started["coins"] + awarded + 50 + SIGNUP_BONUS_COINS + 25
     )
+    assert after["cards_waiting"] == 0
     # The award history reads newest first — this test's four payments, and the
     # offer the third of them completed — and each row says where it came from.
     assert [(row["reason"], row["coins"]) for row in after["awards"]] == [
@@ -1596,17 +1805,6 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
         "Payment rewarded",
     ]
 
-    # One award per payment, keyed to the transaction that earned it — which is
-    # what stops a retry paying for the same transfer twice.
-    with app.app_context():
-        rows = CoinAward.query.filter_by(
-            user_id=payer["user_id"], reason=CoinAward.REASON_PAYMENT
-        ).all()
-        assert len(rows) == 4
-        assert len({row.transaction_id for row in rows}) == 4
-        assert [row.coins for row in rows] == drawn
-        assert sum(row.coins for row in rows) == awarded
-
     # A top-up is money arriving, not a payment made, so it earns nothing.
     coins_before = after["coins"]
     client.post(
@@ -1614,12 +1812,15 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
     )
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == coins_before
 
-    # Earning coins writes to the inbox, in the same commit as the payment.
-    kinds = [
-        row["kind"]
-        for row in client.get("/api/notifications", headers=headers).get_json()["notifications"]
-    ]
-    assert "reward" in kinds
+    # A draw writes to the inbox, in the same commit as the payment — and says
+    # only that a card is waiting, never what it is worth.
+    notes = client.get("/api/notifications", headers=headers).get_json()["notifications"]
+    kinds = [row["kind"] for row in notes]
+    assert "scratch_card" in kinds
+    waiting = [row for row in notes if row["kind"] == "scratch_card"]
+    assert waiting and all("scratch" in row["body"].lower() for row in waiting)
+    assert all(row["amount"] is None for row in waiting)
+    assert all(str(value) not in row["title"] for row in waiting for value in drawn if value > 5)
 
 
 def test_the_award_draw_is_small_most_of_the_time_but_reaches_fifty(app):
@@ -1660,8 +1861,9 @@ def test_coins_redeem_into_the_wallet_and_cannot_be_spent_twice(client):
     user_id = payer["user_id"]
     payee = onboard(client, "9000000942", "Redeem Payee")
 
-    # Pay until the balance clears the minimum. The payout is random, so the
-    # number of payments it takes is not fixed — the balance is what matters.
+    # Pay and scratch until the balance clears the minimum. The payout is
+    # random, so the number of payments it takes is not fixed — the balance is
+    # what matters, and it only moves for the cards that have been opened.
     for _ in range(60):
         if client.get("/api/coins", headers=headers).get_json()["coins"] >= 10:
             break
@@ -1673,6 +1875,7 @@ def test_coins_redeem_into_the_wallet_and_cannot_be_spent_twice(client):
             ).status_code
             == 200
         )
+        claim_every_card(client, headers)
 
     before = client.get("/api/coins", headers=headers).get_json()
     assert before["coins"] >= 10
@@ -1735,14 +1938,14 @@ def test_redemption_pays_out_the_whole_balance_at_a_rupee_a_coin(client, app):
 
     # Start from an empty coin balance: the welcome bonus is real coins, and
     # clearing it through the API is how any account ends up holding nothing.
+    # It has to be scratched first — that is what puts it in the balance at all.
+    assert claim_every_card(client, headers) == SIGNUP_BONUS_COINS
     cleared = client.post("/api/coins/redeem", json={}, headers=headers)
     assert cleared.status_code == 200
     assert cleared.get_json()["coins_redeemed"] == SIGNUP_BONUS_COINS
 
     for held, expected in ((11, 11.0), (37, 37.0)):
-        with app.app_context():
-            coins.grant(user_id, held)
-            db.session.commit()
+        grant_claimed(app, client, headers, user_id, held)
 
         before = client.get("/api/coins", headers=headers).get_json()
         assert before["coins"] == held
@@ -1766,9 +1969,7 @@ def test_redemption_pays_out_the_whole_balance_at_a_rupee_a_coin(client, app):
         assert balance_after == balance_before + expected
 
     # Nine coins are still short of the gate, named amount or not.
-    with app.app_context():
-        coins.grant(user_id, 9)
-        db.session.commit()
+    grant_claimed(app, client, headers, user_id, 9)
     short = client.post("/api/coins/redeem", json={}, headers=headers)
     assert short.status_code == 400
     assert "10 are needed" in short.get_json()["message"]
@@ -1796,7 +1997,10 @@ def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
         headers=headers,
     )
 
-    held = SIGNUP_BONUS_COINS + 1
+    # Scratch the two cards the account is holding — the welcome bonus and the
+    # one-coin draw just made — because that is what puts them in the balance.
+    held = claim_every_card(client, headers)
+    assert held == SIGNUP_BONUS_COINS + 1
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == held
 
     # A named amount is not a menu: a redemption takes the whole balance, so
@@ -1818,9 +2022,7 @@ def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
 
     # A balance under the minimum is refused with the shortfall rather than a
     # shrug, and the refusal names the gate it has to clear.
-    with app.app_context():
-        coins.grant(payer["user_id"], 4)
-        db.session.commit()
+    grant_claimed(app, client, headers, payer["user_id"], 4)
     short = client.post("/api/coins/redeem", json={}, headers=headers)
     assert short.status_code == 400
     assert "10 are needed" in short.get_json()["message"]
@@ -1845,7 +2047,27 @@ def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
     user_id = payload["user_id"]
 
     assert SIGNUP_BONUS_COINS == 50
-    first = client.get("/api/coins", headers=headers).get_json()
+    # The bonus arrives as a card. It is decided and stored at sign-up, and the
+    # balance does not know about it — nor does the client, which is why the
+    # amount is absent rather than merely undrawn.
+    held = client.get("/api/coins", headers=headers).get_json()
+    assert held["coins"] == 0
+    assert held["redeemable"] == 0
+    assert held["awards"] == []
+    assert held["cards_waiting"] == 1
+
+    cards = client.get("/api/scratch-cards", headers=headers).get_json()
+    assert cards["total"] == 1
+    assert cards["cards"][0]["reason"] == "signup"
+    assert cards["cards"][0]["caption"] == "Welcome bonus"
+    assert cards["cards"][0]["coins"] is None
+
+    # The scratch is the claim, and it is what makes the coins real.
+    scratched = client.post(
+        f"/api/scratch-cards/{cards['cards'][0]['id']}/scratch", headers=headers
+    ).get_json()
+    assert scratched["credited"] == SIGNUP_BONUS_COINS
+    first = scratched["coins"]
     assert first["coins"] == 50
     assert first["value"] == 50.0
     assert first["redeemable"] == 50
@@ -1866,7 +2088,9 @@ def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
             "notifications"
         ]
     ]
-    assert "50 coin welcome bonus" in titles
+    assert "A welcome scratch card is waiting" in titles
+    # Not one of them names the amount: the card is the only place it exists.
+    assert not any("50" in title for title in titles)
 
     # Two more sign-ins. The bonus is not a sign-in bonus.
     for _ in range(2):

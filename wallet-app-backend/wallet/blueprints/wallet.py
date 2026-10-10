@@ -3,7 +3,6 @@ from sqlalchemy import or_, update
 from sqlalchemy.orm import aliased
 
 from ..coins import announce_payment as announce_coins
-from ..coins import card_for_transaction
 from ..directory import classify_identifier, find_payee
 from ..events import notify
 from ..extensions import db
@@ -161,10 +160,12 @@ def transfer():
     # payer's are reported back, because only the payer is reading this response.
     credited = settle_due(sender_id, txn.timestamp)
     settle_due(receiver_id, txn.timestamp)
-    # Every payment draws coins, and a large draw is the point of the scheme.
-    # Queued here, in the same commit as the payment itself, so a payment can't
-    # succeed and its coins silently not exist.
-    coins = announce_coins(sender_id, txn.id, txn.timestamp)
+    # Every payment draws a card, and a large draw is the point of the scheme.
+    # The draw is queued here, in the same commit as the payment itself, so a
+    # payment can't succeed and its card silently not exist — but the amount is
+    # not in this payload. The card holds it until it is scratched, so the
+    # receipt is told only that a card is waiting, never what it is worth.
+    card = announce_coins(sender_id, txn.id, txn.timestamp)
     db.session.commit()
 
     payload = {
@@ -175,13 +176,11 @@ def transfer():
         "txn_id": txn.reference,
         "note": note,
     }
-    if coins:
-        payload["coins_earned"] = coins
+    if card is not None:
         # The card this payment drew, by id, so the receipt can hand over the
         # same card and scratching it there clears it from the collection too.
-        card = card_for_transaction(sender_id, txn.id)
-        if card is not None:
-            payload["coin_card_id"] = card.id
+        payload["coin_card_id"] = card.id
+        payload["scratch_card_waiting"] = True
     if credited:
         payload["rewards"] = credited_summary(credited)
     return jsonify(payload), 200

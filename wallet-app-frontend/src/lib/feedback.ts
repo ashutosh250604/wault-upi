@@ -21,12 +21,16 @@
  *   `requested`       money was asked for. Two even knocks at the same pitch —
  *                     a question, with no resolution in it, because nothing has
  *                     moved yet.
- *   `coins`           coins were counted out as a payment's reward lands (the
- *                     scratch card revealing). The one cue allowed to be a
- *                     tiny flourish.
+ *   `scratch`         a finger is dragging across a scratch card's cover. Shaped
+ *                     noise rather than a tone — paper, not a beep — and short
+ *                     enough to repeat under a stroke without turning into a
+ *                     machine gun.
+ *   `reward`          a card was claimed and its coins are in the balance. One
+ *                     warm note with a coin settling on it, once per card: the
+ *                     reveal is the answer to the scratch, not a fanfare.
  *   `redeemed`        coins were paid out into the wallet. Its own cue rather
- *                     than `coins`, because a redemption is money arriving
- *                     rather than a reward being counted.
+ *                     than `reward`, because a redemption is money arriving
+ *                     rather than a prize being counted.
  *   `error` / `warn`  refused, and gently refused.
  *
  * ## Supplied recordings
@@ -57,7 +61,8 @@ export type SoundCue =
   | "paid"
   | "received"
   | "requested"
-  | "coins"
+  | "scratch"
+  | "reward"
   | "redeemed";
 
 /**
@@ -153,6 +158,52 @@ function tone(
     oscillator.connect(gain).connect(ctx.destination);
     oscillator.start(start);
     oscillator.stop(end + 0.02);
+  } catch {
+    // Audio is a nicety — never let it break an interaction.
+  }
+}
+
+/**
+ * A short burst of shaped noise, swept through a band-pass filter.
+ *
+ * The one sound an oscillator cannot make is a surface: a tone has a pitch, and
+ * a finger on paper does not. So this fills a buffer with noise, fades it with
+ * a squared curve (a stroke starting and dying away, rather than a gate opening
+ * and closing) and moves the filter across the burst while it plays — which is
+ * what turns "static" into "dragging".
+ */
+function noise(
+  durationMs: number,
+  options: { from: number; to: number; gain?: number; q?: number },
+): void {
+  const ctx = context();
+  if (!ctx) return;
+  try {
+    const frames = Math.max(1, Math.round((ctx.sampleRate * durationMs) / 1000));
+    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let index = 0; index < frames; index += 1) {
+      const envelope = 1 - index / frames;
+      samples[index] = (Math.random() * 2 - 1) * envelope * envelope;
+    }
+
+    const start = ctx.currentTime;
+    const end = start + durationMs / 1000;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = options.q ?? 0.9;
+    filter.frequency.setValueAtTime(options.from, start);
+    filter.frequency.linearRampToValueAtTime(options.to, end);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(options.gain ?? 0.05, start);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    source.connect(filter).connect(gain).connect(ctx.destination);
+    source.start(start);
   } catch {
     // Audio is a nicety — never let it break an interaction.
   }
@@ -310,27 +361,35 @@ export const feedback = {
   },
 
   /**
-   * Coins counted out onto the receipt: four falls, each a wooden "tuk" with a
-   * metallic ring on top, close enough together to read as "tuk tuk tuk".
+   * A finger dragging across a scratch card's cover.
    *
-   * Gains stay under 0.05 and the sequence is short on purpose — the target is
-   * "satisfying", not a slot machine.
+   * The gesture, not the prize: a paper stroke of shaped noise, low and damped,
+   * 150 ms long. It is deliberately the quietest cue in the vocabulary and the
+   * only one with no vibration — a stroke is continuous, and buzzing on every
+   * sample of a drag would be a rattle in the hand.
+   *
+   * `cue`'s gap means one stroke cannot retrigger it more than every 160 ms, so
+   * rubbing faster reads as continuous scratching rather than as a stutter.
    */
-  coins(): void {
+  scratch(): void {
+    cue("scratch", () => noise(150, { from: 850, to: 2400, gain: 0.038, q: 0.8 }));
+  },
+
+  /**
+   * A scratch card was claimed and its coins are in the balance.
+   *
+   * Fires on the server's answer, never on the stroke — a reveal that sounds
+   * before the claim succeeds would be a prize announced before it was paid.
+   * One short flourish, and the only sound for this moment: a coin landing on
+   * the note above it, which is a different shape from `paid` (two tight notes,
+   * up) so money moving and a prize landing never sound alike.
+   */
+  reward(): void {
     buzz([12, 26, 12, 30, 14]);
-    cue("coins", () => {
-      const falls = [
-        { at: 0, freq: 1180, gain: 0.05 },
-        { at: 88, freq: 1410, gain: 0.046 },
-        { at: 168, freq: 1090, gain: 0.04 },
-        { at: 252, freq: 1330, gain: 0.034 },
-      ];
-      for (const fall of falls) {
-        tone(fall.freq, 62, { delayMs: fall.at, gain: fall.gain, type: "triangle" });
-        tone(fall.freq / 4.8, 84, { delayMs: fall.at, gain: fall.gain * 0.45 });
-      }
-      // One quiet shimmer to close the sequence once the coins have settled.
-      tone(1760, 130, { delayMs: 330, gain: 0.02 });
+    cue("reward", () => {
+      tone(1568, 44, { gain: 0.05 });
+      tone(1046, 88, { delayMs: 34, gain: 0.044, type: "triangle" });
+      tone(1318, 140, { delayMs: 96, gain: 0.034, type: "triangle" });
     });
   },
 

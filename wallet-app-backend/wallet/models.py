@@ -343,6 +343,21 @@ class CoinAward(db.Model):
 
     `transaction_id` is unique: it is the record of what a payment paid, and
     the guarantee that a retry or a double settle cannot pay for it twice.
+
+    **A draw is not spendable until it is claimed.** The amount is decided the
+    moment the payment settles and is stored here immediately, but it counts
+    towards the coin balance only from `claimed_at` — the instant the user
+    scratched the card and was told what it paid. Crediting on settle meant the
+    wallet announced a prize before anyone had opened the card, and a wrong
+    number in a receipt is worse than a card still under its cover: the balance
+    moved for money the user had not been told about yet.
+
+    `claimed_at` and `scratched_at` are the same instant for every card won
+    since claiming existed. They can differ for the rows written before it —
+    those coins were already spendable, so the migration stamped them claimed
+    while leaving a card that was never opened still covered. Such a card
+    reveals its coins when it is scratched and credits nothing, because they
+    were counted the first time.
     """
 
     __tablename__ = "coin_awards"
@@ -370,12 +385,17 @@ class CoinAward(db.Model):
         db.Integer, db.ForeignKey("transactions.id"), nullable=True, unique=True
     )
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
-    # When the user lifted the cover on this card. Null means the coins are
-    # still hidden: a payment's draw is decided and credited the moment the
-    # payment settles, but the card over it is the telling, and the telling is
-    # the user's to do. Scratched rather than "revealed" because a card is only
-    # ever revealed by scratching it, or by asking the app to do it for you.
+    # When the user lifted the cover on this card. Null means it is still under
+    # it: the draw is decided and written down the moment the payment settles,
+    # but the card over it is the telling, and the telling is the user's to do.
+    # Scratched rather than "revealed" because a card is only ever revealed by
+    # scratching it, or by asking the app to do it for you.
     scratched_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # When the coins started counting. This is the claim: the moment the user
+    # was told the amount, which is the moment it may be spent. Null means the
+    # draw is decided and nobody has been told it yet, so it is deliberately
+    # not in the balance — `coins.coins_earned` sums this column's rows only.
+    claimed_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
 
     transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
 

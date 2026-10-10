@@ -142,8 +142,9 @@ export function RewardSheet({
       </dl>
 
       <p className="mt-4 border-t border-ink-200 pt-3 text-[11.5px] leading-relaxed text-ink-500">
-        Offers pay in coins, never in cash: they land in your coin balance as soon as the
-        payment that earns them settles, and 10 coins redeem for ₹10.
+        Offers pay in coins, never in cash: a completed offer arrives as a scratch
+        card, and scratching it adds the coins to your balance. 10 coins redeem for
+        ₹10.
       </p>
     </Sheet>
   );
@@ -212,9 +213,10 @@ export function RewardsCard({
  * Offers for this account.
  *
  * Nothing here is decorative: progress comes from the ledger on the server, and
- * completing an offer credits the balance inside the same commit as the payment
- * that completed it. `reloadKey` is the newest transaction, which is exactly the
- * signal that something may have just been earned.
+ * completing an offer draws a scratch card inside the same commit as the
+ * payment that completed it — the coins themselves are counted when that card is
+ * scratched. `reloadKey` is the newest transaction, which is exactly the signal
+ * that a card may just have arrived.
  */
 export function OffersStrip({
   reloadKey,

@@ -6,6 +6,7 @@ import { cx } from "../lib/cx";
 import { feedback } from "../lib/feedback";
 import { formatCurrency, formatDateTime, formatDayLabel } from "../lib/format";
 import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
+import { primeCoins } from "../hooks/useCoins";
 import { useToast } from "../hooks/toast";
 import { AppBar, AppShell } from "../components/AppShell";
 import { ScratchCard } from "../components/ScratchCard";
@@ -20,14 +21,18 @@ import { EmptyState, ErrorState, SkeletonCard } from "../components/ui/States";
  * A card is handed over covered and stays here afterwards, so the screen reads
  * as a record of what the wallet has given back rather than as a pile of
  * unopened envelopes. A covered card is scratchable right here; a card that has
- * been scratched shows what it paid. Nothing is ever opened for the user: the
- * coins are in the balance the moment they are won, and the cover is theirs to
- * lift whenever they want to.
+ * been scratched shows what it paid.
+ *
+ * **This screen is where coins are collected.** A draw counts towards the
+ * balance when its card is scratched and not before — the amount is decided
+ * when the card is won, stored on the server, and absent from every payload
+ * until this screen claims it. So the reveal follows the server's answer rather
+ * than racing it: the card holds its cover while the claim is in flight, and
+ * what appears underneath is the number the account was actually paid.
  *
  * Every coin award is here, not only the payment draws: an offer's payout and
- * the welcome bonus are the same kind of thing — coins that landed the moment
- * they were earned — so they arrive as cards too. Those have no payment behind
- * them and are named by what paid them instead.
+ * the welcome bonus arrive as cards too, and are claimed the same way. Those
+ * have no payment behind them and are named by what paid them instead.
  */
 
 /** "₹25 to Meera Iyer" for a payment's card, the reason's own line for the rest. */
@@ -62,28 +67,33 @@ export default function ScratchCardsPage() {
   }, [reloadKey]);
 
   /**
-   * Open a card: lift the cover, then write down that it was lifted.
+   * Claim a card: scratch it, and let the account pay it.
    *
-   * The card is marked here before the request comes back, so the reveal never
-   * waits on the network — the coins are already in the balance, and this call
-   * only decides whether the card is still covered tomorrow. A failure is said
-   * out loud rather than swallowed: the card will read as unscratched the next
-   * time this screen is opened, which is the honest outcome.
+   * Nothing is revealed until this answers, because the amount does not exist on
+   * this device until then — the card is where the prize lives. The response
+   * carries the coins, the card and the fresh coin snapshot, so the reveal, the
+   * header chip and this list all move together. Nothing is written locally
+   * first: an optimistic mark would show a prize the server had not paid, and a
+   * refusal would leave a card looking opened with no coins behind it.
+   *
+   * Returns whether the claim landed, which is what the card under the finger
+   * uses to decide between showing the coins and staying scratchable.
    */
-  const openCard = async (card: ScratchCardModel) => {
-    feedback.coins();
-    setCards((current) =>
-      (current ?? []).map((item) =>
-        item.id === card.id
-          ? { ...item, scratched: true, scratched_at: new Date().toISOString() }
-          : item,
-      ),
-    );
+  const claimCard = async (card: ScratchCardModel): Promise<boolean> => {
     try {
-      await api.scratchCard(card.id);
+      const result = await api.scratchCard(card.id);
+      setCards((current) =>
+        (current ?? []).map((item) => (item.id === card.id ? result.card : item)),
+      );
+      // The chip on the home screen reads this the moment it mounts: a claim
+      // mints no transaction, so its own reload key would not have moved.
+      primeCoins(result.coins);
+      feedback.reward();
+      return true;
     } catch (err) {
       feedback.warn();
       toast.error(errorMessage(err));
+      return false;
     }
   };
 
@@ -114,7 +124,7 @@ export default function ScratchCardsPage() {
             icon={<IconSpark size={TILE_GLYPH.lg} strokeWidth={TILE_STROKE} />}
             iconTone="pending"
             title="No scratch cards yet"
-            description="Every payment draws 1 to 50 coins, every offer pays in coins, and each payout lands here as a card. Earn one and it arrives."
+            description="Every payment draws 1 to 50 coins, every offer pays in coins, and each payout arrives here as a card. Scratch one and its coins land in your balance."
             action={
               <Button size="lg" onClick={() => navigate("/scan")}>
                 Make a payment
@@ -130,7 +140,7 @@ export default function ScratchCardsPage() {
                   ? "Every card has been scratched. There is nothing left under a cover."
                   : `${waiting} ${waiting === 1 ? "card is" : "cards are"} still under the cover — scratch ${
                       waiting === 1 ? "it" : "them"
-                    } here whenever you like. The coins are already yours.`}
+                    } here to reveal ${waiting === 1 ? "its reward" : "their rewards"}. The coins are counted when you do.`}
               </p>
             </div>
 
@@ -165,9 +175,9 @@ export default function ScratchCardsPage() {
                     <div className="mt-1.5">
                       <ScratchCard
                         compact
-                        coins={card.coins ?? 0}
+                        coins={card.coins}
                         revealed={card.scratched}
-                        onRevealed={() => void openCard(card)}
+                        onClaim={() => claimCard(card)}
                       />
                     </div>
 

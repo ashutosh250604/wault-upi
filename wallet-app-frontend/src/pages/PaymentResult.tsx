@@ -26,31 +26,10 @@ export default function PaymentResultPage() {
     void refresh({ silent: true });
   }, [refresh]);
 
-  // Coins this payment paid: its own draw plus anything an offer it completed
-  // paid alongside it — all written in the same commit as the payment.
-  const coinsWon = receipt
-    ? (receipt.coinsEarned ?? 0) +
-      (receipt.cashback ?? []).reduce((sum, item) => sum + item.coins, 0)
-    : 0;
   if (!receipt) return <Navigate to="/home" replace />;
 
   const isTopUp = receipt.kind === "topup";
   const headline = isTopUp ? "Money added" : "Payment successful";
-
-  /**
-   * Where these coins came from.
-   *
-   * A top-up completes an offer without drawing anything — only money sent to
-   * someone else draws — so the draw is named only when there was one. It used
-   * to be promised unconditionally, which had a ₹100 top-up claiming a draw as
-   * well as the 25 coins its offer paid.
-   */
-  const offerTitles = (receipt.cashback ?? []).map((item) => item.title).join(", ");
-  const rewardLine = offerTitles
-    ? `${offerTitles} from your offers${
-        (receipt.coinsEarned ?? 0) > 0 ? ", plus this payment's own draw" : ""
-      }.`
-    : "This payment's draw.";
 
   return (
     <AppShell>
@@ -132,19 +111,22 @@ export default function PaymentResultPage() {
           />
         </div>
 
-        {coinsWon > 0 ? (
+        {/* A card, and not a number. The receipt says a reward is waiting and
+            where to collect it; what it is worth is under the cover, on the
+            card, until the card itself is scratched. */}
+        {receipt.scratchCardWaiting ? (
           <div className="mt-6 flex items-start gap-3 rounded-[10px] border border-dashed border-seal-300 bg-seal-50 px-4 py-3">
             {/* The coin itself, not a sparkle: the reward line should be about
-                the same object as the card the user just scratched. */}
+                the same object as the card it points to. */}
             <Coin size={36} className="mt-0.5" />
             <div className="min-w-0">
               <p className="text-[13.5px] font-semibold text-seal-900">
-                {coinsWon === 1 ? "1 coin earned" : `${coinsWon} coins earned`}
+                A scratch card is waiting
               </p>
               <p className="mt-0.5 text-[12px] leading-relaxed text-seal-800/80">
-                {rewardLine} It is still under its cover — open your scratch cards to
-                lift it. Coins sit in your coin balance, not your wallet — 10 redeem
-                for ₹10.
+                This payment drew a card and left it under its cover — scratch your
+                card to reveal your reward. Coins sit in your coin balance, not your
+                wallet, and 10 of them redeem for ₹10.
               </p>
             </div>
           </div>

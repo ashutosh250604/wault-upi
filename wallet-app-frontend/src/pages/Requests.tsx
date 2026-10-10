@@ -63,9 +63,11 @@ export default function RequestsPage() {
       // Paying a request is a payment: it gets the payment tick, not the quiet
       // "something was written" blip.
       feedback.paid();
-      // "Earned": an offer pays coins, which live in the coin balance until
-      // they are redeemed.
-      for (const reward of result.rewards ?? []) toast.success(`${reward.title} earned`);
+      // An offer paid — as a card, not as a balance. The note names the promise
+      // and never its amount: the coins are counted when the card is scratched.
+      for (const reward of result.rewards ?? []) {
+        toast.success(`${reward.headline ?? "An offer paid out"} — a scratch card is waiting`);
+      }
       replace(result.request);
       if (profile) {
         patchProfile({ balance: Math.max(0, profile.balance - result.amount) });
@@ -83,10 +85,10 @@ export default function RequestsPage() {
             counterpartyVpa: result.request.counterparty.vpa,
             note: result.note,
             timestamp: result.timestamp,
-            // Paying a request is a payment, so it draws coins too — and those
-            // coins get the same scratch card an ordinary transfer gets.
-            coinsEarned: result.coins_earned,
-            cashback: result.rewards,
+            // Paying a request is a payment, so it draws a card too — the same
+            // one an ordinary transfer draws, and with its amount still under
+            // the cover.
+            scratchCardWaiting: result.scratch_card_waiting === true,
           },
         },
       });

@@ -176,7 +176,13 @@ export default function HomePage() {
                 aria-label={
                   coins === null
                     ? "Coins"
-                    : `Coins, ${coins.coins} available, worth ₹${coins.value}`
+                    : `Coins, ${coins.coins} available, worth ₹${coins.value}${
+                        coins.cards_waiting > 0
+                          ? `, ${coins.cards_waiting} scratch ${
+                              coins.cards_waiting === 1 ? "card" : "cards"
+                            } to open`
+                          : ""
+                      }`
                 }
                 className="relative flex items-center gap-1 rounded-[8px] px-2 py-1.5 text-[12px] font-bold text-pending-100 transition hover:bg-ink-700 hover:text-pending-50 focus-visible:ring-2 focus-visible:ring-ink-25 focus-visible:outline-none"
               >
@@ -189,7 +195,15 @@ export default function HomePage() {
                     className="block h-3 w-3.5 animate-pulse rounded-[3px] bg-ink-600"
                   />
                 )}
-                {claimable ? (
+                {/* A count when cards are waiting, a dot when the only thing to
+                    do is redeem: a number is worth showing when there is
+                    something to open, and the chip's own total is unchanged by
+                    an unopened card. */}
+                {coins && coins.cards_waiting > 0 ? (
+                  <span className="absolute -top-1.5 -right-1.5 grid size-[15px] place-items-center rounded-full bg-seal-500 text-[9.5px] font-bold text-ink-900 tabular-nums ring-2 ring-ink-800">
+                    {coins.cards_waiting}
+                  </span>
+                ) : claimable ? (
                   <span
                     aria-hidden="true"
                     className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-seal-500 ring-2 ring-ink-800"

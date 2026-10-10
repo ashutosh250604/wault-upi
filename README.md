@@ -1,401 +1,313 @@
-# WAULT — UPI-Style Digital Wallet
+# Wault
 
-A full-stack, UPI-inspired wallet: mobile-number sign-in with OTP, a 4-digit UPI PIN, a
-unique VPA (`mobile@okwault`) rendered as a scannable QR code, balance, top-up, P2P
-transfers, money requests and a transaction history.
+A UPI-style digital wallet: OTP sign-in, a 4-digit payment PIN, per-user `@okwault` UPI IDs with QR codes, P2P transfers, money requests, a coin/rewards system with scratch cards, and CSV/PDF statements.
 
-Every time the app shows is **IST**, every date is **DD-MM-YYYY**, and every session lasts
-at most **30 minutes** — see [Time and sessions](#time-and-sessions).
+Wault is a portfolio project. It is **not** connected to NPCI, UPI or any bank: there is no real money and no real payment rail. Handles use a made-up suffix (`@okwault`) and balances only move between accounts inside this application's own database.
 
-> **Portfolio project — not real UPI.** There is no NPCI/UPI integration, no real money and
-> no real payment rail. Handles use the made-up suffix `@okwault` and payments only
-> move balances between accounts inside this app's own database. The Profile screen repeats
-> this in its "About WAULT" card, along with the sample logins and the live API/database
-> status, so anyone who lands in the app is told the same thing.
+**Live demo:** <https://wault-upi.onrender.com> — on Render's free tier, so the first request after ~15 minutes idle takes 20–50 seconds while the instance wakes up.
 
-**Live demo:** [upi-wallet-demo.onrender.com](https://upi-wallet-demo.onrender.com) (see [Deploy](#deploy))
+**Sample login:** mobile `9000000001`, PIN `1234`, or the *Explore with a ready-made account* button.
 
-> The demo runs on Render's free tier, so the first request after ~15 minutes of idle
-> takes 20-50 seconds while the instance wakes up.
+## Screenshots
 
-## Sample accounts
+| | |
+| --- | --- |
+| ![Sign in](docs/screenshots/01-sign-in.png) | ![Wallet home](docs/screenshots/02-home.png) |
+| Sign-in, with the one-tap sample account | Wallet home: balance, quick actions, recent payees |
+| ![Entering an amount](docs/screenshots/03-payment-amount.png) | ![Payment receipt](docs/screenshots/04-payment-receipt.png) |
+| Sending money: verified payee, amount, note | Receipt. A drawn scratch card is announced, not revealed |
+| ![Scanner](docs/screenshots/05-scan-qr.png) | ![My QR](docs/screenshots/06-my-qr.png) |
+| Scanner, with manual entry as a fallback | Personal QR, encoding a `upi://pay` deep link |
+| ![Transactions](docs/screenshots/07-transactions.png) | ![Scratch cards](docs/screenshots/08-scratch-cards.png) |
+| History: money in/out, day grouping, statement export | Scratch cards, still under their covers |
+| ![Scratch card claimed](docs/screenshots/09-scratch-card-claimed.png) | ![Coins](docs/screenshots/10-coins.png) |
+| A scratch card claimed: the reward, and the balance | Coins: what is held, what it is worth, what earned it |
+| ![Profile](docs/screenshots/11-profile.png) | ![Linked accounts](docs/screenshots/12-linked-accounts.png) |
+| Profile: session, PIN state, sending limit | Linked accounts: sample accounts, PIN-gated balances |
+| ![Notifications](docs/screenshots/13-notifications.png) | |
+| Inbox: payments, requests and rewards | |
 
-| Account | Mobile | VPA | PIN | Balance |
-| --- | --- | --- | --- | --- |
-| Aarav Sharma | `9000000001` | `9000000001@okwault` | `1234` | ₹5,000 (+ seeded history) |
-| Meera Iyer | `9000000002` | `9000000002@okwault` | `1234` | ₹2,500 |
-| Rohan Verma | `9000000004` | `9000000004@okwault` | `1234` | ₹1,800 |
-| Ananya Desai | `9000000005` | `9000000005@okwault` | `1234` | ₹950 |
-| Gupta Kirana Store | `9000000006` | `9000000006@okwault` | `1234` | ₹4,200 |
-
-The extra accounts exist so the address book, the "Send money to" strip and the
-frequent-payer ranking have something real to show on a fresh install. Anyone in that table
-can be signed into with the emailed-on-screen OTP.
-
-Two ways to get in:
-
-- **Explore with a ready-made account** on the login screen → one-tap token login as Aarav (no OTP).
-- Normal flow with a mobile number → in demo mode the OTP is shown on screen (no SMS provider).
-
-Try a payment: **tap a face under "Send money to" → amount → PIN `1234`**, or **Scan QR →
-type `9000000002@okwault`**. Cameras need HTTPS, which the deployed URL provides; typed
-numbers and UPI IDs work with or without a camera.
+Screenshots are taken from the running application at a 420×900 phone viewport (`docs/screenshots/`, captured from the local build; the sample account is public demo data).
 
 ## Features
 
-- OTP login with expiry, attempt limits and a resend cooldown enforced server-side (with
-  auto-submit and paste)
-- Guided onboarding: name/email → auto-generated VPA → 4-digit PIN (with confirm step)
-- Wallet home: balance card with hide/show, quick actions, **"Send money to" avatar strip** of
-  people you pay, offers, recent activity
-- P2P transfers by mobile number **or** UPI ID, with the **verified recipient name shown before
-  paying**
-- Address book: searchable contacts, favourites, per-person nicknames, one-tap repeat payments;
-  a person's registered name is always read live from the directory and can't be edited away
-- Money requests: ask a contact for an amount with a note, see what you owe and what's coming
-  to you, and approve an ask with the PIN — the transfer and the request closing land in the
-  same commit, so a request can never look open after the money moved
-- **The PIN is verified by the server on every debit** (payments, request approvals and
-  top-ups), sharing one attempt counter and lockout, so a stolen token alone can't move money
-- **Notification inbox** with an unread badge on the home screen: every payment, top-up, money
-  request and reward writes a line, derived from the ledger rather than typed by hand, and each
-  line links through to the screen that owns the detail — including a note when a payment leaves
-  a scratch card waiting, which opens the collection rather than the receipt. One line per event
-  and one welcome in the life of an account: signing in again says nothing, because it is not news
-- **Coins, and one currency for every reward.** Each successful payment draws 1–50 coins from a
-  server-side, weighted draw (mostly 1–5, a big number is genuinely rare), recorded against the
-  transaction that earned it; a coin is worth **₹1**, and 10 coins is the floor to clear — above
-  it a redemption takes the **whole balance** (11 coins pay ₹11, 37 pay ₹37) through the same
-  ledger every other credit goes through, so no coin is ever rounded off and kept. A new account
-  is handed a **50-coin welcome bonus** on its first verified code,
-  and every offer pays in coins too — so the balance chip is the only number to watch, and it is
-  the sum of one award log rather than a total anybody maintains
-- **A scratch card for the coins a payment wins.** A square card, the cover is the app's own icon
-  artwork on a canvas, scratched with the finger, and a twelfth of it is enough to lift by itself.
-  Nothing is opened for you: a payment ends on its receipt with a **Scratch Card** button, and the
-  card waits in the collection until you go and open it. The draw, the reveal and the balance are
-  the server's; the card only decides how the number is told
-- **Every card you have won, in one place.** Every coin award is a card — a payment's draw, an
-  offer's payout and the 50-coin welcome bonus — and the collection screen lists them newest
-  first, **two to a row**, with each card's state on it (`Waiting` under its cover, `Scratched`
-  once it has been lifted), what won it and the date. A covered card does not carry its number at
-  all: the prize is absent from the page until the cover comes off, so an unscratched card cannot
-  be read out of a screenshot, a screen reader or a canvas that failed to paint. Once lifted, the
-  reveal is written down server-side, so it comes back open — never twice, and never re-covered —
-  and `/api/scratch-cards` is reachable from the coins sheet as well as from the receipt
-- **Offers that actually pay out.** Progress towards each offer is counted from the ledger, and
-  the coins land *in the same commit as the payment that earned them* — no window where a payment
-  succeeded and its reward silently did not, and a replay of the same payment can never pay twice
-- **Enforced daily sending limit** (default ₹1,00,000), measured in IST so it resets at local
-  midnight, checked by the ledger on every debit and reported to the amount screen from the same
-  function — the limit a user is shown and the limit that is applied can't disagree
-- Linked bank accounts with a default, **PIN-gated "check balance"**, and top-ups that debit the
-  chosen account in the same transaction that credits the wallet. They are **sample accounts**:
-  the app never connects to a bank, each top-up moves money between the two sides of this demo
-  ledger, and the Accounts screen says so on the screen rather than only here. The sample logins
-  in the table above are wallets of their own, not bank accounts of Araav's
-- Statement export: a real CSV download built from the ledger, with signed amounts from the
-  account owner's point of view
-- QR scanner (camera, torch, lazy-loaded) plus manual number/UPI ID entry as a camera-free
-  fallback
-- Personal QR code with copy / save / share, encoding a `upi://pay?...` deep link
-- History with money-in/out filters, day grouping and tap-through receipts
-- Money stored as **integer paise**; transfers use an **atomic conditional debit** so
-  concurrent requests cannot overdraw a wallet
-- **Forgot PIN**: the registered number gets a one-time code, the code buys a ten-minute token,
-  and the token writes one new PIN — no step signs anybody in, and the old PIN stops working the
-  moment the new one is saved. The answer to "is this number registered?" is the same sentence
-  either way
-- JWT sessions capped at 30 minutes, scrypt-hashed PINs/OTPs, PIN lockout after **5 wrong
-  attempts a day** (the count is kept against an IST date, so an Indian midnight clears it),
-  ownership checks on every wallet endpoint
-- Session tokens and PIN-reset tokens are different kinds, told apart by a `typ` claim: a reset
-  token cannot be used as a `Bearer` token, and a session cannot write a PIN
+**Accounts and sign-in**
+- OTP sign-in with server-side expiry, attempt limits and a resend cooldown
+- Onboarding: name/email → generated UPI ID → 4-digit PIN with a confirm step
+- Forgot PIN: a code on the registered number buys a 10-minute reset token, which writes one new PIN. No reset step signs anyone in, and the old PIN stops working immediately
+- Session tokens and PIN-reset tokens are different kinds (a `typ` claim), so a reset token is refused as a `Bearer` token
 
-## Frontend notes
+**Payments**
+- Transfers by mobile number or UPI ID, both showing the verified recipient name before paying
+- Money requests: ask, approve with a PIN, decline, cancel. The transfer and the request closing happen in one commit
+- **The PIN is verified server-side on every debit** — payments, request approvals and top-ups — behind one attempt counter: 5 wrong attempts in an IST day
+- Daily sending limit (default ₹1,00,000), enforced in the ledger and reported by the same function the amount screen reads
+- Top-ups from a linked account debit that account and credit the wallet in one transaction
+- History with money-in/out filters, day grouping, tap-through receipts, CSV and PDF statements
 
-- **Typed end to end.** `tsc --noEmit` runs in CI-script form (`npm run typecheck`) and every
-  API response is described once in `src/types.ts`.
-- **One error path.** All requests go through `src/lib/api.ts`, which normalises failures into
-  `ApiError`, turns dead connections into human copy, and reports any 401 to the session
-  provider so an expired token signs the user out instead of half-breaking a screen.
-- **Client validation mirrors the server**, but only as UX — the server re-validates every
-  amount, PIN and ownership rule.
-- **Accessible by default:** labelled inputs, `aria-live` errors, Escape-to-close sheets with
-  focus management, and `prefers-reduced-motion` support.
-- **Fast first paint:** the barcode-decoding engine is code-split, so the scanner's ~156 kB
-  chunk only downloads when someone opens the scanner (initial bundle ≈ 430 kB / 129 kB gzip).
-- **Honest states:** skeleton loaders, empty states with a next step, retryable error states,
-  and a top-level error boundary.
+**Rewards**
+- Every successful payment draws 1–50 coins server-side (weighted towards 1–5; a large draw is genuinely rare). One coin is worth ₹1
+- Redemption takes the whole balance once it clears 10 coins: 11 coins pay ₹11, 37 pay ₹37, with nothing rounded off and kept
+- A new account gets a 50-coin welcome card, and offers pay in coins too, so there is one reward currency and one balance to watch
+- **A draw counts when it is scratched, not when it is decided.** A payment stores the amount and hands over a scratch card; the coins enter the balance only when the card is claimed, so the receipt announces a card rather than a number. Until then the amount is absent from every API response, and the claim is idempotent (a conditional `UPDATE`, so a refresh or a second tap cannot pay twice)
+
+**Everywhere**
+- **Money is stored as integer paise**, and every debit is an atomic conditional update, so concurrent requests cannot overdraw a wallet
+- Sessions last at most 30 minutes (clamped in code, not only in config); the client counts down from the token's own `exp` and signs out before it lapses
+- UTC in the database, IST on screen (fixed +05:30; India has had no DST since 1945), and dates printed DD-MM-YYYY
+- Statements, day grouping, reference codes and the daily limit all use the Indian calendar day
+
+## Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| API | Flask 3, SQLAlchemy, Alembic, Gunicorn |
+| Database | PostgreSQL (production), SQLite (local/tests) |
+| Auth | JWT sessions, scrypt-hashed PINs and OTPs |
+| Frontend | React 19, TypeScript, Vite 7, Tailwind CSS v4, React Router |
+| Frontend libs | `qrcode.react` (My QR), `@yudiel/react-qr-scanner` + `barcode-detector` (scanner, code-split) |
+| Statements | `reportlab` for the branded PDF, `csv` for the export |
+| Tests | pytest (66 tests, Flask test client) |
+| Hosting | Docker image on Render, PostgreSQL on Neon |
 
 ## Architecture
 
-```
-wallet-app-frontend (React 19 + Vite)          wallet-app-backend (Flask)
-        │                                              │
-        │  same origin in production  ◄───────────────► │  /api routes + built SPA
-        │  Vite dev server in development               │  SQLAlchemy models
-        ▼                                              ▼
-   React Router pages ───────────────────────►  Postgres (Neon) or SQLite locally
-```
+One deployable. The Docker image builds the frontend in a Node stage and serves the built bundle from Flask, so the API and the SPA share an origin: no CORS in production, no mixed content, and the camera works over the single HTTPS URL.
 
-One deployable: the Docker image builds the frontend, then serves `dist/` from Flask so the
-app and API share an origin (no CORS, no mixed content, camera works over the single HTTPS URL).
+```
+wallet-app-frontend (React + Vite)          wallet-app-backend (Flask)
+        │                                            │
+        │  same origin in production  ◄─────────────► │  /api/* + built SPA
+        │  Vite dev server in development             │  SQLAlchemy models
+        ▼                                            ▼
+  React Router screens ──────────────────────►  PostgreSQL (Neon) / SQLite locally
+```
 
 ```
 wallet-app-backend/
+  app.py               entrypoint for flask run, flask db and gunicorn
   wallet/
-    __init__.py      app factory, health check, SPA serving, CLI
-    config.py        env-driven configuration
-    models.py        User / Wallet / Transaction / Contact / LinkedAccount / PaymentRequest
-                     / Notification / Reward (balances as paise)
-    security.py      validators, scrypt hashing, JWT, require_auth
-    money.py         paise conversion + transaction references
-    ledger.py        the one place money moves: atomic debit/credit + inbox rows
-    limits.py        the daily cap window, its enforcement and its snapshot
-    rewards.py       the offer catalogue, ledger-derived progress, coin settlement
-    coins.py         the coin award log: the draw, the welcome bonus, redemption
-    events.py        the single helper every notification is written through
-    seed.py          idempotent demo data
-    blueprints/      auth.py, wallet.py, people.py, requests.py, accounts.py, inbox.py
-  migrations/        Alembic schema
-  tests/             pytest suite
-wallet-app-frontend/            React 19 + TypeScript + Tailwind v4 (Vite)
+    __init__.py        app factory, health check, SPA serving, CLI commands
+    config.py          environment-driven configuration
+    models.py          User, Wallet, Transaction, Contact, LinkedAccount,
+                       PaymentRequest, Notification, Reward, CoinAward (paise)
+    security.py        validators, scrypt hashing, JWT, require_auth
+    money.py           paise conversion, reference codes
+    ledger.py          the only place money moves: atomic debit/credit
+    limits.py          the daily cap window and its enforcement
+    rewards.py         the offer catalogue, ledger-derived progress
+    coins.py           the coin award log: the draw, the claim, redemption
+    events.py          the single helper every notification is written through
+    statement.py       CSV and PDF statements
+    seed.py            idempotent demo data
+    blueprints/        auth, wallet, people, requests, accounts, inbox
+  migrations/          Alembic history
+  tests/               pytest suite
+wallet-app-frontend/
   src/
-    App.tsx                     routes, session guards, providers
-    pages/                      one file per screen (sign-in → onboarding → wallet → payment)
-    components/                 app shell + bottom tabs, keypads, PIN pad, QR views, toasts
-    components/ui/              design system: Button, Card, Field, Sheet, Badge, states, icons
-    lib/                        typed API client, formatting, validation, session storage
-    session/                    auth state + cached profile/transactions provider
-    types.ts                    the API contract, in one place
+    App.tsx            routes, session guards, providers
+    pages/             one file per screen
+    components/        app shell, keypads, PIN pad, scratch card, QR views
+    components/ui/     design system: Button, Card, Field, Sheet, states, icons
+    lib/               typed API client, formatting, validation, feedback
+    session/           auth state and cached profile/transactions
+    types.ts           the API contract, in one place
+  public/brand/        logo and icon artwork
+  public/sounds/       the two supplied recordings
 ```
 
-## API
+Client route vs API route is deliberate: screens are `/history`, `/scratch-cards`, `/my-qr`; data is `/api/transactions/<id>`, `/api/scratch-cards`, `/api/me`.
 
-Every JSON endpoint lives under **`/api`**, so the API can never shadow a client route:
-`/requests` is a screen, `/api/requests` is data. `/healthz` stays at the root for hosting
-health checks.
+## Local setup
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| GET | `/healthz` | – | health check (reports the live database + driver) |
-| POST | `/api/start_login` | – | validate mobile, issue OTP (`dev_otp` in demo mode) |
-| POST | `/api/verify_otp` | – | verify OTP, returns JWT + user id |
-| POST | `/api/demo_login` | – | one-tap session as the seeded sample account (demo mode only) |
-| POST | `/api/set_name` | Bearer | save name/email, generate VPA, create wallet |
-| POST | `/api/set_pin` | Bearer | store scrypt-hashed PIN |
-| POST | `/api/verify_pin` | Bearer | PIN check with lockout |
-| GET | `/api/me` | Bearer | current profile + balance (and whether a PIN is set) |
-| GET | `/api/get_balance/<id>` | Bearer | wallet balance (own wallet only) |
-| POST | `/api/topup` | Bearer + PIN | add funds, optionally debiting a linked account |
-| POST | `/api/transfer` | Bearer + PIN | send money: the PIN is verified server-side before the debit |
-| POST | `/api/vpas/resolve` | Bearer | UPI ID → verified name + user id |
-| POST | `/api/payees/resolve` | Bearer | mobile number *or* UPI ID → verified name + user id |
-| GET | `/api/people/recent` | Bearer | home strip: people paid recently, then saved contacts |
-| GET | `/api/contacts` | Bearer | the caller's address book |
-| POST | `/api/contacts` | Bearer | save a payee (idempotent: re-saving updates the nickname) |
-| PATCH | `/api/contacts/<id>` | Bearer | rename / favourite a saved payee |
-| DELETE | `/api/contacts/<id>` | Bearer | remove a saved payee |
-| POST | `/api/requests` | Bearer | ask someone for money |
-| GET | `/api/requests` | Bearer | every ask involving the caller, open ones first |
-| POST | `/api/requests/<id>/pay` | Bearer + PIN | approve an ask: verifies the PIN, transfers, closes the request |
-| POST | `/api/requests/<id>/decline` | Bearer | refuse an ask (payer only) |
-| POST | `/api/requests/<id>/cancel` | Bearer | withdraw an ask (requester only) |
-| GET | `/api/accounts` | Bearer | linked bank accounts (masked numbers, default flagged) |
-| POST | `/api/accounts/<id>/default` | Bearer | switch the default funding account |
-| POST | `/api/accounts/<id>/balance` | Bearer + PIN | the PIN-gated balance check |
-| GET | `/api/statements.csv` | Bearer | statement download, optional `?month=YYYY-MM` |
-| GET | `/api/transactions/<id>` | Bearer | history with sender/receiver names |
-| GET | `/api/limits` | Bearer | today's cap, what's spent and when it resets |
-| GET | `/api/notifications` | Bearer | the inbox plus its unread count, newest first |
-| POST | `/api/notifications/<id>/read` | Bearer | mark one row read |
-| POST | `/api/notifications/read-all` | Bearer | clear the badge |
-| DELETE | `/api/notifications/<id>` | Bearer | forget a row (never touches the money it describes) |
-| GET | `/api/rewards` | Bearer | this account's offers with progress counted from the ledger |
-| GET | `/api/coins` | Bearer | the coin balance, what it is worth, and where the last few came from |
-| POST | `/api/coins/redeem` | Bearer | coins → wallet credit (the whole balance, 10 coins minimum) |
-| GET | `/api/scratch-cards` | Bearer | every card the wallet has won, newest first |
-| POST | `/api/scratch-cards/<id>/scratch` | Bearer | record that a card's cover has been lifted |
-| GET | `/api/statements.pdf` | Bearer | the branded PDF statement |
+Node 20.19+ (or 22.12+) for the dev server; Python 3.11+ for the API database layer.
 
-Coins ride along on the responses that earn them: `/api/transfer` and
-`/api/requests/<id>/pay` return `coins_earned` (this payment's draw), `coin_card_id`
-(the card that draw was handed over on) and `rewards` (any offer it completed,
-each with its `coins`), which is what the scratch card reveals. A new account's
-50 coins are granted by `/api/verify_otp`, once.
-
-## Local development
-
-### Backend (SQLite by default — no database setup needed)
+### 1. Backend
 
 ```bash
 cd wallet-app-backend
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements-dev.txt   # Linux/macOS: .venv/bin/python
-export FLASK_APP=app.py DEMO_MODE=true       # DEMO_MODE seeds no data itself, but it is
-                                             # what makes /demo_login work and returns
-                                             # the OTP in the response instead of the log
-.venv/Scripts/python -m flask db upgrade     # required: the demo database needs the
-.venv/Scripts/python -m flask seed-demo      # accounts, so run the seed once too
 ```
 
-Use `python -m flask`, not the `flask` shim: on Windows `.venv/Scripts/flask.exe` can exit
-1 with no output at all, which looks like a broken install.
-
-To sign in without `DEMO_MODE`, the OTP is written to the server log (`OTP for 9000000001:
-…`) because no SMS gateway is configured locally.
-
-### Frontend
+Create the database and the demo data:
 
 ```bash
-cd wallet-app-frontend
-npm ci
-npm run dev          # http://localhost:5173, talks to http://localhost:5000
-npm run typecheck    # tsc --noEmit
-npm run lint         # eslint (flat config, TypeScript-aware)
-npm run build        # production bundle into dist/
+export FLASK_APP=app.py DEMO_MODE=true
+.venv/Scripts/python -m flask db upgrade
+.venv/Scripts/python -m flask seed-demo
 ```
 
-`npm run dev` needs **Node 20.19+ or 22.12+** (Vite 7 opens the dev server with
-`crypto.hash`, which older Node lacks — on Node 20.4 it dies with `TypeError: crypto.hash
-is not a function`). `npm run build` still works on older Node, so on an old toolchain use
-the single-origin path below, or upgrade Node.
-
-### Single origin (the deployed setup)
-
-Flask serves `dist/` itself, so this reproduces production exactly — same origin, no CORS,
-and no Vite dev server. Flask only looks for the bundle in `STATIC_FOLDER`, which defaults
-to `wallet-app-backend/static_frontend` (the directory the Docker build creates), so point
-it at `dist` or copy the files there. A path that does not exist silently disables the SPA
-and `/` answers 404.
+Run it:
 
 ```bash
-cd wallet-app-frontend && npm run build
-cd ../wallet-app-backend
-# either copy the bundle where Flask already looks for it…
-cp -r ../wallet-app-frontend/dist ./static_frontend
-# …or leave it in place and point Flask at it instead
-export STATIC_FOLDER="$(cd ../wallet-app-frontend/dist && pwd)"
 export SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
 .venv/Scripts/python -m flask run --port 5000
 ```
 
-Then open <http://127.0.0.1:5000> and use the demo account: mobile `9000000001`, PIN
-`1234` (or the one-tap *Explore with a ready-made account* button when `DEMO_MODE=true`).
-Rebuild after every frontend change — Flask serves static files, it does not watch them.
+Use `python -m flask` rather than the `flask` shim: on Windows `.venv/Scripts/flask.exe` can exit 1 with no output at all, which looks like a broken install. With `DEMO_MODE=false` there is no on-screen OTP; the code is written to the server log instead, because no SMS gateway is configured.
 
-To demo from your phone on the same Wi-Fi, point `VITE_API_BASE` in
-`wallet-app-frontend/.env.development` at your machine's LAN IP and allow that origin in
-`CORS_ORIGINS`. Camera scanning needs HTTPS, so use the deployed URL (or a tunnel) for that.
-
-Tests:
+### 2. Frontend
 
 ```bash
-cd wallet-app-backend && .venv/Scripts/python -m pytest
+cd wallet-app-frontend
+npm ci
+npm run dev          # http://localhost:5173, API on http://localhost:5000
+npm run typecheck    # tsc --noEmit
+npm run lint         # eslint
+npm run build        # production bundle into dist/
 ```
 
-## Time and sessions
+`npm run dev` needs Node 20.19+ or 22.12+ (Vite 7 uses `crypto.hash`, which older Node lacks). `npm run build` works on older Node, so on an old toolchain use the single-origin setup below.
 
-The app has one rule about clocks: **store and compare in UTC, show in IST.**
+### 3. Single origin (how production runs)
 
-- Every timestamp in the database is UTC, and every window a query filters on is converted
-to UTC before it reaches SQL.
-- Everything a person reads is rendered in `Asia/Kolkata`: transaction times, day headings,
-month banners on statements, the CSV/PDF exports and the greeting on the home screen. A
-fixed +05:30 offset is used rather than a timezone database, since India has had no daylight
-saving since 1945.
-- Dates are printed **DD-MM-YYYY** everywhere. Month banner rows on a statement keep the
-month's name, because that is a period label rather than a date.
-- The statement window is the user's calendar month, not the server's: `2026-09` runs from
-18:30 UTC on 31 August (midnight IST on 1 September) to the same instant on 30 September. A
-UTC-boundary month would file a 1am IST payment under the previous month.
-- Reference codes (`TXN20261006K7Q2MP`) carry an IST date for the same reason.
+Flask serves the built bundle itself, so this reproduces production exactly — same origin, no CORS, no Vite dev server. Flask looks for the bundle in `STATIC_FOLDER`, which defaults to `wallet-app-backend/static_frontend`.
 
-Sessions last **30 minutes**, and that ceiling is enforced in code
-(`wallet/config.py` clamps `JWT_EXPIRES_MINUTES`), not only in the default — setting the
-environment variable to `720` still yields 30 minutes. The client counts the same window down
-from the token's `exp` and signs out the moment it lapses, rather than discovering the expiry
-with a 401 half-way through a payment. Sign-in responses also return `expires_at` (IST) and
-`expires_in` (seconds) so any other client can do the same.
+```bash
+cd wallet-app-frontend && npm run build
+cd ../wallet-app-backend
+export STATIC_FOLDER="$(cd ../wallet-app-frontend/dist && pwd)"
+export DEMO_MODE=true SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+.venv/Scripts/python -m flask run --port 5000
+```
+
+Open <http://127.0.0.1:5000> and sign in with mobile `9000000001`, PIN `1234`. Rebuild after every frontend change — Flask serves static files, it does not watch them. A `STATIC_FOLDER` that does not exist disables the SPA silently and `/` answers 404.
+
+### 4. Tests
+
+```bash
+cd wallet-app-backend && .venv/Scripts/python -m pytest    # 66 tests
+cd wallet-app-frontend && npm run typecheck && npm run lint && npm run build
+```
+
+The suite runs against a temporary SQLite file and covers auth and lockout, transfers and limits, requests, contacts, accounts, statements, notification scoping, the offer payouts, and the reward lifecycle (a draw is not credited until it is claimed, claiming twice credits once, and an unclaimed card carries no amount in any response).
 
 ## Environment variables
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | local SQLite file | Postgres connection string in production |
+| `DATABASE_URL` | local SQLite file | PostgreSQL connection string in production |
 | `SECRET_KEY` | dev value | JWT signing key; use 32+ random bytes |
-| `DEMO_MODE` | `false` | seeds demo data, enables `/demo_login`, returns OTP in the API |
-| `DEMO_MOBILE` | `9000000001` | account used by one-tap demo login |
+| `DEMO_MODE` | `false` | seeds demo data, enables `/api/demo_login`, returns the OTP in the API response |
+| `DEMO_MOBILE` | `9000000001` | account used by the one-tap sample login |
 | `VPA_SUFFIX` | `okwault` | suffix for generated UPI IDs |
 | `MAX_DAILY_RUPEES` | `100000` | daily sending cap per account; `0` lifts it |
+| `MAX_TRANSFER_RUPEES` | `100000` | ceiling for one debit (payment or request approval) |
+| `MAX_TOPUP_RUPEES` | `100000` | ceiling for one top-up |
 | `LIMIT_TZ_OFFSET_MINUTES` | `330` | minutes added to UTC to find the limit day's local midnight (330 = IST) |
-| `MAX_TRANSFER_RUPEES` | `100000` | ceiling for a single debit (a payment or a request approval) |
 | `OTP_TTL_MINUTES` | `5` | how long a login code stays valid |
-| `OTP_FREE_REQUESTS` | `5` | codes a number may ask for in a row before the wait starts |
-| `OTP_RESEND_SECONDS` | `60` | seconds between codes once the free requests are used up |
+| `OTP_FREE_REQUESTS` | `5` | codes a number may request in a row before the wait applies |
+| `OTP_RESEND_SECONDS` | `60` | seconds between codes once the free requests are used |
 | `CORS_ORIGINS` | `localhost:5173` | comma-separated extra browser origins |
-| `JWT_EXPIRES_MINUTES` | `30` | session lifetime in minutes; a larger value is clamped to 30 |
-| `STATIC_FOLDER` | `<backend>/static_frontend` | directory of the built SPA that the API serves alongside itself |
-| `PORT` | `8000` in the container (`5000` for `python app.py`) | port the server binds to; a `0` falls back to the default |
+| `JWT_EXPIRES_MINUTES` | `30` | session lifetime; a larger value is clamped to 30 |
+| `STATIC_FOLDER` | `<backend>/static_frontend` | directory of the built SPA that Flask serves alongside the API |
+| `PORT` | `8000` in the container, `5000` for `python app.py` | bound port; a `0` falls back to the default |
 
-## Deploy
+## Database
 
-The repo ships a Render blueprint (`render.yaml`) plus a multi-stage `Dockerfile`. The
-container applies migrations and seeds demo data on boot, then serves the API and SPA with
-gunicorn.
+- **Local:** nothing to configure. With `DATABASE_URL` unset, the app uses SQLite (`wallet-app-backend/wallet_dev.db`).
+- **Production:** a PostgreSQL string (`postgresql://user:password@host/dbname?sslmode=require`). The `psycopg2` driver is added automatically to bare URLs.
+- **Schema:** Alembic. `flask db upgrade` applies migrations; `flask db migrate` drafts a new one. The container runs `flask db upgrade` on boot.
+- **Seed:** `flask seed-demo` creates five sample accounts with balances and history, their contacts, one or two linked sample accounts each and the welcome coin cards. It is idempotent, so it is safe on every boot, and it is what `DEMO_MODE` uses for the one-tap login.
+- **Rows written before the claim rule existed** are stamped as claimed by the migration that added it, so no existing balance changed when the rule changed; `scratched_at` is left alone, so a card that was never opened is still covered.
 
-1. **Push to GitHub** — create an empty repo and push this project to it.
-2. **Create a Neon Postgres project** (neon.tech) and copy the connection string
-   (`postgresql://user:password@host/db?sslmode=require`).
-3. **Render → New → Blueprint → select the repo.** Render reads `render.yaml`; paste the Neon
-   string as `DATABASE_URL` when prompted. `SECRET_KEY` is generated for you.
-4. First boot runs `flask db upgrade && flask seed-demo`, so the demo accounts exist
-   immediately. Health check: `/healthz`.
+## Docker and Render
 
-Notes: on Render's free plan the service sleeps after ~15 minutes idle, so the first request
-after a pause takes a few seconds to wake up. Camera QR scanning works because Render serves
-HTTPS.
+### Why Docker, and what the image does
 
-### Renaming the service, and the URL
+The backend needs a Python runtime plus a system font, and the frontend needs a Node toolchain to build it. A container pins both, builds the bundle with the same commands used locally, and gives Render one artifact to run. It also makes the "same origin" deployment structural: the built bundle is inside the image, not uploaded beside it.
 
-The app's name and its URL are two separate things on Render, and neither is set by this
-repository once the service exists:
+`wallet-app-backend/Dockerfile` in order:
 
-- **The service name** — Render's dashboard → the service → *Settings* → *Name* → Save. That
-  changes the name shown in the dashboard and the default `*.onrender.com` host, so the URL
-  changes with it (old links stop working; Render does not redirect them). `render.yaml`
-  carries the name this blueprint was first created with, and editing it in a live service is
-  a no-op — the blueprint is a creation-time description, not a setting.
-- **A custom domain** — *Settings* → *Custom Domains* → add `okvault.example`, then point a
-  `CNAME` at the service's `onrender.com` host at your DNS provider. Render issues the TLS
-  certificate. Custom domains need a paid instance type; on the free plan the `onrender.com`
-  URL is the only one.
-- **Nothing in the app hard-codes the host.** The frontend talks to the same origin it was
-  served from, so a rename needs no rebuild and no environment variable — the only thing to
-  update is the *Live demo* link at the top of this README.
+1. **Stage 1 — `FROM node:20-alpine AS frontend`.** Copies `package.json` and `package-lock.json` first and runs `npm ci`, then copies the source and runs `npm run build`. Installing before copying the source is what keeps the dependency layer cached across code changes; `npm ci` installs the lockfile exactly, so the image cannot drift from the commit.
+2. **Stage 2 — `FROM python:3.12-slim`.** A fresh runtime image. Only stage 2 ships: Node, the frontend source and `node_modules` are discarded.
+3. **`ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1`.** No `.pyc` files in the layer, and logs reach Render's log stream immediately rather than being buffered.
+4. **`apt-get install fonts-dejavu-core`.** The PDF statement prints a rupee sign; reportlab's built-in Helvetica has no `₹` glyph, so `wallet/statement.py` looks for a Unicode face and falls back to "INR" when it cannot find one. This is the package that provides it. `rm -rf /var/lib/apt/lists/*` in the same layer keeps the image smaller.
+5. **`COPY wallet-app-backend/requirements.txt` + `pip install`.** Runtime dependencies only, installed before the application code so they are cached separately.
+6. **`COPY wallet-app-backend/ ./` then `COPY --from=frontend /frontend/dist ./static_frontend`.** The API and the built SPA end up in one image, which is what lets Flask serve both from one origin — the path `STATIC_FOLDER` expects.
+7. **`EXPOSE 8000`.** Documentation for humans and tooling; Render routes to `$PORT`, which is why nothing else depends on it.
+8. **`CMD ["sh", "-c", "flask db upgrade && flask seed-demo && gunicorn app:app --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60"]`.** One process tree per deploy: migrate, seed (idempotent), then serve with 2 Gunicorn workers and a 60-second timeout. `$PORT` is Render's; `8000` is the local default.
 
-Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-`Referrer-Policy: no-referrer`, a camera-only `Permissions-Policy` and HSTS, so put the
-container behind TLS (Render terminates it for you) — over plain HTTP the HSTS header is
-simply ignored by browsers, which is what keeps local development on `http://` working.
+`.dockerignore` excludes `node_modules`, virtualenvs, `__pycache__`, `dist`, `.git`, `.env` and database files from the build context. Excluding `dist` is deliberate: the bundle is built *inside* the image, so a stale local build can never be shipped by accident.
 
-The frontend is built in the first Docker stage and served from the same origin, so the only
-things a fresh deploy needs to set are `DATABASE_URL` and `SECRET_KEY`. A missing asset is an
-honest 404: the SPA fallback only answers extension-less client routes, never a URL that looks
-like a file.
+### Does the image still need to exist?
+
+Yes. Render's Docker runtime runs this image; the alternative is Render's native Python runtime, which would need the SPA built and deployed by a separate service or a build step — more moving parts for the same result. The build is reproducible and does not depend on anything outside the repository.
+
+### The Render service name and the URL
+
+**The Dockerfile does not contain the service name.** It never has: it is a build recipe and a start command, and neither takes a name. The name that produces the hostname lives in the Render service — `render.yaml`'s `name:` when the Blueprint creates it, or the dashboard when the service is created there.
+
+Facts, measured on this deployment rather than assumed:
+
+- The `*.onrender.com` subdomain is set **when the service is created**, from the service name. Renaming the service afterwards changes the dashboard label only; the old subdomain keeps answering, and the new name's host returns Render's 404. Render's documentation describes no supported way to change the subdomain of an existing service.
+- To move to a new hostname, create a **new** service whose name is the hostname you want, copy the environment variables across, and delete the old service. The database is a separate resource, so nothing moves with it.
+- The rename here was done that way: the app answers on **`wault-upi.onrender.com`**, the old `upi-wallet-demo` host is gone, and `render.yaml` declares `name: wault-upi` so the Blueprint and the live service agree. Rendering the service name in the Dockerfile would have changed nothing — a Dockerfile has no say in it.
+- **Keep `render.yaml`'s `name:` equal to the live service's name.** Render matches Blueprint services by name, so a `name:` that does not match is not a rename: it is a second service the next Blueprint sync would create, beside the one that is actually serving.
+- A **custom domain** (*Settings → Custom Domains*) is the supported way to get a branded URL: add the domain, point a `CNAME` at the service's `onrender.com` host, and Render issues the TLS certificate. The `onrender.com` subdomain keeps working until it is turned off there.
+- **No host is hard-coded in the app.** The frontend talks to the origin it was served from, so a new host needs no rebuild, no environment variable and no CORS change. The only reference in the repository is the live-demo link in this README.
+
+### Deploying
+
+1. Push the repository to GitHub.
+2. Create a PostgreSQL database (this deployment uses Neon) and copy the connection string.
+3. Render → **New → Blueprint**, select the repo, and paste the string as `DATABASE_URL` when prompted. `SECRET_KEY` is generated. The service is defined in `render.yaml`: Docker runtime, `wallet-app-backend/Dockerfile`, context at the repository root, health check `/healthz`.
+4. First boot runs `flask db upgrade && flask seed-demo`, so the sample accounts exist immediately.
+
+Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a camera-only `Permissions-Policy` and HSTS. Terminate TLS in front of the container (Render does); over plain HTTP the HSTS header is ignored, which is what keeps local development on `http://` working. A request for a missing asset is an honest 404 — the SPA fallback answers extension-less client routes only, never a URL that looks like a file.
+
+## Known limitations
+
+- **No real UPI.** No NPCI integration, no bank connection, no real money. Payments move balances between accounts in this database.
+- **Linked accounts are seeded sample data.** They stand in for the accounts a top-up could come from; they are rows in this app's database, and the Accounts screen says so on screen. See [Linked accounts](#linked-accounts-what-the-feature-is) below.
+- **OTPs are not sent by SMS.** In demo mode the code is returned in the API response so the sample logins work; otherwise it is written to the server log.
+- **The sample login is conditional.** The one-tap account is rendered only when `/healthz` answers `demo_mode: true` for that request, so a logged-out device with a blocked, offline or failed health call sees the ordinary sign-in form only. It comes back on a reload.
+- **Reward audio is synthesised unless a recording replaces it.** `payment-success.mp3` and `coins-redeemed.mp3` are supplied recordings; the tap, error and scratch cues are generated in the browser. Browsers block audio until the first gesture, and iOS Safari has no vibration API.
+- **No KYC, no mandates, no autopay.** See the roadmap.
+- **Free-tier hosting.** The demo instance sleeps after ~15 minutes idle, and the PDF statement depends on the font package described above (the container installs it; a bare `python:3.12-slim` without it prints "INR" instead of `₹`).
+
+### Linked accounts: what the feature is
+
+The Accounts screen lists **sample bank accounts**: rows in the `linked_accounts` table, belonging to a named user, each with a bank, a holder name, a masked account number, an IFSC, an optional nickname, a default flag and a stored balance. They are seeded by `flask seed-demo` from a table in `wallet/seed.py` and attached to specific sample mobiles — the sample account `9000000001` gets two (SBI "Salary" and HDFC "Savings"), the other sample users get one each.
+
+What they are used for:
+
+- **Choosing where a top-up comes from.** `POST /api/topup` accepts an `account_id`; the account's stored balance is debited with a conditional `UPDATE` and the wallet is credited in the same commit — the same "cannot overdraw, cannot half-happen" shape as a transfer.
+- **A PIN-gated balance check.** `POST /api/accounts/<id>/balance` reveals an account's stored balance only with the payment PIN, and the list endpoint returns masked numbers and no balance.
+
+What they are **not**:
+
+- Not a bank connection, and not a real account. Nothing leaves this database.
+- Not the source of the wallet balance. The wallet has its own balance; a top-up moves part of a sample account into it, but the wallet total is never the sum of the linked accounts (the sample wallet holds ₹5,000 while its two sample accounts hold ₹48,250 and ₹11,240).
+- Not available to a newly registered user. Only the seeded sample users have accounts, and there is no endpoint to add one, so a new account sees an empty list. Making it work for ordinary users would need an "add account" flow with ownership verification (a penny-drop or an account-aggregator provider), and a decision about where the money would actually come from.
 
 ## Roadmap
 
-- [ ] Double-entry ledger for every money movement + idempotency keys on transfers
-- [ ] Active sessions, "log out everywhere", delete account
-- [x] Forgot PIN: a one-time code on the registered number, a new PIN, no sign-in
-- [x] Address book: saved contacts, favourites, nicknames, recent-payer ranking
-- [x] Money requests: ask, pay with PIN, decline, cancel
-- [x] Linked accounts, PIN-gated balance check, CSV statements
-- [x] Notification inbox, offers that pay in coins, enforced daily limit
-- [x] Coin rewards with a scratch card, a 50-coin sign-up bonus and PIN-free redemption
-- [ ] Split a bill between several people at once, PDF receipts, date-range statements
-- [ ] KYC/verification progress, autopay/mandates and a UPI-Lite-style small-value balance
-- [ ] Playwright end-to-end tests plus a GitHub Actions job running typecheck, lint, build and pytest
-- [ ] Screenshot gallery and a short architecture write-up at the top of this README
+### Planned features
+
+- [ ] Split a bill between several people
+- [ ] Date-range statements and PDF receipts
+- [ ] Add-a-linked-account flow for ordinary users, with a verification step (penny-drop), replacing the seeded sample accounts
+
+### Technical improvements
+
+- [ ] Double-entry ledger for every money movement, plus idempotency keys on transfers
+- [ ] Active sessions list, "log out everywhere", account deletion
+- [ ] Playwright end-to-end tests, and a CI job running typecheck, lint, build and pytest
+- [ ] Structured logging and error reporting on the API
+
+### Optional integrations
+
+- [ ] A real SMS provider for OTP delivery (the code path already exists; only the sender is missing)
+- [ ] An account-aggregator or payments provider for genuinely linked accounts — this needs provider onboarding, contractual approval and regulatory clearance before it is anything but a plan
+- [ ] **KYC is not implemented and is not planned as a demo feature.** Real identity verification means a licensed provider, storing identity documents, and complying with RBI KYC rules; a portfolio project has no way to do that honestly. Any KYC work here would be limited to a UI placeholder that is clearly labelled as such, or it should be left out entirely.
+
+### Done
+
+- [x] OTP sign-in, onboarding, PIN with lockout
+- [x] Transfers, money requests, contacts, daily limit
+- [x] Notification inbox, offers, coin rewards with scratch cards
+- [x] Linked sample accounts with a PIN-gated balance check
+- [x] CSV and PDF statements
+- [x] Forgot PIN

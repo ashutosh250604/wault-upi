@@ -214,7 +214,11 @@ export function CoinsSheet({
                 Scratch cards
               </span>
               <span className="mt-0.5 block text-[11.5px] text-ink-500">
-                Every card you have won, under its cover or opened
+                {coins.cards_waiting > 0
+                  ? `${coins.cards_waiting} ${
+                      coins.cards_waiting === 1 ? "card is" : "cards are"
+                    } under a cover — scratching one adds its coins`
+                  : "Every card you have won, under its cover or opened"}
               </span>
             </span>
             <IconChevronRight size={16} className="shrink-0 text-ink-400" />
@@ -248,7 +252,8 @@ export function CoinsSheet({
             </div>
           ) : (
             <p className="mt-4 rounded-[12px] border border-dashed border-ink-300 px-4 py-4 text-center text-[12.5px] text-ink-500">
-              Pay someone and this fills up — every payment draws 1 to 50 coins.
+              Pay someone and a scratch card arrives — scratch it and its coins
+              land here. Every payment draws 1 to 50.
             </p>
           )}
         </>

@@ -4,8 +4,8 @@ The strip on the home screen used to be decoration: tapping a card apologised
 that rewards were not live. This module makes the promise real. An offer is a
 target, a payout and an expiry date; progress is counted from the ledger rather
 than kept in a counter, so it can't drift from what actually happened; and the
-payout lands in the coin balance, through the one function that writes coin
-awards (`coins.grant`).
+payout is written as a coin award (`coins.grant`), which arrives as a scratch
+card — the coins count when the user scratches it, like every other prize.
 
 **Offers pay in coins, not cashback.** They used to credit rupees straight into
 the balance, which meant two reward currencies on one screen — a cashback strip
@@ -199,11 +199,15 @@ def settle_due(user_id: int, now: datetime | None = None) -> list[Reward]:
         reward.status = Reward.CREDITED
         reward.credited_at = moment
         reward.updated_at = moment
+        # The note names the promise and not the payout: the coins are decided
+        # and stamped, and the card over them is scratched to collect them, so
+        # this is told as something to open rather than as money banked.
         notify(
             user_id,
-            Notification.REWARD,
-            f"{offer['title']} earned",
-            f"{offer['headline']} · added to your coin balance",
+            Notification.SCRATCH_CARD,
+            f"{offer['headline']} — card waiting",
+            "An offer paid out. Open your scratch cards and scratch it to reveal "
+            "your reward.",
             when=moment,
         )
         credited.append(reward)
@@ -263,7 +267,12 @@ def list_for(reward_rows: list[Reward], now: datetime | None = None) -> list[dic
 
 
 def credited_summary(rewards: list[Reward]) -> list[dict]:
-    """Tiny payload for the payment response: what the payment just unlocked."""
+    """Tiny payload for the payment response: which promises this payment paid.
+
+    The offer's own terms, not a new fact — every one of them is printed on the
+    home strip before it is earned — and each payout it names is waiting as a
+    scratch card. Nothing here moves the balance; the card does that.
+    """
     summary = []
     for reward in rewards:
         offer = OFFERS_BY_CODE.get(reward.code)
@@ -273,6 +282,10 @@ def credited_summary(rewards: list[Reward]) -> list[dict]:
             {
                 "code": reward.code,
                 "title": offer["title"],
+                # The promise in words, without its number: what the client says
+                # out loud when an offer pays, since the payout itself is a card
+                # waiting rather than coins in the balance.
+                "headline": offer["headline"],
                 "coins": offer["reward_coins"],
                 "amount": paise_to_rupees(offer["reward_coins"] * coins.COIN_VALUE_PAISE),
             }

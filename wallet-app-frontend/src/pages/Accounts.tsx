@@ -145,7 +145,7 @@ export default function AccountsPage() {
           <IconInfo size={16} className="mt-px shrink-0 text-ink-500" />
           <p className="text-[12.5px] leading-relaxed text-ink-600">
             <span className="font-semibold text-ink-800">Sample accounts, not real ones.</span>{" "}
-            OK Vault never connects to a bank: these stand in for the accounts a
+            WAULT never connects to a bank: these stand in for the accounts a
             top-up could come from. Your <span className="font-semibold text-ink-700">wallet</span>{" "}
             is the balance you pay from — adding money moves it from the account
             you pick here into the wallet, inside this demo.

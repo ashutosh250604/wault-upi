@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BRAND_ASSETS } from "../lib/brand";
 import { cx } from "../lib/cx";
+import { feedback } from "../lib/feedback";
 import { Coin } from "./ui/Coin";
 
 /**
@@ -20,6 +21,13 @@ import { Coin } from "./ui/Coin";
  * it — out of a screenshot, out of the accessibility tree, or out of a cover
  * that has not finished painting. So a covered card draws the paper face and
  * the words "keep scratching", and the coins arrive on the reveal.
+ *
+ * **The reveal waits for the claim.** The amount is not known until the server
+ * answers the scratch — the card is what pays, and the scratch is what collects
+ * — so crossing the threshold asks the caller to claim and holds the cover until
+ * it hears back. A refused claim puts the cover back in play (the card can be
+ * scratched again) rather than showing a number nothing agreed with; a card
+ * that has already been claimed simply renders it.
  *
  * The artwork is the supplied logo, not a redrawing of it: the field behind the
  * tile is the tile's own gradient, measured off the file, and the tile is drawn
@@ -108,11 +116,16 @@ function paintCover(canvas: HTMLCanvasElement, tile: HTMLImageElement | null) {
 }
 
 export interface ScratchCardProps {
-  /** The coins this card is hiding. Shown only once the cover is off. */
-  coins: number;
-  /** True once the cover has lifted — owned by the caller, which also stores it. */
+  /** The coins this card paid, or null while it is still under its cover. */
+  coins: number | null;
+  /** True once the card has been claimed — owned by the caller, which stores it. */
   revealed: boolean;
-  onRevealed: () => void;
+  /**
+   * Claim the card, and answer whether it worked. The caller owns the request
+   * and the coins that come back with it, and flips `revealed` when it succeeds;
+   * a false answer leaves the cover scratchable.
+   */
+  onClaim: () => Promise<boolean>;
   /** Tighter proportions, for the two-column collection. */
   compact?: boolean;
   className?: string;
@@ -121,7 +134,7 @@ export interface ScratchCardProps {
 export function ScratchCard({
   coins,
   revealed,
-  onRevealed,
+  onClaim,
   compact = false,
   className,
 }: ScratchCardProps) {
@@ -133,9 +146,12 @@ export function ScratchCard({
   const [tileReady, setTileReady] = useState(false);
   // The card stops asking to be scratched the moment it is.
   const [touched, setTouched] = useState(false);
+  // True between asking for the claim and hearing back, which is when the card
+  // is holding the cover for the server's answer.
+  const [claiming, setClaiming] = useState(false);
   // Coverage is measured every few moves and again on release, so the moment
-  // the cover is judged gone arrives several times. The caller is told once:
-  // one card is one scratch, not one call per sample.
+  // the cover is judged gone arrives several times. The claim is asked for once:
+  // one card is one scratch, not one request per sample.
   const announced = useRef(false);
 
   // A fresh card in the same mount is a fresh card: the cover is back on, so
@@ -145,6 +161,22 @@ export function ScratchCard({
     announced.current = false;
     setTouched(false);
   }, [revealed]);
+
+  /**
+   * Ask for the card to be claimed, once.
+   *
+   * The coin sound belongs to the gesture rather than to the claim, so it plays
+   * here, under the finger; the prize's own cue fires in the caller, on the
+   * server's answer. A refusal re-arms the threshold, so the card can be
+   * scratched again instead of turning into dead artwork.
+   */
+  const claim = useCallback(async () => {
+    if (claiming || revealed) return;
+    setClaiming(true);
+    const claimed = await onClaim();
+    setClaiming(false);
+    if (!claimed) announced.current = false;
+  }, [claiming, onClaim, revealed]);
 
   // The cover's artwork is a file, so it arrives a frame or two after the sheet
   // does. Painting is keyed off this rather than off a timer.
@@ -196,16 +228,16 @@ export function ScratchCard({
     return sampled === 0 ? 0 : gone / sampled;
   }, []);
 
-  /** Lift the cover if enough of it has gone — and say so exactly once. */
+  /** Claim the card if enough of the cover has gone — and ask exactly once. */
   const check = useCallback(
     (canvas: HTMLCanvasElement) => {
       if (announced.current) return;
       if (coverage(canvas) >= REVEAL_AT) {
         announced.current = true;
-        onRevealed();
+        void claim();
       }
     },
-    [coverage, onRevealed],
+    [claim, coverage],
   );
 
   /** Rub a hole in the cover, and the line between the last hole and this one. */
@@ -247,6 +279,9 @@ export function ScratchCard({
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (revealed) return;
+    // One stroke, one scrape: `cue` refuses a repeat inside its own gap, so
+    // rubbing fast reads as continuous scratching rather than as a rattle.
+    feedback.scratch();
     const canvas = event.currentTarget;
     // Capture so a stroke that leaves the card keeps erasing instead of
     // stopping dead at the edge. Best-effort: capture is a nicety, and a
@@ -329,7 +364,7 @@ export function ScratchCard({
                   compact ? "text-[1.6rem]" : "text-[2.4rem]",
                 )}
               >
-                +{coins}
+                +{coins ?? 0}
               </p>
               <p
                 className={cx(
@@ -352,20 +387,21 @@ export function ScratchCard({
           )}
         </div>
 
-        {/* What to do, on the cover, until the finger arrives. It is an overlay
-            rather than a label beside the card because the gesture is the whole
+        {/* What to do, on the cover, until the finger arrives — and then what is
+            happening while the claim is in flight. It is an overlay rather than
+            a label beside the card because the gesture is the whole
             interaction, and pointer-events-none keeps the stroke that dismisses
             it from being eaten by it. */}
-        {!touched && !revealed ? (
+        {!revealed && (claiming || !touched) ? (
           <span
             className={cx(
               "pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-full bg-ink-900/85 font-semibold whitespace-nowrap text-ink-25 shadow-[0_6px_14px_-8px_rgba(15,15,13,0.9)]",
               compact
                 ? "bottom-2.5 px-2.5 py-1 text-[10px]"
-                : "bottom-3.5 px-3.5 py-1.5 text-[11.5px]",
+                : "bottom-3.5 px-3.5 py-1.5 text-[11.5]",
             )}
           >
-            Scratch the logo
+            {claiming ? "Claiming…" : "Scratch the logo"}
           </span>
         ) : null}
 
@@ -385,14 +421,16 @@ export function ScratchCard({
       </div>
 
       {/* The gesture is the interaction, but never the only way in: a keyboard
-          or a screen reader gets the same card with one press. */}
+          or a screen reader gets the same card with one press, which claims it
+          the same way a stroke does. */}
       {!revealed ? (
         <button
           type="button"
-          onClick={onRevealed}
-          className="mt-2.5 w-full text-center text-[11.5px] font-semibold text-ink-500 underline decoration-ink-300 decoration-1 underline-offset-4 transition hover:text-ink-800"
+          disabled={claiming}
+          onClick={() => void claim()}
+          className="mt-2.5 w-full text-center text-[11.5px] font-semibold text-ink-500 underline decoration-ink-300 decoration-1 underline-offset-4 transition hover:text-ink-800 disabled:opacity-60"
         >
-          Reveal without scratching
+          {claiming ? "Claiming…" : "Reveal without scratching"}
         </button>
       ) : null}
     </div>

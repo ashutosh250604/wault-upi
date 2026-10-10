@@ -6,8 +6,9 @@ the offers strip and the coin chip all sit on the home screen.
 Notifications are a log of things that already happened and can be deleted
 freely; rewards are a promise about things that haven't happened yet and are
 settled by the payment paths, not by this screen; coins are the sum of an award
-log that only `wallet/coins.py` writes, and of the two things a caller can do
-here, only a redemption writes anything at all.
+log that only `wallet/coins.py` writes. Two writes live here and both of them
+are the user collecting something they were already given: scratching a card,
+which is what counts its coins, and redeeming a balance.
 """
 
 from flask import Blueprint, g, jsonify, request
@@ -16,8 +17,8 @@ from ..coins import (
     CoinError,
     card_collection,
     card_view,
+    claim_card,
     redeem,
-    scratch_card,
     snapshot,
 )
 from ..extensions import db
@@ -159,9 +160,10 @@ def coin_snapshot():
 def list_scratch_cards():
     """Every scratch card the user holds, newest first.
 
-    A pure read, and a card that has not been scratched deliberately does not
-    carry its coins: the cover is the point of the card, and the collection
-    screen exists to show which ones are still to be opened.
+    A pure read, and a card that has not been scratched has no coins in its
+    payload at all: until it is claimed the amount is not the screen's to draw,
+    so it is not sent. A card that *has* been scratched carries what it paid,
+    which is what lets the collection come back with it still revealed.
     """
     return jsonify(card_collection(g.user_id)), 200
 
@@ -169,21 +171,34 @@ def list_scratch_cards():
 @bp.post("/scratch-cards/<int:card_id>/scratch")
 @require_auth
 def scratch_scratch_card(card_id):
-    """Reveal one card's coins.
+    """Scratch one card: reveal its coins, and count them.
 
-    Nothing moves here — the draw was credited with the payment that won it, in
-    that payment's own commit. This writes down only that the user has seen it,
-    which is what takes the card out of the unscratched pile; a card that is
-    already scratched, or is not the caller's, is refused rather than stamped.
+    This is the only write that moves the coin balance — the draw was decided
+    and stored when the payment settled, and it becomes spendable here. The
+    claim is idempotent by construction (`coins.claim_card` lifts the cover with
+    a conditional UPDATE and credits only if it was the request that changed the
+    row), so a refresh, a double tap or two requests racing each other reveal
+    the same card once and add its coins once.
+
+    Returns the card with its coins, plus how many this call credited — 0 for a
+    card that was already claimed, which is what the receipt of a second tap
+    needs to know. The fresh coin snapshot comes back in the same response so
+    the header chip moves with the reveal instead of a round trip behind it.
     """
     try:
-        card = scratch_card(g.user_id, card_id)
+        card, credited = claim_card(g.user_id, card_id)
     except CoinError as refusal:
         return jsonify({"message": refusal.message}), refusal.status
 
     db.session.commit()
     return (
-        jsonify({"card": card_view(g.user_id, card), "coins": snapshot(g.user_id)}),
+        jsonify(
+            {
+                "card": card_view(g.user_id, card),
+                "credited": credited,
+                "coins": snapshot(g.user_id),
+            }
+        ),
         200,
     )
 

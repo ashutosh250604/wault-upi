@@ -16,7 +16,6 @@ from ..ledger import TransferRefused, settle_transfer
 from ..models import Notification, PaymentRequest, User
 from ..money import paise_to_rupees, rupees_to_paise
 from ..coins import announce_payment as announce_coins
-from ..coins import card_for_transaction
 from ..rewards import credited_summary, settle_due
 from ..security import check_pin, current_user, require_auth
 from ..timeutils import as_utc, utcnow
@@ -228,9 +227,10 @@ def pay_request(request_id):
     # transfer blueprint — see `settle_due`.
     credited = settle_due(payer.id, txn.timestamp)
     settle_due(payment_request.requester_id, txn.timestamp)
-    # Settling a request is a payment, so it counts towards coins exactly as a
-    # direct transfer does.
-    coins = announce_coins(payer.id, txn.id, txn.timestamp)
+    # Settling a request is a payment, so it draws a scratch card exactly as a
+    # direct transfer does — the card, not its amount, which stays under the
+    # cover until it is scratched.
+    card = announce_coins(payer.id, txn.id, txn.timestamp)
     # One commit for the ledger row and the request's new state: they can never
     # disagree about whether the money moved.
     db.session.commit()
@@ -249,13 +249,11 @@ def pay_request(request_id):
     }
     if credited:
         payload["rewards"] = credited_summary(credited)
-    if coins:
-        payload["coins_earned"] = coins
+    if card is not None:
         # Settling a request hands over the same card a direct payment does, so
-        # the receipt can scratch it and the collection screen knows it is done.
-        card = card_for_transaction(payer.id, txn.id)
-        if card is not None:
-            payload["coin_card_id"] = card.id
+        # the receipt can point at it and the collection screen knows it is done.
+        payload["coin_card_id"] = card.id
+        payload["scratch_card_waiting"] = True
     return jsonify(payload), 200
 
 

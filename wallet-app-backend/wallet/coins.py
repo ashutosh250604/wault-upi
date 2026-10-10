@@ -26,8 +26,19 @@ fixed rule. A random payout has no such shortcut: the ledger says a payment
 happened, not how much it paid, so the amount is recorded the moment the
 transfer settles. `coin_awards.transaction_id` is unique, so a retried or
 duplicated settle announces a payment once and once only, and the balance is
-`sum(awards) − sum(redemptions)` — two tables rather than a running total that
-could drift from them.
+`sum(claimed awards) − sum(redemptions)` — two tables rather than a running
+total that could drift from them.
+
+**A draw counts when it is claimed, not when it is decided.** The amount is
+drawn and written down the instant the payment settles, but the balance sums
+only the awards that carry a `claimed_at` — and that is stamped by one thing:
+the POST that scratches the card. So the number in the balance is always a
+number the user has been shown, "you have N coins" and "your card paid N"
+cannot disagree, and a payment's receipt can no longer announce a prize whose
+card is still under its cover. It also makes the claim the only write that
+moves the balance, which is what lets it be idempotent: a card is claimed by a
+conditional UPDATE (`… WHERE scratched_at IS NULL`), so a refresh, a double
+tap or two requests racing each other lift one cover and count one prize.
 
 Every function here leaves the commit to its caller, as everywhere else money
 moves.
@@ -166,13 +177,29 @@ def _qualifying_payment(user_id: int, txn_id: int) -> bool:
 
 
 def coins_earned(user_id: int) -> int:
-    """Lifetime coins, summed from the award log."""
+    """Lifetime coins this user has been told about, summed from the award log.
+
+    Claimed awards only. An unclaimed draw is decided and stored but nobody has
+    been shown it, so it is not money yet — see the module docstring.
+    """
     total = (
         db.session.query(func.coalesce(func.sum(CoinAward.coins), 0))
-        .filter(CoinAward.user_id == user_id)
+        .filter(CoinAward.user_id == user_id, CoinAward.claimed_at.isnot(None))
         .scalar()
     )
     return int(total or 0)
+
+
+def cards_awaiting(user_id: int) -> int:
+    """How many cards are still under their cover.
+
+    Deliberately a count and not a total: what an unopened card is worth is the
+    one thing the wallet is not allowed to say before it is scratched, so the
+    home screen can say "2 cards to open" without a number that ruins the reveal.
+    """
+    return CoinAward.query.filter(
+        CoinAward.user_id == user_id, CoinAward.scratched_at.is_(None)
+    ).count()
 
 
 def coins_redeemed(user_id: int) -> int:
@@ -201,9 +228,11 @@ def grant(
 
     Every coin that ever reaches a balance goes through here, so the award log
     has one writer and the balance stays a sum of rows rather than a total that
-    somebody remembered to update. Idempotency is the caller's to guarantee —
-    `award_for_payment` has `transaction_id` for it and `grant_signup_bonus`
-    checks the reason.
+    somebody remembered to update. The row arrives **unclaimed** — the amount is
+    decided and recorded, and `claim_card` is what makes it spendable — so
+    writing an award here can never move a balance on its own. Idempotency is
+    the caller's to guarantee — `award_for_payment` has `transaction_id` for it
+    and `grant_signup_bonus` checks the reason.
     """
     db.session.add(
         CoinAward(
@@ -235,14 +264,17 @@ def award_for_payment(user_id: int, txn_id: int, when: datetime | None = None) -
 
 
 def grant_signup_bonus(user_id: int, when: datetime | None = None) -> int:
-    """Hand a new account its welcome coins, once and only once.
+    """Hand a new account its welcome card, once and only once.
 
     Returns the bonus the first time and 0 on every later call, so it is safe to
     run on every sign-in: the code that creates an account and the code that
     reminds an existing one look identical from here. There is no transaction
     behind a welcome bonus — nothing moved — so `reason` is the guard rather
-    than `transaction_id`. The caller owns the commit, so the coins land in the
+    than `transaction_id`. The caller owns the commit, so the card lands in the
     same transaction as the sign-in that revealed the account.
+
+    The note in the inbox names the card and not the amount: the 50 coins are
+    counted when the card is scratched, like every other prize.
     """
     existing = CoinAward.query.filter_by(
         user_id=user_id, reason=CoinAward.REASON_SIGNUP
@@ -254,12 +286,11 @@ def grant_signup_bonus(user_id: int, when: datetime | None = None) -> int:
     grant(user_id, SIGNUP_BONUS_COINS, CoinAward.REASON_SIGNUP, moment)
     notify(
         user_id,
-        Notification.REWARD,
-        f"{SIGNUP_BONUS_COINS} coin welcome bonus",
-        f"Welcome to WAULT. {SIGNUP_BONUS_COINS} coins are in your balance — "
-        f"worth ₹{SIGNUP_BONUS_COINS * COIN_VALUE_PAISE // 100}. "
-        f"Every coin is worth ₹1, and {REDEEM_MIN_COINS} coins redeem into your "
-        f"wallet whenever you want them.",
+        Notification.SCRATCH_CARD,
+        "A welcome scratch card is waiting",
+        "Open your scratch cards and scratch yours to reveal your welcome "
+        "reward. Every coin is worth ₹1, and "
+        f"{REDEEM_MIN_COINS} coins redeem into your wallet whenever you want them.",
         when=moment,
     )
     return SIGNUP_BONUS_COINS
@@ -274,40 +305,32 @@ def _payee_name(txn_id: int) -> str | None:
     return payee.name if payee else None
 
 
-def announce_payment(user_id: int, txn_id: int, when: datetime | None = None) -> int:
-    """Pay out and tell the payer. Returns the coins awarded.
+def announce_payment(user_id: int, txn_id: int, when: datetime | None = None) -> CoinAward | None:
+    """Draw a card for a payment and tell the payer it is waiting.
 
-    Queues the inbox row; the caller still owns the commit, so the award and the
+    Returns the card (queued, not yet committed) or None when the payment drew
+    nothing. The amount is deliberately not returned and not announced: it is a
+    number the card holds until it is scratched, and a notification that names
+    it would hand the prize over before the cover came off.
+
+    Queues the inbox row; the caller still owns the commit, so the draw and the
     note land in the same transaction as the payment that earned them.
     """
-    earned = award_for_payment(user_id, txn_id, when)
-    if not earned:
-        return 0
+    if not award_for_payment(user_id, txn_id, when):
+        return None
 
+    card = card_for_transaction(user_id, txn_id)
     moment = when or utcnow()
-    total = coin_balance(user_id) + earned
-    notify(
-        user_id,
-        Notification.REWARD,
-        f"{earned} {'coin' if earned == 1 else 'coins'} earned",
-        f"That payment paid out {earned}. You have {total} "
-        f"{'coin' if total == 1 else 'coins'} — worth ₹{total * COIN_VALUE_PAISE // 100}. "
-        f"Redeem from {REDEEM_MIN_COINS} coins.",
-        when=moment,
-    )
-    # And the card itself, which nobody has opened yet. A second note rather
-    # than a line on the first: this one is a thing to do, and the inbox links
-    # it to the collection so it can be done from the bell.
     payee = _payee_name(txn_id)
     notify(
         user_id,
         Notification.SCRATCH_CARD,
         "A scratch card is waiting",
         f"Your payment to {payee or 'someone'} left a card under its cover — "
-        f"open your scratch cards to lift it.",
+        f"scratch it to reveal your reward.",
         when=moment,
     )
-    return earned
+    return card
 
 
 def redeem(user_id: int, coins: int | None = None, when: datetime | None = None) -> tuple[int, Transaction]:
@@ -390,11 +413,17 @@ def redeem(user_id: int, coins: int | None = None, when: datetime | None = None)
 # --------------------------------------------------------------------------- #
 # Scratch cards
 #
-# Every payment's draw is handed over under a cover: the card is the receipt's
-# flourish, and the coins are already in the balance the moment the payment
-# settles. What `scratched_at` adds is memory — a card that was never scratched
-# is still a card, so the whole collection can be shown again in one place,
-# newest first, with the unscratched ones still hiding what they paid.
+# A draw is handed over under a cover, and the cover is the claim: the coins
+# start counting when the card is scratched, not when the payment settles. So
+# the card is the payout's only door — the collection is where a prize is
+# collected, and an unopened card is not merely undisplayed, it is
+# unspendable. The collection shows them all in one place, newest first, with
+# the unopened ones' amounts absent from the payload entirely.
+#
+# Old rows are the exception and are handled in the migration: coins awarded
+# before claiming existed were already spendable, so those rows are stamped
+# claimed — a card that was never opened stays covered, and scratching it
+# reveals an amount that was counted the first time.
 # --------------------------------------------------------------------------- #
 
 
@@ -406,11 +435,15 @@ def card_for_transaction(user_id: int, txn_id: int) -> CoinAward | None:
 def _card_payload(card: CoinAward, txn: Transaction | None, name: str | None) -> dict:
     """One card as the screen draws it.
 
-    The coins travel with an unscratched card as well as a scratched one. They
-    are the user's own and are already in their balance — the cover is the
-    screen's device for handing a prize over, not a secret being kept — and
-    sending them is what lets the cover lift on the first stroke instead of
-    waiting for a round trip to find out what is underneath.
+    An unclaimed card's `coins` is null, and that is the point: the amount is
+    the card's whole secret, so it travels only once the card has been claimed.
+    Anything else — an amount on the wire that the screen declines to draw —
+    would still be readable from a response, a screenshot or a cover that failed
+    to paint, which is exactly what a card under a cover must not allow.
+
+    Claiming is what fills it in, and the claim's own response carries the
+    number, so the reveal is one round trip rather than a card that has to be
+    re-fetched to find out what it paid.
     """
     # `as_utc` at the edge, like every other timestamp the API hands out: SQLite
     # returns a naive datetime for a UTC column, and a naive string on the wire
@@ -423,7 +456,7 @@ def _card_payload(card: CoinAward, txn: Transaction | None, name: str | None) ->
         # payee and amount, everything else by its reason's own line.
         "reason": card.reason,
         "caption": card_caption(card.reason),
-        "coins": card.coins,
+        "coins": card.coins if card.scratched_at is not None else None,
         "scratched": card.scratched_at is not None,
         "scratched_at": as_utc(card.scratched_at).isoformat() if card.scratched_at else None,
         "reference": txn.reference if txn else None,
@@ -463,9 +496,8 @@ def card_collection(user_id: int, limit: int = 100) -> dict:
     """Every scratch card this user holds, newest first.
 
     Every coin award is a card: the draw a payment makes, each offer's payout,
-    and the welcome bonus. They are one collection because they are one balance
-    — the coins land the moment they are won, and a card is the telling of a
-    payout rather than the payout itself.
+    and the welcome bonus. They are one collection because they are one
+    balance, and every one of them is a payout the user has not been told yet.
     """
     rows = (
         CoinAward.query.filter(CoinAward.user_id == user_id)
@@ -481,20 +513,51 @@ def card_collection(user_id: int, limit: int = 100) -> dict:
     }
 
 
-def scratch_card(user_id: int, card_id: int, when: datetime | None = None) -> CoinAward:
-    """Lift the cover on one card. The caller owns the commit.
+def claim_card(
+    user_id: int, card_id: int, when: datetime | None = None
+) -> tuple[CoinAward, int]:
+    """Scratch one card: lift the cover, and let its coins count. Returns
+    `(card, credited)` — the coins this call added to the balance, 0 if the card
+    had already been claimed. The caller owns the commit.
 
     Refuses a card that is not this user's exactly like one that does not exist,
-    so the collection cannot be probed for which ids are real. A card that has
-    already been scratched comes back as it is rather than being stamped again:
-    a second tap is a second tap, not a second prize.
+    so the collection cannot be probed for which ids are real.
+
+    **Exactly one caller can claim a card, and the database decides which.** The
+    cover comes off with a conditional `UPDATE … WHERE scratched_at IS NULL`,
+    and the row count is the answer: the request that changed the row is the one
+    that counts the coins, and a second tap, a refresh or two requests in
+    flight at once all see 0 rows changed and credit nothing. Doing it as a
+    read-then-write instead is what would credit twice — both requests read an
+    unclaimed card, and both write.
+
+    `claimed_at` is stamped only if this card has never been counted, which is
+    what makes a pre-claim award (already in the balance — see the migration)
+    reveal without paying out a second time.
     """
     card = db.session.get(CoinAward, card_id)
     if card is None or card.user_id != user_id:
         raise CoinError("Scratch card not found", 404)
-    if card.scratched_at is None:
-        card.scratched_at = when or utcnow()
-    return card
+
+    moment = when or utcnow()
+    lift = CoinAward.query.filter(
+        CoinAward.id == card_id,
+        CoinAward.user_id == user_id,
+        CoinAward.scratched_at.is_(None),
+    ).update({"scratched_at": moment}, synchronize_session=False)
+
+    credited = 0
+    if lift:
+        counted = CoinAward.query.filter(
+            CoinAward.id == card_id,
+            CoinAward.claimed_at.is_(None),
+        ).update({"claimed_at": moment}, synchronize_session=False)
+        if counted:
+            credited = card.coins
+
+    # The UPDATEs ran in the session's transaction, so the instance is stale.
+    db.session.refresh(card)
+    return card, credited
 
 
 def card_view(user_id: int, card: CoinAward) -> dict:
@@ -508,6 +571,10 @@ def snapshot(user_id: int, history: int = 5) -> dict:
     Deliberately small. The sheet shows a balance, what it is worth, whether it
     can be spent yet and what earned it — the same facts the wallet would put on
     a receipt, and nothing that needs a paragraph to explain.
+
+    Everything here is *claimed* coins. An unopened card contributes a count
+    (`cards_waiting`) and not a single rupee: this is the list a user reads, and
+    a prize it named would be a prize handed over before the cover came off.
     """
     earned = coins_earned(user_id)
     spent = coins_redeemed(user_id)
@@ -515,7 +582,9 @@ def snapshot(user_id: int, history: int = 5) -> dict:
     payout = balance if balance >= REDEEM_MIN_COINS else 0
 
     recent = (
-        CoinAward.query.filter(CoinAward.user_id == user_id)
+        CoinAward.query.filter(
+            CoinAward.user_id == user_id, CoinAward.claimed_at.isnot(None)
+        )
         .order_by(CoinAward.created_at.desc(), CoinAward.id.desc())
         .limit(history)
         .all()
@@ -528,6 +597,9 @@ def snapshot(user_id: int, history: int = 5) -> dict:
         "redeemed": spent,
         "coin_value": paise_to_rupees(COIN_VALUE_PAISE),
         "min_redeem": REDEEM_MIN_COINS,
+        # How many scratch cards are still under a cover, so the sheet can send
+        # the user to them without saying what any of them is worth.
+        "cards_waiting": cards_awaiting(user_id),
         # The payout on offer — the whole balance — and what it is worth. 0 below
         # the minimum, which is what the sheet's disabled button reads from.
         "redeemable": payout,

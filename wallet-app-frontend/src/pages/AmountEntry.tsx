@@ -114,10 +114,21 @@ export default function AmountEntryPage() {
    * "Earned", not "credited": an offer pays coins, and coins are not in the
    * balance until they are redeemed.
    */
+  /**
+   * Say that an offer paid — without saying how much.
+   *
+   * An offer's coins are a card like any other payout, counted when it is
+   * scratched, so the note names the promise and points at the collection. The
+   * toast used to read "25 coins earned", which was the balance moving before
+   * the card had been opened.
+   */
   const announceRewards = (rewards?: CreditedReward[]) => {
-    for (const reward of rewards ?? []) {
-      toast.success(`${reward.title} earned`);
-    }
+    if (!rewards?.length) return;
+    toast.success(
+      rewards.length === 1
+        ? `${rewards[0].headline ?? rewards[0].title} — a scratch card is waiting`
+        : `${rewards.length} scratch cards are waiting`,
+    );
   };
   const closePin = () => {
     setPinOpen(false);
@@ -151,7 +162,9 @@ export default function AmountEntryPage() {
               counterpartyVpa: profile?.vpa ?? null,
               note: null,
               timestamp: new Date().toISOString(),
-              cashback: result.rewards,
+              // A top-up draws no card of its own; an offer it completed does,
+              // and that one is reported the same way — as something to open.
+              scratchCardWaiting: (result.rewards?.length ?? 0) > 0,
             },
           },
         });
@@ -181,10 +194,11 @@ export default function AmountEntryPage() {
             counterpartyVpa: intent.receiverVpa ?? null,
             note: result.note,
             timestamp: new Date().toISOString(),
-            // The draw this payment made, so the receipt can say what the
-            // payment earned and send the user to the card hiding it.
-            coinsEarned: result.coins_earned,
-            cashback: result.rewards,
+            // Only that a card is waiting. The amount this payment drew is not
+            // in this response at all: it stays in the card until it is
+            // scratched, so the receipt cannot announce a number nobody has
+            // been told yet.
+            scratchCardWaiting: result.scratch_card_waiting === true,
           },
         },
       });

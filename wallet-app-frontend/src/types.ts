@@ -194,6 +194,12 @@ export interface CoinSnapshot {
   coin_value: number;
   /** The smallest payout, in coins. */
   min_redeem: number;
+  /**
+   * How many scratch cards are still under a cover. A count and never a total:
+   * what an unopened card is worth is the one thing the wallet will not say
+   * before it is scratched, so the chip can point at them without spoiling them.
+   */
+  cards_waiting: number;
   /** The largest payout available right now, in coins (0 below the minimum). */
   redeemable: number;
   redeemable_value: number;
@@ -226,6 +232,8 @@ export interface CoinsRedeemedResponse {
 export interface CreditedReward {
   code: string;
   title: string;
+  /** The promise in words ("On your first top-up"), without its number. */
+  headline?: string;
   coins: number;
   /** Rupees the coins are worth. */
   amount: number;
@@ -238,8 +246,11 @@ export interface TransferResponse {
   amount: number;
   txn_id: string;
   note: string | null;
-  /** Coins this payment drew — the amount the scratch card reveals. */
-  coins_earned?: number;
+  /**
+   * Set when this payment drew a scratch card. The draw's *amount* is not in
+   * this payload: it lives in the card and arrives when the card is scratched.
+   */
+  scratch_card_waiting?: boolean;
   /** The scratch card this payment drew, so its receipt can open the same one. */
   coin_card_id?: number;
   /** Present only when this payment completed an offer. */
@@ -361,8 +372,8 @@ export interface RequestPaymentResponse {
   to: number;
   note: string | null;
   timestamp: string;
-  /** Coins this payment drew — the amount the scratch card reveals. */
-  coins_earned?: number;
+  /** Set when this payment drew a scratch card — see `TransferResponse`. */
+  scratch_card_waiting?: boolean;
   /** The scratch card this payment drew, so its receipt can open the same one. */
   coin_card_id?: number;
   /** Present only when paying the request completed an offer. */
@@ -378,10 +389,12 @@ export interface Receipt {
   counterpartyVpa: string | null;
   note: string | null;
   timestamp: string;
-  /** Coins this payment drew, before any offer's coins are added to them. */
-  coinsEarned?: number;
-  /** Offers paid alongside this payment, shown as the reward line. */
-  cashback?: CreditedReward[];
+  /**
+   * True when this payment drew a scratch card. A flag and not an amount: the
+   * receipt says a card is waiting, and what it is worth stays under the cover
+   * until the card itself is scratched.
+   */
+  scratchCardWaiting?: boolean;
 }
 
 /**
@@ -401,7 +414,12 @@ export interface ScratchCard {
   reason: string;
   /** What won it, in a line — the fallback caption for a card with no payment. */
   caption: string;
-  /** What the card paid, or null for one whose payment is out of reach. */
+  /**
+   * What the card paid, or null while it is still under its cover. The amount
+   * is decided and stored server-side the moment the card is won, and it is
+   * deliberately absent from this payload until the card is claimed — so a
+   * covered card has nothing to reveal, in the response or on the screen.
+   */
   coins: number | null;
   scratched: boolean;
   scratched_at: string | null;
@@ -418,6 +436,20 @@ export interface ScratchCardCollection {
   cards: ScratchCard[];
   total: number;
   unscratched: number;
+}
+
+/**
+ * The answer to scratching one card.
+ *
+ * `credited` is what the claim added to the coin balance — 0 for a card that
+ * had already been claimed, which is how a repeat scratch is told apart from a
+ * payout — and `coins` is the fresh snapshot, so the header chip moves with the
+ * reveal rather than a round trip behind it.
+ */
+export interface ScratchCardClaimResponse {
+  card: ScratchCard;
+  credited: number;
+  coins: CoinSnapshot;
 }
 
 /** Router state for the amount-entry screen. */
