@@ -1355,7 +1355,7 @@ def test_a_payment_hands_over_a_scratch_card_that_pays_when_it_is_scratched(
     inbox = client.get("/api/notifications", headers=headers).get_json()["notifications"]
     waiting = [row for row in inbox if row["kind"] == "scratch_card"]
     assert waiting, "a payment that drew coins writes a note about its card"
-    assert waiting[0]["title"] == "A scratch card is waiting"
+    assert waiting[0]["title"] == "Scratch card ready"
     assert "Meera Iyer" in waiting[0]["body"]
 
 
@@ -1487,7 +1487,10 @@ def test_an_offer_pays_out_as_a_card_with_its_own_caption(client, demo_auth):
     collection = client.get("/api/scratch-cards", headers=headers).get_json()
     assert collection["total"] == before + 1
     offer_card = collection["cards"][0]
-    assert offer_card["caption"] == "On your first top-up"
+    # The reason, not the promise: "On your first top-up" is a condition to
+    # work towards, and printed under a prize that has already been won it read
+    # as though the coins were still conditional on something.
+    assert offer_card["caption"] == "First top-up"
     assert offer_card["coins"] is None  # under its cover like every other card
     assert offer_card["scratched"] is False
     assert offer_card["paid_to"] is None
@@ -1643,7 +1646,7 @@ def test_the_third_payment_credits_fifty_coins_and_a_refusal_credits_nothing(
         {
             "code": "three_payments",
             "title": "50 coins",
-            "headline": "On your next 3 payments",
+            "headline": "Send 3 payments",
             "coins": 50,
             "amount": 50.0,
         }
@@ -2088,7 +2091,7 @@ def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
             "notifications"
         ]
     ]
-    assert "A welcome scratch card is waiting" in titles
+    assert "Welcome card ready" in titles
     # Not one of them names the amount: the card is the only place it exists.
     assert not any("50" in title for title in titles)
 

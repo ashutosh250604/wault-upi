@@ -12,9 +12,13 @@ import { SkeletonCard } from "./ui/States";
 
 /** "0 of 3 payments" — the one line that says how far along an offer is. */
 function progressLabel(reward: Reward): string {
-  if (reward.status === "credited") return "Credited";
+  // The same word the chip beside it uses, so one offer does not read as two
+  // different states depending on which part of the card is visible.
+  if (reward.status === "credited") return "Paid out";
   if (reward.status === "expired") return "Expired";
-  const unit = reward.progress === 1 ? reward.unit : `${reward.unit}s`;
+  // The target decides the number, not the progress: a one-off offer read
+  // "0 of 1 top-ups", which is the sort of thing a template says.
+  const unit = reward.target === 1 ? reward.unit : `${reward.unit}s`;
   return `${reward.progress} of ${reward.target} ${unit}`;
 }
 
@@ -141,10 +145,13 @@ export function RewardSheet({
         ) : null}
       </dl>
 
+      {/* The one rule nobody can guess: where an offer's payout turns up. The
+          coins' own worth belongs to the coins sheet, which is where a user
+          goes to spend them, and repeating it here made two screens explain
+          the same rate. */}
       <p className="mt-4 border-t border-ink-200 pt-3 text-[11.5px] leading-relaxed text-ink-500">
-        Offers pay in coins, never in cash: a completed offer arrives as a scratch
-        card, and scratching it adds the coins to your balance. 10 coins redeem for
-        ₹10.
+        Offers pay in coins, never in cash. A completed offer arrives as a scratch
+        card — scratch it and the coins are yours.
       </p>
     </Sheet>
   );
@@ -302,7 +309,7 @@ export function OffersStrip({
           open={listOpen}
           onClose={() => setListOpen(false)}
           title="Offers for you"
-          description="Every offer here pays in coins, credited in the same moment as the payment that earns it."
+          description="Every offer pays in coins, collected when you scratch its card."
         >
           <div className="flex flex-col gap-3.5">
             {visible.map((reward) => (

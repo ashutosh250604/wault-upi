@@ -19,13 +19,14 @@ export default function ShowQrPage() {
 
             <VpaQr vpa={profile.vpa} name={profile.name} />
 
+            {/* The one thing the picture cannot say for itself: what is actually
+                inside the code. The line above the card already told the reader
+                any UPI app can read it, so this says the format and stops. */}
             <p className="flex gap-2.5 rounded-[10px] border border-dashed border-ink-300 px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-500">
               <IconInfo size={14} className="mt-px shrink-0 text-ink-400" />
               <span>
-                The code encodes a standard <span className="font-mono">upi://pay</span>{" "}
-                deep link, so any UPI scanner can read your{" "}
-                <span className="font-mono">@okwault</span> handle straight off it — no
-                typing needed.
+                A standard <span className="font-mono">upi://pay</span> code, readable by
+                any UPI app.
               </span>
             </p>
           </>

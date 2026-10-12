@@ -36,9 +36,15 @@ OFFERS = (
         "code": "first_topup",
         "title": "25 coins",
         "headline": "On your first top-up",
+        # What earned a card, for the card's own caption. A promise and a reason
+        # are not the same sentence: "On your first top-up" is a condition to
+        # work towards, and printed under a prize that has already been won it
+        # reads as though the coins were still conditional on something. The
+        # card says what happened instead.
+        "caption": "First top-up",
         "detail": (
-            "Add ₹100 or more to your wallet for the first time and 25 coins land "
-            "in your coin balance. One per account."
+            "Add ₹100 or more for the first time and 25 coins arrive as a scratch "
+            "card. One per account."
         ),
         "reward_coins": 25,
         "target": 1,
@@ -50,10 +56,11 @@ OFFERS = (
     {
         "code": "three_payments",
         "title": "50 coins",
-        "headline": "On your next 3 payments",
+        "headline": "Send 3 payments",
+        "caption": "Three payments",
         "detail": (
-            "Send money to anyone three times — any amount, any payee — and 50 coins "
-            "are credited as soon as the third payment settles."
+            "Pay anyone three times — any amount, to any payee. The 50 coins arrive "
+            "as a scratch card when the third payment settles."
         ),
         "reward_coins": 50,
         "target": 3,
@@ -66,9 +73,10 @@ OFFERS = (
         "code": "first_money_in",
         "title": "10 coins",
         "headline": "When someone pays you",
+        "caption": "Money received",
         "detail": (
-            "The first time another WAULT account sends you money, 10 coins are "
-            "credited on top. Ask for it with a money request, or share your QR."
+            "The first time another Wault account pays you, 10 coins arrive as a "
+            "scratch card. Ask for it with a money request, or share your QR."
         ),
         "reward_coins": 10,
         "target": 1,
@@ -201,13 +209,15 @@ def settle_due(user_id: int, now: datetime | None = None) -> list[Reward]:
         reward.updated_at = moment
         # The note names the promise and not the payout: the coins are decided
         # and stamped, and the card over them is scratched to collect them, so
-        # this is told as something to open rather than as money banked.
+        # this is told as something to open rather than as money banked. One
+        # line, because the inbox is a list of things to do and not a place to
+        # read the terms of a reward the user can see on their own card.
         notify(
             user_id,
             Notification.SCRATCH_CARD,
-            f"{offer['headline']} — card waiting",
-            "An offer paid out. Open your scratch cards and scratch it to reveal "
-            "your reward.",
+            "Scratch card ready",
+            f"{offer['title']} earned from {offer['caption'].lower()} — collect it "
+            f"in Scratch cards.",
             when=moment,
         )
         credited.append(reward)

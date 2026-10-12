@@ -90,8 +90,12 @@ def card_caption(reason: str) -> str:
 
     A payment's card names the payment instead (the client has the payee and the
     amount for that). This is the reason's own line: the welcome bonus, or the
-    offer that paid it — the offer's headline rather than its amount, because
-    the card already shows the coins.
+    offer that paid it.
+
+    The offer's `caption` and never its `headline`: a headline is the condition
+    to work towards ("Send 3 payments"), and printed under a prize that has
+    already been won it reads as though the coins were still conditional on it.
+    The caption is the past-tense reason, which is what a card needs to say.
     """
     if reason == CoinAward.REASON_SIGNUP:
         return "Welcome bonus"
@@ -103,7 +107,7 @@ def card_caption(reason: str) -> str:
         from .rewards import OFFERS_BY_CODE
 
         offer = OFFERS_BY_CODE.get(code)
-        return offer["headline"] if offer else "Offer reward"
+        return offer["caption"] if offer else "Offer reward"
     return award_label(reason)
 
 
@@ -287,10 +291,8 @@ def grant_signup_bonus(user_id: int, when: datetime | None = None) -> int:
     notify(
         user_id,
         Notification.SCRATCH_CARD,
-        "A welcome scratch card is waiting",
-        "Open your scratch cards and scratch yours to reveal your welcome "
-        "reward. Every coin is worth ₹1, and "
-        f"{REDEEM_MIN_COINS} coins redeem into your wallet whenever you want them.",
+        "Welcome card ready",
+        "Your welcome card is waiting in Scratch cards.",
         when=moment,
     )
     return SIGNUP_BONUS_COINS
@@ -325,9 +327,10 @@ def announce_payment(user_id: int, txn_id: int, when: datetime | None = None) ->
     notify(
         user_id,
         Notification.SCRATCH_CARD,
-        "A scratch card is waiting",
-        f"Your payment to {payee or 'someone'} left a card under its cover — "
-        f"scratch it to reveal your reward.",
+        "Scratch card ready",
+        # One line, because the inbox row truncates at one line: an instruction
+        # after this point is an instruction nobody reads.
+        f"Your payment to {payee or 'someone'} earned a scratch card.",
         when=moment,
     )
     return card

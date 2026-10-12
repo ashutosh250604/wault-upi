@@ -328,7 +328,29 @@ export function ScratchCard({
 
   return (
     <div className={cx("mx-auto w-full", compact ? undefined : "max-w-[17rem]", className)}>
+      {/* The card is the control.
+
+          It used to be a picture with a small underlined "Reveal without
+          scratching" button under it — which left every covered card on the
+          collection screen reading as three stacked lines of text, and put the
+          card's own caption below two of them. The gesture is a pointer drag on
+          the artwork, so the artwork is what a keyboard has to be able to
+          reach: a focusable box, activated by Enter or Space, claiming exactly
+          the way a stroke does. */}
       <div
+        role={revealed ? undefined : "button"}
+        tabIndex={revealed ? undefined : 0}
+        aria-label={revealed ? undefined : "Scratch card — press to reveal your coins"}
+        onKeyDown={
+          revealed
+            ? undefined
+            : (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  void claim();
+                }
+              }
+        }
         className={cx(
           // Square, and square on any screen: one width, `aspect-square`, and a
           // cap so a wide sheet does not hand the card a block taller than the
@@ -337,6 +359,8 @@ export function ScratchCard({
           // absurdly wide on a desktop.
           "relative aspect-square w-full overflow-hidden border-[1.5px] border-ink-900/75 bg-paper-100 shadow-[0_10px_24px_-18px_rgba(15,15,13,0.9)]",
           compact ? "rounded-[12px]" : "rounded-[16px]",
+          !revealed &&
+            "focus-visible:ring-2 focus-visible:ring-ink-900/40 focus-visible:ring-offset-2 focus-visible:outline-none",
         )}
       >
         {/* The face of the card. The prize is deliberately absent while the
@@ -401,7 +425,7 @@ export function ScratchCard({
                 : "bottom-3.5 px-3.5 py-1.5 text-[11.5]",
             )}
           >
-            {claiming ? "Claiming…" : "Scratch the logo"}
+            {claiming ? "Claiming…" : "Scratch to reveal"}
           </span>
         ) : null}
 
@@ -420,19 +444,11 @@ export function ScratchCard({
         />
       </div>
 
-      {/* The gesture is the interaction, but never the only way in: a keyboard
-          or a screen reader gets the same card with one press, which claims it
-          the same way a stroke does. */}
-      {!revealed ? (
-        <button
-          type="button"
-          disabled={claiming}
-          onClick={() => void claim()}
-          className="mt-2.5 w-full text-center text-[11.5px] font-semibold text-ink-500 underline decoration-ink-300 decoration-1 underline-offset-4 transition hover:text-ink-800 disabled:opacity-60"
-        >
-          {claiming ? "Claiming…" : "Reveal without scratching"}
-        </button>
-      ) : null}
+      {/* Nothing under the card: while the cover is on, the card says what it
+          wants and how the claim is going in the badge on the cover itself, and
+          once the prize is showing the caption is the very next line. A second
+          line here said "Claiming…" a second time and pushed the card's own
+          caption a row further from the card. */}
     </div>
   );
 }

@@ -193,9 +193,11 @@ export default function ProfilePage() {
                   style={{ width: `${Math.min(100, Math.max(0, limits.used_percent))}%` }}
                 />
               </div>
+              {/* Two facts, two clauses: what has gone today, and when the
+                  meter clears. "The cap is enforced on every debit" was the
+                  screen explaining that a limit is a limit. */}
               <p className="mt-2.5 text-[12px] leading-relaxed text-ink-500">
-                {formatCurrency(limits.spent_today)} sent today. The cap is enforced on every
-                debit. It resets at midnight IST.
+                {formatCurrency(limits.spent_today)} sent today. Resets at midnight IST.
               </p>
             </>
           ) : (

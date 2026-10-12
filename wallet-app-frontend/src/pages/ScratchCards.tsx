@@ -124,7 +124,7 @@ export default function ScratchCardsPage() {
             icon={<IconSpark size={TILE_GLYPH.lg} strokeWidth={TILE_STROKE} />}
             iconTone="pending"
             title="No scratch cards yet"
-            description="Every payment draws 1 to 50 coins, every offer pays in coins, and each payout arrives here as a card. Scratch one and its coins land in your balance."
+            description="Every payment draws 1–50 coins. Scratch a card and its coins land in your balance."
             action={
               <Button size="lg" onClick={() => navigate("/scan")}>
                 Make a payment
@@ -133,24 +133,19 @@ export default function ScratchCardsPage() {
           />
         ) : (
           <>
-            <div className="flex items-start gap-2.5 rounded-[10px] border border-dashed border-pending-300 bg-pending-50 px-3.5 py-3">
-              <IconSpark size={16} className="mt-0.5 shrink-0 text-pending-600" />
-              <p className="text-[12px] leading-relaxed text-pending-800">
-                {waiting === 0
-                  ? "Every card has been scratched. There is nothing left under a cover."
-                  : `${waiting} ${waiting === 1 ? "card is" : "cards are"} still under the cover — scratch ${
-                      waiting === 1 ? "it" : "them"
-                    } here to reveal ${waiting === 1 ? "its reward" : "their rewards"}. The coins are counted when you do.`}
-              </p>
-            </div>
-
-            <p className="mt-4 text-[11.5px] font-semibold tracking-[0.06em] text-ink-400 uppercase">
-              Newest first
+            {/* One line, and only when there is something to do. The badges on
+                the cards already say which are opened and which are not, so a
+                paragraph explaining the rule was telling the user what the
+                screen was already showing them. */}
+            <p className="text-center text-[12px] font-semibold text-ink-500">
+              {waiting === 0
+                ? "All scratched"
+                : `${waiting} ${waiting === 1 ? "card" : "cards"} to scratch`}
             </p>
 
             {/* Two to a row: a card is a small object, and a list of them reads
                 faster side by side than one per screen-width. */}
-            <ul className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-6">
+            <ul className="mt-3.5 grid grid-cols-2 gap-x-3 gap-y-6">
               {list.map((card) => {
                 const line = cardLine(card);
                 const at = formatDateTime(card.at);
@@ -172,17 +167,20 @@ export default function ScratchCardsPage() {
                       </span>
                     </div>
 
-                    <div className="mt-1.5">
-                      <ScratchCard
+                    <div className="mt-1.5">                        <ScratchCard
                         compact
                         coins={card.coins}
                         revealed={card.scratched}
                         onClaim={() => claimCard(card)}
                       />
+
                     </div>
 
+                    {/* Centred under the card it belongs to: a caption pinned
+                        to the left of a centred object reads as a different
+                        column rather than as that card's line. */}
                     <p
-                      className="mt-1.5 truncate text-[11.5px] font-semibold text-ink-700"
+                      className="mt-2 truncate text-center text-[11.5px] font-semibold text-ink-700"
                       title={line}
                     >
                       {line}

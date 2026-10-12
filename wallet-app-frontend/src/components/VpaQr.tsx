@@ -179,13 +179,13 @@ export function VpaQr({ vpa, name }: VpaQrProps) {
           {vpa}
         </span>
 
-        {/* The slip's own detail block: what a payer would fill in by hand. */}
+        {/* The slip's own detail block: what a payer would fill in by hand.
+
+            No "Pays to" row: the chip directly above this block is the same
+            address in the same mono face, so the row repeated the line the eye
+            had just read. The amount is the part the card cannot say. */}
         <dl className="mt-4 w-full space-y-1.5 text-[11.5px]">
           <div className="flex items-baseline justify-between gap-3 border-t border-dashed border-ink-300 pt-2.5">
-            <dt className="text-ink-500">Pays to</dt>
-            <dd className="font-mono font-semibold text-ink-800 tabular-nums">{vpa}</dd>
-          </div>
-          <div className="flex items-baseline justify-between gap-3">
             <dt className="text-ink-500">Amount</dt>
             <dd className="font-semibold text-ink-800">The payer chooses</dd>
           </div>

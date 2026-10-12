@@ -195,15 +195,13 @@ export default function RequestsPage() {
 
         {requests !== null && requests.length === 0 ? (
           <Card>
+            {/* No button here: the footer already carries "Ask for money" on
+                this screen, and the empty state was holding a second one two
+                centimetres above it. */}
             <EmptyState
               icon={<IconReceipt size={22} />}
               title="No requests yet"
               description="Ask a contact for money — they can approve it with their PIN, or decline if it isn't right."
-              action={
-                <Button leftIcon={<IconPlus size={16} />} onClick={() => setComposing(true)}>
-                  Ask for money
-                </Button>
-              }
             />
           </Card>
         ) : null}

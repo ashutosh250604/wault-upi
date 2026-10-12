@@ -437,8 +437,8 @@ export default function AmountEntryPage() {
           <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
           <p className="text-[12.5px] leading-relaxed text-ink-600">
             {isTopUp
-              ? "Your bank and your wallet update together, so both always show the same amount."
-              : "Your balance is checked and the money sent in the same step, so you can never send more than you have."}
+              ? "Your bank and your wallet update together."
+              : "The balance is checked and the money sent in one step."}
           </p>
         </Card>
       </div>
@@ -479,9 +479,11 @@ export default function AmountEntryPage() {
             </Button>
           </Card>
         ) : (
+          // One line, and not the pad's own line again: the pad already says
+          // the PIN is checked before money moves, so this says the other half
+          // — where the PIN goes — rather than repeating that half twice.
           <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ink-400">
-            Your PIN is sent over HTTPS, checked on the server before any money moves,
-            and never stored in plain text.
+            Sent over HTTPS and never stored in plain text.
           </p>
         )}
       </Sheet>

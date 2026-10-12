@@ -1,5 +1,6 @@
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo } from "react";
+import { cx } from "../lib/cx";
 import { formatCurrency, formatDateTime } from "../lib/format";
 import { parseReceipt } from "../lib/routing";
 import { useToast } from "../hooks/toast";
@@ -11,7 +12,7 @@ import { DetailRow } from "../components/ui/DetailRow";
 import { Coin } from "../components/ui/Coin";
 import { TILE_GLYPH } from "../lib/tiles";
 import { IconTile } from "../components/ui/IconTile";
-import { IconCheck, IconSpark } from "../components/ui/Icons";
+import { IconCheck, IconChevronRight } from "../components/ui/Icons";
 
 export default function PaymentResultPage() {
   const location = useLocation();
@@ -111,40 +112,53 @@ export default function PaymentResultPage() {
           />
         </div>
 
-        {/* A card, and not a number. The receipt says a reward is waiting and
-            where to collect it; what it is worth is under the cover, on the
-            card, until the card itself is scratched. */}
+        {/* The card, as the thing to do next — and not as a paragraph about
+            the thing to do next.
+
+            This used to be a two-line notice under a secondary "Scratch Card"
+            button: the notice said a card was waiting, the button said the same
+            in two words, and the note underneath explained coin economics. The
+            user was told one thing three times and handed the action as the
+            quieter of two buttons.
+
+            Now it is one object that is obviously tappable — the app's slip: an
+            inked edge, a hard print shadow, the coin it pays out, and a chevron
+            saying where it goes. It carries no amount, because the amount does
+            not exist on this device until the card is scratched. */}
         {receipt.scratchCardWaiting ? (
-          <div className="mt-6 flex items-start gap-3 rounded-[10px] border border-dashed border-seal-300 bg-seal-50 px-4 py-3">
-            {/* The coin itself, not a sparkle: the reward line should be about
-                the same object as the card it points to. */}
-            <Coin size={36} className="mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-[13.5px] font-semibold text-seal-900">
-                A scratch card is waiting
-              </p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-seal-800/80">
-                This payment drew a card and left it under its cover — scratch your
-                card to reveal your reward. Coins sit in your coin balance, not your
-                wallet, and 10 of them redeem for ₹10.
-              </p>
-            </div>
-          </div>
+          <Link
+            to="/scratch-cards"
+            className={cx(
+              "mt-6 flex items-center gap-3 rounded-[14px] border-[1.5px] border-ink-900 bg-seal-50 py-3 pr-3.5 pl-3",
+              "shadow-[3px_3px_0_0_rgba(25,25,22,0.85)] transition",
+              "hover:bg-seal-100 active:translate-y-px active:shadow-[1px_1px_0_0_rgba(25,25,22,0.85)]",
+              "focus-visible:ring-2 focus-visible:ring-ink-900/30 focus-visible:outline-none",
+            )}
+          >
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-[11px] border-[1.5px] border-ink-900 bg-paper-25">
+              <Coin size={24} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-bold text-ink-900">
+                Scratch card ready
+              </span>
+              <span className="mt-0.5 block text-[12px] text-ink-600">
+                Tap to reveal your coins
+              </span>
+            </span>
+            <IconChevronRight size={18} className="shrink-0 text-ink-600" />
+          </Link>
         ) : null}
 
-        <div className="mt-6 grid w-full grid-cols-2 gap-2">
-          <Link to="/scratch-cards" className="contents">
+        <div className={cx(receipt.scratchCardWaiting ? "mt-3" : "mt-6")}>
+          <Link to="/home" replace className="contents">
             <Button
-              variant="secondary"
+              // With a card waiting the card is the action and this is the way
+              // out; with nothing to collect it is the only thing left to do.
+              variant={receipt.scratchCardWaiting ? "secondary" : "primary"}
               size="lg"
               fullWidth
-              leftIcon={<IconSpark size={17} />}
             >
-              Scratch Card
-            </Button>
-          </Link>
-          <Link to="/home" replace className="contents">
-            <Button size="lg" fullWidth>
               Done
             </Button>
           </Link>
@@ -165,8 +179,8 @@ export default function PaymentResultPage() {
           </Link>
         </div>
 
-        <p className="mt-8 text-center text-[11.5px] leading-relaxed text-ink-400">
-          Saved to your transactions. Keep the reference number for your records.
+        <p className="mt-7 text-center text-[11.5px] leading-relaxed text-ink-400">
+          Saved to your transactions.
         </p>
       </div>
 
