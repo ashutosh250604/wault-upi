@@ -38,9 +38,12 @@ import { Coin } from "./ui/Coin";
  * scratch card that demands the whole surface is a chore, and the coins are
  * already in the balance either way — this is the telling, not the paying.
  *
- * "Reveal without scratching" is not a fallback for a broken canvas. A scratch
- * card is a pointer gesture, and a card is not allowed to have a prize that a
- * keyboard or a screen reader cannot get to.
+ * A scratch card is a pointer gesture, and a card is not allowed to have a
+ * prize that a keyboard or a screen reader cannot get to — so the card itself
+ * is the control: focusable, announced as a button, and claimed by Enter or
+ * Space exactly as a stroke claims it. That replaced a small underlined
+ * "Reveal without scratching" link underneath, which got every covered card on
+ * the collection screen announced twice and pushed its caption a row down.
  */
 
 /** How much of the cover has to be gone before it lifts by itself. */
