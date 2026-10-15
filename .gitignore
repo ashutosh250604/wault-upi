@@ -26,3 +26,6 @@ static_frontend/
 # tooling
 .DS_Store
 .freebuff/
+
+# editor settings (machine-local)
+.vscode/
