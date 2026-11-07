@@ -14,7 +14,7 @@ from wallet.config import _database_uri
 from wallet.extensions import db
 from wallet.limits import day_window
 from wallet.models import CoinAward, User
-from wallet.timeutils import ist_date, utcnow
+from wallet.timeutils import ist_date, ist_now, utcnow
 
 
 PIN = "1234"
@@ -48,7 +48,7 @@ def claim_every_card(client, headers):
     """Scratch every card still under a cover, returning the coins they paid.
 
     A card is what a payout arrives as, and the coin balance moves only when it
-    is scratched — so a test about what a payout is worth has to open the cards
+    is scratched, so a test about what a payout is worth has to open the cards
     that payout produced, exactly as a user does. Returns the total credited, so
     a caller can check it against what it expected the payouts to be.
     """
@@ -68,7 +68,7 @@ def grant_claimed(app, client, headers, user_id, amount):
 
     `coins.grant` records a draw; the card over it is what counts the coins. A
     test that wants an exact balance therefore has to do both halves, and this
-    does — through the same endpoint a user's scratch goes through.
+    does, through the same endpoint a user's scratch goes through.
     """
     with app.app_context():
         award = CoinAward(user_id=user_id, coins=amount, reason=CoinAward.REASON_PAYMENT)
@@ -203,7 +203,7 @@ def test_topup_then_transfer(client, demo_auth):
     )
     assert topup.status_code == 200
     # ₹1000 is the first qualifying top-up, so the welcome offer pays 25 coins
-    # inside the same commit as the top-up itself — coins, not cash: the offer
+    # inside the same commit as the top-up itself, coins, not cash: the offer
     # moves the coin balance, and the wallet balance is only the top-up.
     assert topup.get_json()["new_balance"] == 6000.0
     assert topup.get_json()["rewards"] == [
@@ -310,7 +310,7 @@ def test_full_onboarding_flow(client):
     assert named.status_code == 200
     assert named.get_json()["vpa"] == "9876543210@okwault"
 
-    # Half-onboarded: named, but no PIN yet — the client uses this to route
+    # Half-onboarded: named, but no PIN yet, the client uses this to route
     # the user back to the PIN step.
     assert client.get("/api/me", headers=headers).get_json()["has_pin"] is False
 
@@ -379,7 +379,7 @@ def test_pin_lockout_is_shared_by_every_debit_path(client, demo_auth):
             headers=headers,
         )
 
-    # Wrong attempts through /transfer lock the PIN for /verify_pin too — the
+    # Wrong attempts through /transfer lock the PIN for /verify_pin too, the
     # counter cannot be sidestepped by picking a different endpoint.
     locked = client.post("/api/verify_pin", json={"pin": PIN}, headers=headers)
     assert locked.status_code == 403
@@ -446,7 +446,7 @@ def test_request_lifecycle_ends_in_a_real_transfer(client, demo_auth):
         == 2200.0
     )
     # 5000 + the 300 received. The "when someone pays you" offer unlocked by
-    # arriving money pays Aarav 10 coins, which is not wallet money — the
+    # arriving money pays Aarav 10 coins, which is not wallet money, the
     # balance is the transfer alone.
     assert (
         client.get(f"/api/get_balance/{aarav['user_id']}", headers=aarav["headers"]).get_json()[
@@ -688,7 +688,7 @@ def test_topup_from_a_linked_account_debits_it_and_needs_a_pin(client, demo_auth
     )
     assert okay.status_code == 200
     # ₹500 clears the ₹100 first-top-up threshold, so the offer's 25 coins ride
-    # along — in the coin balance, not in this one.
+    # along, in the coin balance, not in this one.
     assert okay.get_json()["new_balance"] == 5500.0
     assert okay.get_json()["account"]["balance"] == 47750.0
 
@@ -787,7 +787,7 @@ def test_statement_pdf_brands_the_period_it_was_asked_for(client, demo_auth):
     empty = client.get(
         "/api/statements.pdf?from=2020-01-01&to=2020-01-31", headers=headers
     )
-    # An empty window is still a valid statement — it just says so.
+    # An empty window is still a valid statement, it just says so.
     assert empty.status_code == 200
     assert empty.data.startswith(b"%PDF")
 
@@ -799,7 +799,7 @@ def test_statement_window_labels_and_fallbacks():
     """The window is the user's calendar month, not the server's.
 
     Its boundaries are IST midnights converted to UTC, so September runs from
-    18:30 UTC on 31 August — which is exactly midnight on the 1st in India. A
+    18:30 UTC on 31 August, which is exactly midnight on the 1st in India. A
     statement that started at UTC midnight would file a payment made at 1am IST
     on the 1st under the previous month.
     """
@@ -829,7 +829,7 @@ def test_times_are_rendered_in_ist():
 
     from wallet.timeutils import format_date, format_datetime, to_ist
 
-    # 20:30 UTC on 30 September is 02:00 on 1 October in India — the case that
+    # 20:30 UTC on 30 September is 02:00 on 1 October in India, the case that
     # makes a UTC-rendered date wrong rather than merely different.
     late = datetime(2026, 9, 30, 20, 30, tzinfo=timezone.utc)
     assert format_date(late) == "01-10-2026"
@@ -1090,7 +1090,7 @@ def test_the_first_five_otp_requests_are_free_and_the_sixth_waits(client, app):
         assert body["requests_remaining"] == free - index - 1
 
     # The last free request is where the window opens: it succeeds, and it
-    # carries the instant the next one may be made — which is what the client's
+    # carries the instant the next one may be made, which is what the client's
     # countdown runs on, instead of a second clock it started itself.
     fifth = client.post("/api/start_login", json={"mobile": mobile})
     assert fifth.status_code == 200
@@ -1232,8 +1232,8 @@ def test_the_inbox_and_rewards_are_owner_scoped_and_need_a_token(client, demo_au
     assert client.get("/api/rewards").status_code == 401
     assert client.get("/api/limits").status_code == 401
 
-    # The stranger's inbox holds only their own news — signing in, setting a PIN,
-    # and the welcome scratch card every new account is handed — and none of
+    # The stranger's inbox holds only their own news, signing in, setting a PIN,
+    # and the welcome scratch card every new account is handed, and none of
     # Aarav's ledger activity leaks across.
     stranger_inbox = client.get("/api/notifications", headers=stranger["headers"]).get_json()
     assert {row["kind"] for row in stranger_inbox["notifications"]} == {
@@ -1262,7 +1262,7 @@ def test_a_payment_hands_over_a_scratch_card_that_pays_when_it_is_scratched(
     client, demo_auth
 ):
     """The card is the receipt's, the collection is the user's, the two are the
-    same card — and it pays once, when it is opened."""
+    same card, and it pays once, when it is opened."""
     headers = demo_auth["headers"]
     payee = client.post(
         "/api/vpas/resolve", json={"vpa": "9000000002@okwault"}, headers=headers
@@ -1294,7 +1294,7 @@ def test_a_payment_hands_over_a_scratch_card_that_pays_when_it_is_scratched(
     card = next(item for item in collection["cards"] if item["id"] == card_id)
     assert collection["cards"][0]["reference"] == paid["txn_id"]  # newest first
     # ...and the amount is not on the wire either, so a covered card cannot hand
-    # its prize over — not to a response, a screenshot or a failed cover.
+    # its prize over, not to a response, a screenshot or a failed cover.
     assert card["coins"] is None
     assert card["scratched"] is False
     assert card["paid_to"] == "Meera Iyer"
@@ -1302,7 +1302,7 @@ def test_a_payment_hands_over_a_scratch_card_that_pays_when_it_is_scratched(
     assert card["reference"] == paid["txn_id"]
     # Timezone-aware and the moment of the payment. A naive string on the wire
     # is read as the browser's own zone, which put a card won at 11:40 pm IST on
-    # screen at 6:10 pm — the bug this assertion exists to keep out.
+    # screen at 6:10 pm, the bug this assertion exists to keep out.
     stamp = datetime.fromisoformat(card["at"])
     assert stamp.tzinfo is not None
     assert abs((utcnow() - stamp).total_seconds()) < 120
@@ -1366,7 +1366,7 @@ def test_a_card_counts_only_when_it_is_scratched_and_only_once(client):
     amount is anywhere until it is scratched, the scratch credits it exactly
     once, and the scratch is remembered. A top-up below the offer threshold is
     used so that the only cards in play are the payment's draw and the welcome
-    bonus — otherwise this test would be asserting the offer's arithmetic too.
+    bonus, otherwise this test would be asserting the offer's arithmetic too.
     """
     payer = fresh_payer(client, "9000000911", "Lifecycle Payer", topup_rupees=50)
     headers = payer["headers"]
@@ -1412,7 +1412,7 @@ def test_a_card_counts_only_when_it_is_scratched_and_only_once(client):
     assert repeat["credited"] == 0
     assert repeat["coins"]["coins"] == won
 
-    # 8: revisiting shows the state it was left in — cover off, amount still there.
+    # 8: revisiting shows the state it was left in, cover off, amount still there.
     again = client.get("/api/scratch-cards", headers=headers).get_json()
     reopened = next(card for card in again["cards"] if card["id"] == card_id)
     assert reopened["scratched"] is True
@@ -1434,7 +1434,7 @@ def test_two_claims_of_one_card_credit_it_once(client, demo_auth, app):
     The endpoint test covers a second tap arriving later. This covers the same
     instant: two claims of one card inside one session, which is what a refresh
     and a swipe landing together look like to the database. Only the claim that
-    changes the row may count the coins — `claim_card` does the lift as a
+    changes the row may count the coins, `claim_card` does the lift as a
     conditional UPDATE and reads the row count, rather than a read-then-write
     where both callers would see an unclaimed card and both would credit it.
     """
@@ -1476,7 +1476,7 @@ def test_an_offer_pays_out_as_a_card_with_its_own_caption(client, demo_auth):
     before = client.get("/api/scratch-cards", headers=headers).get_json()["total"]
 
     # ₹100 is the first-top-up threshold, so the offer pays 25 coins inside the
-    # top-up's own commit — and those coins are a card like any other.
+    # top-up's own commit, and those coins are a card like any other.
     topped = client.post(
         "/api/topup",
         json={"user_id": demo_auth["user_id"], "amount": 100, "pin": PIN},
@@ -1520,7 +1520,7 @@ def test_scratch_cards_are_owner_scoped_and_need_a_token(client, demo_auth):
 
     stranger = onboard(client, "9000000931", "Card Thief")
     theirs = client.get("/api/scratch-cards", headers=stranger["headers"]).get_json()
-    # Their own welcome bonus and nothing else — not the other wallet's card.
+    # Their own welcome bonus and nothing else, not the other wallet's card.
     assert theirs["total"] == 1
     assert all(item["id"] != card_id for item in theirs["cards"])
     # 404 rather than 403: the collection is not a way to confirm which ids exist.
@@ -1576,8 +1576,8 @@ def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth, 
     assert after["first_topup"]["coins"] == 25
     assert after["first_topup"]["reward"] == 25.0
 
-    # The payout is a real coin award, tagged with the offer that made it —
-    # which is what keeps the coin balance one sum of one log — and it reaches
+    # The payout is a real coin award, tagged with the offer that made it,
+    # which is what keeps the coin balance one sum of one log, and it reaches
     # the balance the way every payout does, by being scratched.
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == 0
     assert claim_every_card(client, headers) == SIGNUP_BONUS_COINS + 25
@@ -1597,7 +1597,7 @@ def test_rewards_pay_out_once_the_qualifying_payment_settles(client, demo_auth, 
     assert [row["type"] for row in ledger[:2]] == ["topup", "topup"]
     assert all(row["type"] != "cashback" for row in ledger)
 
-    # And it cannot be paid twice — a credited offer is skipped, not re-earned.
+    # And it cannot be paid twice, a credited offer is skipped, not re-earned.
     client.post(
         "/api/topup", json={"user_id": user_id, "amount": 100, "pin": PIN}, headers=headers
     )
@@ -1750,7 +1750,7 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
     assert started["coin_value"] == 1.0
     assert started["min_redeem"] == 10
     # A brand-new account holds two cards and no coins: the welcome bonus, and
-    # the 25 the ₹500 `fresh_payer` top-up earned for the first-top-up offer —
+    # the 25 the ₹500 `fresh_payer` top-up earned for the first-top-up offer,
     # the same top-up that put the offers in play, counted rather than
     # discarded (see `settle_due`). Neither is spendable until it is scratched,
     # so nothing of either is in the balance, the history or the total yet.
@@ -1792,8 +1792,8 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
         == started["coins"] + awarded + 50 + SIGNUP_BONUS_COINS + 25
     )
     assert after["cards_waiting"] == 0
-    # The award history reads newest first — this test's four payments, and the
-    # offer the third of them completed — and each row says where it came from.
+    # The award history reads newest first, this test's four payments, and the
+    # offer the third of them completed, and each row says where it came from.
     assert [(row["reason"], row["coins"]) for row in after["awards"]] == [
         ("payment", drawn[3]),
         ("payment", drawn[2]),
@@ -1815,7 +1815,7 @@ def test_every_payment_awards_coins_and_the_award_is_written_down(client, app):
     )
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == coins_before
 
-    # A draw writes to the inbox, in the same commit as the payment — and says
+    # A draw writes to the inbox, in the same commit as the payment, and says
     # only that a card is waiting, never what it is worth.
     notes = client.get("/api/notifications", headers=headers).get_json()["notifications"]
     kinds = [row["kind"] for row in notes]
@@ -1830,8 +1830,8 @@ def test_the_award_draw_is_small_most_of_the_time_but_reaches_fifty(app):
     """The odds, stated as odds.
 
     A uniform 1–50 would average 25 coins a payment and make a large award
-    ordinary. The draw is meant to be weighted the other way — mostly pocket
-    change, with the big numbers genuinely rare — so this checks the declared
+    ordinary. The draw is meant to be weighted the other way, mostly pocket
+    change, with the big numbers genuinely rare, so this checks the declared
     weights as well as a few thousand real draws.
     """
     weights = award_weights()
@@ -1865,7 +1865,7 @@ def test_coins_redeem_into_the_wallet_and_cannot_be_spent_twice(client):
     payee = onboard(client, "9000000942", "Redeem Payee")
 
     # Pay and scratch until the balance clears the minimum. The payout is
-    # random, so the number of payments it takes is not fixed — the balance is
+    # random, so the number of payments it takes is not fixed, the balance is
     # what matters, and it only moves for the cards that have been opened.
     for _ in range(60):
         if client.get("/api/coins", headers=headers).get_json()["coins"] >= 10:
@@ -1882,7 +1882,7 @@ def test_coins_redeem_into_the_wallet_and_cannot_be_spent_twice(client):
 
     before = client.get("/api/coins", headers=headers).get_json()
     assert before["coins"] >= 10
-    # Clearing the minimum offers the whole balance — a coin is ₹1 and none of
+    # Clearing the minimum offers the whole balance, a coin is ₹1 and none of
     # them are held back to make the payout a round number.
     assert before["redeemable"] == before["coins"]
     assert before["redeemable_value"] == float(before["redeemable"])
@@ -1927,7 +1927,7 @@ def test_coins_redeem_into_the_wallet_and_cannot_be_spent_twice(client):
 
 
 def test_redemption_pays_out_the_whole_balance_at_a_rupee_a_coin(client, app):
-    """11 coins pay ₹11, 37 pay ₹37 — the ten is the gate, not the step.
+    """11 coins pay ₹11, 37 pay ₹37, the ten is the gate, not the step.
 
     Redemption used to round the balance down to whole tens and leave the odd
     coins behind, which quietly kept money the user had earned: a balance of 37
@@ -1941,7 +1941,7 @@ def test_redemption_pays_out_the_whole_balance_at_a_rupee_a_coin(client, app):
 
     # Start from an empty coin balance: the welcome bonus is real coins, and
     # clearing it through the API is how any account ends up holding nothing.
-    # It has to be scratched first — that is what puts it in the balance at all.
+    # It has to be scratched first, that is what puts it in the balance at all.
     assert claim_every_card(client, headers) == SIGNUP_BONUS_COINS
     cleared = client.post("/api/coins/redeem", json={}, headers=headers)
     assert cleared.status_code == 200
@@ -1983,7 +1983,7 @@ def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
     """Half-finished coin balances get a reason, not a generic refusal.
 
     The payout is pinned to a single coin here, because this test is about the
-    wording of a refusal that only happens while the balance is short — it is
+    wording of a refusal that only happens while the balance is short, it is
     not about the draw. The welcome bonus is part of the balance, so the figures
     below are the bonus plus the one coin the payment is pinned to.
     """
@@ -2000,14 +2000,14 @@ def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
         headers=headers,
     )
 
-    # Scratch the two cards the account is holding — the welcome bonus and the
-    # one-coin draw just made — because that is what puts them in the balance.
+    # Scratch the two cards the account is holding, the welcome bonus and the
+    # one-coin draw just made, because that is what puts them in the balance.
     held = claim_every_card(client, headers)
     assert held == SIGNUP_BONUS_COINS + 1
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == held
 
     # A named amount is not a menu: a redemption takes the whole balance, so
-    # asking for seven of the fifty-one on hand is refused — and the refusal
+    # asking for seven of the fifty-one on hand is refused, and the refusal
     # says what is actually held rather than what the wallet would prefer.
     odd = client.post("/api/coins/redeem", json={"coins": 7}, headers=headers)
     assert odd.status_code == 400
@@ -2019,7 +2019,7 @@ def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
     assert greedy.status_code == 400
     assert f"You have {held} coins" in greedy.get_json()["message"]
 
-    # Redeem the balance — all of it, since 51 coins clear the minimum.
+    # Redeem the balance, all of it, since 51 coins clear the minimum.
     assert client.post("/api/coins/redeem", json={}, headers=headers).status_code == 200
     assert client.get("/api/coins", headers=headers).get_json()["coins"] == 0
 
@@ -2037,8 +2037,8 @@ def test_coin_redemption_rules_are_stated_not_guessed(client, app, monkeypatch):
 def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
     """The welcome bonus belongs to sign-up, not to signing in.
 
-    It is granted where an account becomes real — the moment a one-time code is
-    verified — and the guard is the award log itself, so signing in again, or
+    It is granted where an account becomes real, the moment a one-time code is
+    verified, and the guard is the award log itself, so signing in again, or
     five times again, cannot hand it over twice.
     """
     mobile = "9000000961"
@@ -2051,7 +2051,7 @@ def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
 
     assert SIGNUP_BONUS_COINS == 50
     # The bonus arrives as a card. It is decided and stored at sign-up, and the
-    # balance does not know about it — nor does the client, which is why the
+    # balance does not know about it, nor does the client, which is why the
     # amount is absent rather than merely undrawn.
     held = client.get("/api/coins", headers=headers).get_json()
     assert held["coins"] == 0
@@ -2109,7 +2109,7 @@ def test_signing_up_hands_over_fifty_coins_exactly_once(client, app):
 
 
 def test_statement_pdf_prints_balances_that_reconcile(client, app):
-    """Opening plus credits minus debits equals the closing balance — and the
+    """Opening plus credits minus debits equals the closing balance, and the
     figures are the ledger's, printed on the page for a reader to check.
 
     The statement is built with compression off so the test can read the text it
@@ -2172,10 +2172,14 @@ def test_statement_pdf_prints_balances_that_reconcile(client, app):
 
     # Every figure printed is the ledger's own, to the paise.
     for paise in (opening, credits, debits, closing):
-        assert f"{paise / 100:,.2f}".encode() in body
-
-    # Month banners, so a long statement is readable a month at a time.
-    assert b"September 2026" in body or b"October 2026" in body
+        assert f"{paise / 100:,.2f}".encode() in body        # Month banners, so a long statement is readable a month at a time.
+        #
+        # The banner is the current IST month, because every movement in this
+        # statement happened now. Naming a month in the assertion made the test
+        # fail on the first day of the next one, a calendar fact, not a broken
+        # statement, so the expected label comes from the same clock the app
+        # prints it with.
+        assert ist_now().strftime("%B %Y").encode() in body
     assert b"Debits" in body
 
 
@@ -2201,7 +2205,7 @@ def test_a_wrong_pin_is_counted_per_ist_day(client, app, demo_auth):
     The counter used to be permanent: three mistyped PINs on Monday were still
     three on Friday, and the only way back was to run out of attempts and wait
     out the lockout. The count now belongs to an IST calendar day, so it is
-    written down rather than inferred — a count with no date cannot tell you
+    written down rather than inferred, a count with no date cannot tell you
     whether it was this morning or last week.
     """
     headers = demo_auth["headers"]
@@ -2238,7 +2242,7 @@ def test_a_wrong_pin_is_counted_per_ist_day(client, app, demo_auth):
 def test_a_forgotten_pin_is_replaced_with_the_registered_number(client):
     """The full recovery: code to the number, then a new PIN, and no sign-in.
 
-    The old PIN must stop authenticating the moment the new one is written —
+    The old PIN must stop authenticating the moment the new one is written,
     otherwise "reset" would mean "add a second PIN", which is the opposite of
     what someone who fears their PIN leaked is asking for.
     """
@@ -2290,7 +2294,7 @@ def test_forgot_pin_does_not_say_whether_a_number_is_registered(client):
 
     A screen that says "no wallet with that number" is a screen that tells a
     stranger which numbers bank here. The only difference is the code, and the
-    demo hands that back for the numbers that have an account — which is the
+    demo hands that back for the numbers that have an account, which is the
     same bargain the sign-in flow already makes.
     """
     unknown = client.post("/api/forgot_pin", json={"mobile": "9111111111"})
@@ -2336,7 +2340,7 @@ def test_the_statement_image_installs_a_font_the_rupee_sign_needs():
 
     reportlab's built-in Helvetica has no ₹ glyph, so a statement printed
     without a Unicode face says "INR" on every line. That is what a slim Python
-    image looks like, which is why the Dockerfile installs one — and this is the
+    image looks like, which is why the Dockerfile installs one, and this is the
     test that keeps it installed.
     """
     from wallet import statement
@@ -2347,7 +2351,7 @@ def test_the_statement_image_installs_a_font_the_rupee_sign_needs():
 
     # And the statement must look where that package installs to. (`as_posix`
     # so the assertion is about the container's paths, not this host's
-    # separator — the same list is checked on Windows.)
+    # separator, the same list is checked on Windows.)
     assert any(
         regular.as_posix().startswith("/usr/share/fonts/")
         for regular, _ in statement._FONT_CANDIDATES
@@ -2383,7 +2387,7 @@ def test_the_statement_prints_the_rupee_sign_when_the_host_has_a_face(app):
         if regular.is_file() and bold.is_file()
     ]
     if not available:
-        skip("no Unicode face on this host — see the Dockerfile test")
+        skip("no Unicode face on this host, see the Dockerfile test")
 
     statement._fonts.cache_clear()
     try:

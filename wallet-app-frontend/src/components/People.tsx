@@ -9,7 +9,7 @@ import { IconPlus, IconRefresh, IconStar } from "./ui/Icons";
 
 export interface PersonTileProps {
   name: string | null;
-  /** Stable value the avatar colour is derived from — the UPI ID, ideally. */
+  /** Stable value the avatar colour is derived from, the UPI ID, ideally. */
   seed: string;
   onClick: () => void;
   /** Small caption under the name, e.g. "You paid". */
@@ -88,7 +88,7 @@ export interface PeopleStripProps {
   onRetry?: () => void;
 }
 
-/** Horizontal, snap-scrolling row of faces — the signature UPI home element. */
+/** Horizontal, snap-scrolling row of faces, the signature UPI home element. */
 export function PeopleStrip({
   people,
   status,
@@ -107,7 +107,7 @@ export function PeopleStrip({
         onClick={onRetry}
         className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-dashed border-ink-300 py-4 text-[12.5px] font-semibold text-ink-500 transition hover:border-ink-400 hover:text-ink-700"
       >
-        <IconRefresh size={15} /> Couldn&apos;t load your contacts — tap to retry
+        <IconRefresh size={15} /> Couldn&apos;t load your contacts. Tap to retry
       </button>
     );
   }
@@ -129,7 +129,7 @@ export function PeopleStrip({
       ))}
       {list.length === 0 && !onAdd ? (
         <p className="py-3 text-[12.5px] text-ink-500">
-          Nobody here yet — add a contact to pay them in one tap.
+          Nobody here yet. Add a contact to pay them in one tap.
         </p>
       ) : null}
     </div>

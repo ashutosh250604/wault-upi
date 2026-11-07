@@ -33,7 +33,7 @@ import { EmptyState, TransactionSkeleton } from "./ui/States";
  * A small tile of press ink marking which way the money went.
  *
  * The same `IconTile` the inbox rows wear, at the same scale and with the same
- * tone vocabulary — so a payment reads the same on the sheet that announces it
+ * tone vocabulary, so a payment reads the same on the sheet that announces it
  * and in the ledger that records it. It used to be a different size with a
  * different radius and a black tile for top-ups, which meant the two lists of
  * the same events looked like two different apps.
@@ -45,7 +45,7 @@ function DirectionIcon({ direction, type }: { direction: "in" | "out"; type: str
   const size = TILE_GLYPH.md;
   const strokeWidth = TILE_STROKE;
 
-  // Cashback and coins are the same family — money WAULT itself handed over —
+  // Cashback and coins are the same family, money WAULT itself handed over,
   // so they share the warm glyph and differ only in the mark beside it.
   if (isCoins) {
     return (
@@ -168,7 +168,7 @@ export function TransactionList({
         return (
           <div key={day.key}>
             {/* Just the day. A running total used to sit on the right of this
-                rule — two figures from four different payments, added up and
+                rule, two figures from four different payments, added up and
                 offered as if it were one of them. The rows below are the
                 record; a sum of today is not. */}
             <div className="flex items-center justify-between border-b border-ink-200 pb-1.5">

@@ -1,5 +1,5 @@
 /**
- * Display helpers for the inbox — pure, so the screens stay thin.
+ * Display helpers for the inbox, pure, so the screens stay thin.
  *
  * The API deliberately says *what* happened and nothing about where to go; the
  * one place that maps an event kind onto a route is here, so a change to the
@@ -33,7 +33,7 @@ export function notificationTarget(kind: NotificationKind): string {
   }
 }
 
-/** "2 unread" / "9+" — badge copy, capped so a long count can't widen the bell. */
+/** "2 unread" / "9+", badge copy, capped so a long count can't widen the bell. */
 export function badgeLabel(count: number): string {
   if (count <= 0) return "";
   return count > 9 ? "9+" : String(count);

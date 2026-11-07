@@ -22,7 +22,7 @@ export function formatCurrency(amount: number): string {
   return inr.format(Number.isFinite(amount) ? amount : 0);
 }
 
-/** ₹5,000 — for tight spaces like quick-amount chips. */
+/** ₹5,000, for tight spaces like quick-amount chips. */
 export function formatCurrencyShort(amount: number): string {
   return inrCompact.format(Number.isFinite(amount) ? amount : 0);
 }
@@ -54,7 +54,7 @@ function parse(iso: string): Date {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-// Dates are printed DD-MM-YYYY — the Indian format, and the one the statements
+// Dates are printed DD-MM-YYYY, the Indian format, and the one the statements
 // and CSV exports have always used. `en-IN` with numeric day/month would render
 // 09/10/2026 (slashes) on V8, so dates and times are rebuilt from their parts to
 // keep the separator identical to the server's `%d-%m-%Y` exports.
@@ -84,7 +84,7 @@ function dateText(date: Date): string {
   return `${parts.day}-${parts.month}-${parts.year}`;
 }
 
-/** "7:58 am" — lower-case period, as the app has always shown. */
+/** "7:58 am", lower-case period, as the app has always shown. */
 function timeText(date: Date): string {
   const parts = partMap(timeFormatter.formatToParts(date));
   return `${parts.hour}:${parts.minute} ${(parts.dayPeriod ?? "").toLowerCase()}`.trim();
@@ -120,7 +120,7 @@ function istDayNumber(date: Date): number {
 /**
  * The hour on the IST clock, 0-23.
  *
- * A greeting has to be the user's morning, not the server's — this is why the
+ * A greeting has to be the user's morning, not the server's, this is why the
  * app never asks the browser what time it is.
  */
 export function istHour(now: Date = new Date()): number {
@@ -160,12 +160,12 @@ export function istDateParam(date: Date): string {
 }
 
 /**
- * "AS" — used by the avatar stamps. Brackets and punctuation are dropped first
+ * "AS", used by the avatar stamps. Brackets and punctuation are dropped first
  * so a nickname like "Ananya (college)" stamps "AC" rather than "A(".
  */
 export function initials(name: string | null | undefined): string {
   const parts = (name ?? "")
-    .replace(/[()[\]{}.,'"`~!@#$%^&*_+=|\\/<>?:;·—-]/g, " ")
+    .replace(/[()[\]{}.,'"`~!@#$%^&*_+=|\\/<>?:;·-]/g, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
@@ -177,7 +177,7 @@ export function initials(name: string | null | undefined): string {
 /** "9000000001" -> "+91 90000 00001" */
 export function formatMobile(mobile: string | null | undefined): string {
   const digits = (mobile ?? "").replace(/\D/g, "");
-  if (digits.length !== 10) return mobile ?? "—";
+  if (digits.length !== 10) return mobile ?? "-";
   return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
 }
 

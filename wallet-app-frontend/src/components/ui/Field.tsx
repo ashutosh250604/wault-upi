@@ -52,7 +52,7 @@ export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElemen
  * A field is a well pressed into the paper: warm sheet (one step deeper than the
  * page, so it reads as a recess rather than a white box), inked 1.5px hairline,
  * a soft shadow along the top inside edge, and a wide, low-contrast halo on
- * focus. The colour pair never changes — only the weight of the rule does.
+ * focus. The colour pair never changes, only the weight of the rule does.
  *
  * The placeholder is the lighter ink, deliberately: an empty field must not read
  * as a filled one, so what a user has typed is always the darker of the two.

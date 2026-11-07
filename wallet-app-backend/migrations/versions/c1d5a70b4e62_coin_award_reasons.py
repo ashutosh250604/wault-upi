@@ -8,13 +8,13 @@ Coins stop being only a payment's payout, so an award has to say where it came
 from. `coin_awards.reason` holds that: "payment" for the draw every payment
 makes, "signup" for the one-off welcome bonus, and "offer:<code>" for coins an
 offer paid. It is a column rather than something inferred because the three are
-genuinely different things — only the payment draw has a transaction behind it,
+genuinely different things, only the payment draw has a transaction behind it,
 and the reason is what makes the welcome bonus impossible to grant twice.
 
 `rewards.transaction_id` goes the other way. An offer used to credit cashback
 straight into the wallet and remembered the credit here; offers now pay in
 coins, and a coin award is its own record of what was paid, so the pointer has
-nothing left to point at. Existing rows are dropped with it — the coin awards
+nothing left to point at. Existing rows are dropped with it, the coin awards
 those offers would now have written were never created, and there is no honest
 value to backfill.
 """
@@ -31,7 +31,7 @@ depends_on = None
 
 def upgrade():
     # Existing awards are all payment draws, which is the default the column is
-    # given — so the backfill is the same statement as the change.
+    # given, so the backfill is the same statement as the change.
     with op.batch_alter_table('coin_awards', schema=None) as batch_op:
         batch_op.add_column(
             sa.Column('reason', sa.String(length=32), nullable=False, server_default='payment')

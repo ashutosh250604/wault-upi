@@ -72,7 +72,7 @@ export default function LoginPage() {
           mobile,
           devOtp: result.dev_otp ?? null,
           // The verify screen counts its resend window down from the server's
-          // own instant rather than from a number it made up — see the note on
+          // own instant rather than from a number it made up, see the note on
           // `resend_available_at` in lib/api.ts.
           resendAvailableAt: result.resend_available_at ?? null,
         },
@@ -124,7 +124,7 @@ export default function LoginPage() {
          * the form leaves it, no more and no less. It used to be capped at 28rem
          * and given a 15rem floor inside a scroll container, which is what made
          * a tall screen hand the cover a scrollbar and a short one hide the
-         * card's own head. Now it simply fits — the form is fixed-height, this
+         * card's own head. Now it simply fits, the form is fixed-height, this
          * is `flex-1`, and the facts row pinned to the card's bottom edge turns
          * the slack a tall screen leaves into part of the design.
          *
@@ -136,8 +136,8 @@ export default function LoginPage() {
          * own copy. Clipping leaves a row of half-height words that reads as a
          * rendering fault; hiding it leaves a cover that is simply quieter on a
          * short screen and complete on a tall one. So the card sheds its parts
-         * in order of how much they matter — facts row first (`45rem`), then
-         * the sign-in sentence (`41rem`) — and what is left at the bottom of the
+         * in order of how much they matter, facts row first (`45rem`), then
+         * the sign-in sentence (`41rem`), and what is left at the bottom of the
          * range is the mark and the promise, which is a cover.
          *
          * Measured against the *viewport* rather than the card because the card
@@ -154,7 +154,7 @@ export default function LoginPage() {
               {/* The real mark, blown up and tipped into the corner at low
                   opacity: the same file the QR code is stamped with, so the
                   first screen anyone sees carries the logo itself rather than a
-                  crop of it. Sized to the corner it decorates — big enough to
+                  crop of it. Sized to the corner it decorates, big enough to
                   read as the artwork, cropped by the card rather than floating
                   inside it. */}
               <span
@@ -184,7 +184,7 @@ export default function LoginPage() {
               {/* One sentence rather than three chips with rules between them.
                   The old row set "OTP sign-in", "4-digit payment PIN" and
                   "30-minute sessions" as a row of labels, with the brand seal
-                  in front of the last one — a logo used as punctuation, and a
+                  in front of the last one, a logo used as punctuation, and a
                   list where the screen wanted a promise. It says the same three
                   things the way a person would. */}
               <p className="relative mt-auto pt-5 text-[12.5px] leading-relaxed text-ink-400 [@media(max-height:45rem)]:hidden">
@@ -196,13 +196,13 @@ export default function LoginPage() {
         </div>
 
         {/* Paper form, pinned to the bottom edge of the frame. The gap above it
-            is a fixed, small rhythm rather than a leftover — the hero is what
+            is a fixed, small rhythm rather than a leftover, the hero is what
             absorbs a tall screen.
 
             Neither this block nor the cover above it scrolls. They used to:
             both were `overflow-y-auto`, which put a second, visible scrollbar
             inside the phone frame and let the cover slide under its own
-            heading. The cover is now the only flexible thing on the page — it
+            heading. The cover is now the only flexible thing on the page, it
             shrinks to nothing when the keyboard takes half the viewport, and
             the form is exactly as tall as its contents, so there is nothing to
             scroll and no bar to hide. */}
@@ -215,7 +215,7 @@ export default function LoginPage() {
             >
               {({ id, describedBy }) => (
                 /* The country code is a printed slug, not a floating hint, and
-                   the number is set in the ledger face — the one field on the
+                   the number is set in the ledger face, the one field on the
                    screen that is unmistakably part of the app's paper. */
                 <div
                   className={cx(
@@ -281,7 +281,7 @@ export default function LoginPage() {
             {asleep ? (
               <p className="flex items-start gap-2 rounded-[10px] bg-pending-50 p-3 text-[12.5px] leading-relaxed text-pending-700 ring-1 ring-pending-100 ring-inset">
                 <IconWarning size={15} className="mt-px shrink-0" />
-                Still connecting — the server may be waking up, so the first request
+                Still connecting: the server may be waking up, so the first request
                 can take up to 30 seconds.
               </p>
             ) : null}
@@ -337,7 +337,7 @@ export default function LoginPage() {
         ) : null}
 
           <p className="mt-3 text-center text-[11.5px] leading-relaxed text-ink-500">
-            WAULT is an open-source portfolio project — Flask, React and PostgreSQL.{" "}
+            WAULT is an open-source portfolio project: Flask, React and PostgreSQL.{" "}
             <a
               href={REPO_URL}
               target="_blank"

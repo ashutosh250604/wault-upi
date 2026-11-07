@@ -6,6 +6,7 @@ import { cx } from "../lib/cx";
 import { feedback } from "../lib/feedback";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PaySheet } from "./PaySheet";
+import { VoicePaySheet } from "./VoicePaySheet";
 import { PullIndicator } from "./ui/PullIndicator";
 import {
   IconArrowLeft,
@@ -24,7 +25,7 @@ import {
 export interface AppShellProps {
   header?: ReactNode;
   nav?: boolean;
-  /** Pinned above the nav — used by screens with a keypad. */
+  /** Pinned above the nav, used by screens with a keypad. */
   footer?: ReactNode;
   children: ReactNode;
   contentClassName?: string;
@@ -53,6 +54,9 @@ export function AppShell({
   const pull = usePullToRefresh(onRefresh ?? (() => {}), Boolean(onRefresh));
   // Owned here so the centre "Pay" action works from any tab.
   const [payOpen, setPayOpen] = useState(false);
+  // The voice sheet is a sibling, not a child, of the pay sheet: one portal
+  // inside another would stack two dialogs and two focus traps.
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   return (
     <div className="flex h-dvh flex-col items-center sm:p-5">
@@ -87,7 +91,12 @@ export function AppShell({
         {nav ? <BottomNav onPay={() => setPayOpen(true)} /> : null}
       </div>
 
-      <PaySheet open={payOpen} onClose={() => setPayOpen(false)} />
+      <PaySheet
+        open={payOpen}
+        onClose={() => setPayOpen(false)}
+        onPayByVoice={() => setVoiceOpen(true)}
+      />
+      <VoicePaySheet open={voiceOpen} onClose={() => setVoiceOpen(false)} />
     </div>
   );
 }
@@ -137,7 +146,7 @@ export function AppBar({ title, right, children, showBack = false, border = true
 /**
  * The app-icon tile: a red rounded square carrying the mark.
  *
- * This is the artwork `public/brand/wault-icon.png` — the supplied tile with the
+ * This is the artwork `public/brand/wault-icon.png`, the supplied tile with the
  * cream bed it was exported on cropped away, so it drops onto the dark header as
  * cleanly as onto paper. The size is a parameter rather than fixed classes
  * because the same file is the 26px lockup in the header, the 52px plate on the
@@ -159,7 +168,7 @@ export function BrandSeal({ size = 26 }: { size?: number }) {
 }
 
 /**
- * The full mark — both phones, the ribbon, the medallion — at whatever width it
+ * The full mark, both phones, the ribbon, the medallion, at whatever width it
  * is handed, as the supplied artwork itself.
  *
  * `size` is the mark's width and the height follows from the artwork's own
@@ -189,7 +198,7 @@ export function BrandMarkImage({
 /**
  * The wordmark: the seal next to the name, nothing else.
  *
- * One lockup, used everywhere the app says its own name — the home header, the
+ * One lockup, used everywhere the app says its own name, the home header, the
  * login card, the QR slip. It has no tagline: "Your digital wallet" sat under
  * the name on the login card and turned a logo into a paragraph, so the lockup
  * is now the two things a logo is made of. The name is read from `BRAND`, so a
@@ -197,8 +206,8 @@ export function BrandMarkImage({
  *
  * The scale is a parameter rather than a second lockup, because the login card
  * wants the logo to carry the screen and the header wants it to sit quietly
- * beside the navigation. One rule — the seal's size and the wordmark's size
- * move together — is what keeps the two from drifting apart.
+ * beside the navigation. One rule, the seal's size and the wordmark's size
+ * move together, is what keeps the two from drifting apart.
  */
 export function BrandMark({
   invert = false,

@@ -4,7 +4,7 @@ import { cx } from "../../lib/cx";
 /**
  * The coin: `public/brand/wault-coin-emblem.png`, the supplied gold rupee.
  *
- * Not an icon drawn to look like a coin — this is the artwork, at the size a
+ * Not an icon drawn to look like a coin, this is the artwork, at the size a
  * balance, a reward row or a receipt needs, and it is the app's only coin. The
  * header chip, the coins sheet, the offer strip, a reward row and the scratch
  * card all render this file, so a coin cannot look like one thing on the home

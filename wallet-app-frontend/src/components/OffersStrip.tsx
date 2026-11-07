@@ -10,7 +10,7 @@ import { Sheet } from "./ui/Sheet";
 import { IconCheck, IconChevronRight } from "./ui/Icons";
 import { SkeletonCard } from "./ui/States";
 
-/** "0 of 3 payments" — the one line that says how far along an offer is. */
+/** "0 of 3 payments", the one line that says how far along an offer is. */
 function progressLabel(reward: Reward): string {
   // The same word the chip beside it uses, so one offer does not read as two
   // different states depending on which part of the card is visible.
@@ -151,7 +151,7 @@ export function RewardSheet({
           the same rate. */}
       <p className="mt-4 border-t border-ink-200 pt-3 text-[11.5px] leading-relaxed text-ink-500">
         Offers pay in coins, never in cash. A completed offer arrives as a scratch
-        card — scratch it and the coins are yours.
+        card. Scratch it and the coins are yours.
       </p>
     </Sheet>
   );
@@ -160,7 +160,7 @@ export function RewardSheet({
 /**
  * An offer reads as a coupon: an inked head with the reward's name, the terms
  * below it, and a hard print shadow that lifts the whole ticket off the warm
- * page. Status is still the ledger's — nothing here is decorative state.
+ * page. Status is still the ledger's, nothing here is decorative state.
  */
 export function RewardsCard({
   reward,
@@ -221,7 +221,7 @@ export function RewardsCard({
  *
  * Nothing here is decorative: progress comes from the ledger on the server, and
  * completing an offer draws a scratch card inside the same commit as the
- * payment that completed it — the coins themselves are counted when that card is
+ * payment that completed it, the coins themselves are counted when that card is
  * scratched. `reloadKey` is the newest transaction, which is exactly the signal
  * that a card may just have arrived.
  */
@@ -232,7 +232,7 @@ export function OffersStrip({
   reloadKey?: unknown;
   /**
    * One line instead of the rack: what the home screen uses, so the whole page
-   * fits one screen without losing the offers — the tickets open in a sheet
+   * fits one screen without losing the offers, the tickets open in a sheet
    * from the chip. The card itself is unchanged, because the offer is the same
    * offer wherever it is read.
    */
@@ -246,7 +246,7 @@ export function OffersStrip({
   // empty shell.
   const visible = (rewards ?? []).filter((reward) => reward.status !== "expired").slice(0, 4);
   // The chip leads with the one still worth working on, not the one already
-  // banked — a credited offer is a receipt, not a nudge.
+  // banked, a credited offer is a receipt, not a nudge.
   const lead = visible.find((reward) => reward.status !== "credited") ?? visible[0];
 
   // The rack is inset one notch past the page gutter and scrolls full-bleed, so

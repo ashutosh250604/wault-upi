@@ -1,5 +1,5 @@
 /**
- * Tactile + audio feedback — the layer that makes taps feel native.
+ * Tactile + audio feedback, the layer that makes taps feel native.
  *
  * Everything degrades to a silent no-op: iOS Safari has no vibrate API, and
  * audio needs a user gesture before the browser will let us play anything, so
@@ -10,19 +10,19 @@
  *   `tap` / `digit`   a key was pressed. Synthesised, always, and never queued:
  *                     they fire many times a second and have to stay cheap.
  *   `success`         something was written down (a contact saved, a payee
- *                     resolved). One quiet blip — it used to be the app's
+ *                     resolved). One quiet blip, it used to be the app's
  *                     loudest two-note chime, which is a lot of ceremony for
  *                     saving an address.
  *   `paid`            money left the wallet. The supplied `payment-success.mp3`
- *                     and nothing else — see "Supplied recordings" below.
+ *                     and nothing else, see "Supplied recordings" below.
  *   `received`        money arrived. A warmer, lower rise with a shimmer on top,
  *                     so arriving and leaving are different shapes rather than
  *                     the same noise at two pitches.
- *   `requested`       money was asked for. Two even knocks at the same pitch —
+ *   `requested`       money was asked for. Two even knocks at the same pitch,
  *                     a question, with no resolution in it, because nothing has
  *                     moved yet.
  *   `scratch`         a finger is dragging across a scratch card's cover. Shaped
- *                     noise rather than a tone — paper, not a beep — and short
+ *                     noise rather than a tone, paper, not a beep, and short
  *                     enough to repeat under a stroke without turning into a
  *                     machine gun.
  *   `reward`          a card was claimed and its coins are in the balance. One
@@ -36,7 +36,7 @@
  * ## Supplied recordings
  *
  * `SOUND_FILES` lets a supplied file *replace* a cue without touching the call
- * sites. A cue with a file plays only the file — never the file and its
+ * sites. A cue with a file plays only the file, never the file and its
  * synthesiser, which is what a payment used to sound like. The synthesiser is
  * kept for the cues nobody has recorded yet; for a recorded cue it is the
  * fallback for a file that fails to load, and it never plays underneath the
@@ -68,7 +68,7 @@ export type SoundCue =
 /**
  * Recordings, by cue. Anything not listed here is always synthesised.
  *
- * `paid` covers every way money leaves the wallet — a payment, a top-up, a
+ * `paid` covers every way money leaves the wallet, a payment, a top-up, a
  * request settled. `redeemed` covers coins being paid out into the wallet.
  *
  * A cue with a recording is one voice: the file if it loads, its synthesiser if
@@ -159,7 +159,7 @@ function tone(
     oscillator.start(start);
     oscillator.stop(end + 0.02);
   } catch {
-    // Audio is a nicety — never let it break an interaction.
+    // Audio is a nicety, never let it break an interaction.
   }
 }
 
@@ -169,7 +169,7 @@ function tone(
  * The one sound an oscillator cannot make is a surface: a tone has a pitch, and
  * a finger on paper does not. So this fills a buffer with noise, fades it with
  * a squared curve (a stroke starting and dying away, rather than a gate opening
- * and closing) and moves the filter across the burst while it plays — which is
+ * and closing) and moves the filter across the burst while it plays, which is
  * what turns "static" into "dragging".
  */
 function noise(
@@ -205,7 +205,7 @@ function noise(
     source.connect(filter).connect(gain).connect(ctx.destination);
     source.start(start);
   } catch {
-    // Audio is a nicety — never let it break an interaction.
+    // Audio is a nicety, never let it break an interaction.
   }
 }
 
@@ -214,13 +214,13 @@ function buzz(pattern: number | number[]): void {
   try {
     navigator.vibrate?.(pattern);
   } catch {
-    // Unsupported (iOS) or blocked — ignore.
+    // Unsupported (iOS) or blocked, ignore.
   }
 }
 
 interface Recording {
   element: HTMLAudioElement;
-  /** True once this file has failed to load — this cue is synthesised from now on. */
+  /** True once this file has failed to load, this cue is synthesised from now on. */
   broken: boolean;
 }
 
@@ -247,8 +247,8 @@ function recordingFor(url: string): Recording | null {
  * Play the cue's recording, if it has one that loads.
  *
  * Returns false when the caller should synthesise instead. A failed `play()`
- * is not the end of the file — a browser may refuse the very first call until
- * it has seen a gesture — so a rejected playback stays retryable; only a load
+ * is not the end of the file, a browser may refuse the very first call until
+ * it has seen a gesture, so a rejected playback stays retryable; only a load
  * *error* takes the recording out of service for the session.
  */
 function playRecording(url: string): boolean {
@@ -259,7 +259,7 @@ function playRecording(url: string): boolean {
     // restarts the file instead of doubling it.
     recording.element.currentTime = 0;
     void recording.element.play().catch(() => {
-      // Refused (usually autoplay policy) — the next cue tries again. Nothing
+      // Refused (usually autoplay policy), the next cue tries again. Nothing
       // is synthesised on top, so a payment never sounds twice.
     });
     return true;
@@ -303,7 +303,7 @@ export const feedback = {
   },
 
   /**
-   * Something was written down — a payee resolved, a contact saved, a profile
+   * Something was written down, a payee resolved, a contact saved, a profile
    * updated. One quiet note: it confirms without celebrating, because none of
    * these are the moment the screen exists for.
    */
@@ -315,10 +315,10 @@ export const feedback = {
   },
 
   /**
-   * Money left the wallet — a payment, a top-up, a request settled.
+   * Money left the wallet, a payment, a top-up, a request settled.
    *
-   * The supplied recording is the sound. The synthesiser under it — two tight
-   * notes, the second a fifth above the first — is used only where
+   * The supplied recording is the sound. The synthesiser under it, two tight
+   * notes, the second a fifth above the first, is used only where
    * `payment-success.mp3` is missing, so a paid cue is one voice either way.
    */
   paid(): void {
@@ -349,7 +349,7 @@ export const feedback = {
    * You asked someone for money.
    *
    * Two even knocks at one pitch: the same note twice is a question. Nothing
-   * has moved, so the cue resolves nothing — it just marks that the request
+   * has moved, so the cue resolves nothing, it just marks that the request
    * left, which is why it is also the quietest of the three.
    */
   requested(): void {
@@ -365,7 +365,7 @@ export const feedback = {
    *
    * The gesture, not the prize: a paper stroke of shaped noise, low and damped,
    * 150 ms long. It is deliberately the quietest cue in the vocabulary and the
-   * only one with no vibration — a stroke is continuous, and buzzing on every
+   * only one with no vibration, a stroke is continuous, and buzzing on every
    * sample of a drag would be a rattle in the hand.
    *
    * `cue`'s gap means one stroke cannot retrigger it more than every 160 ms, so
@@ -378,7 +378,7 @@ export const feedback = {
   /**
    * A scratch card was claimed and its coins are in the balance.
    *
-   * Fires on the server's answer, never on the stroke — a reveal that sounds
+   * Fires on the server's answer, never on the stroke, a reveal that sounds
    * before the claim succeeds would be a prize announced before it was paid.
    * One short flourish, and the only sound for this moment: a coin landing on
    * the note above it, which is a different shape from `paid` (two tight notes,
@@ -411,7 +411,7 @@ export const feedback = {
     });
   },
 
-  /** Something failed — a flat descending buzz reads as "no". */
+  /** Something failed, a flat descending buzz reads as "no". */
   error(): void {
     buzz([28, 55, 28]);
     tone(240, 170, { gain: 0.05, type: "sawtooth" });

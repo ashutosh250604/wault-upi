@@ -29,8 +29,8 @@ import { EmptyState, ErrorState, TransactionSkeleton } from "../components/ui/St
 /**
  * The glyph and the tone for each kind of news.
  *
- * Only those two things vary. Every row wears the same tile — same box, same
- * radius, same ring — so the colours read as a legend rather than as seven
+ * Only those two things vary. Every row wears the same tile, same box, same
+ * radius, same ring, so the colours read as a legend rather than as seven
  * different treatments: green is money in, amber is something the wallet gave
  * you, red is somebody asking, grey is a closed door.
  *
@@ -148,7 +148,7 @@ function NotificationRow({
 
 /**
  * The inbox. Opening a row marks it read and takes the reader to the screen that
- * owns the detail — the notification itself is only ever a pointer at something
+ * owns the detail, the notification itself is only ever a pointer at something
  * that already happened elsewhere in the app.
  */
 export default function NotificationsPage() {

@@ -5,7 +5,7 @@ Two questions that must never disagree: "how much can I still spend today?" and
 number the amount screen shows the user and the number the server enforces are
 the same number.
 
-The day is measured in IST rather than UTC — the users are in India, so a cap
+The day is measured in IST rather than UTC, the users are in India, so a cap
 that reset at 05:30 in the morning would look arbitrary. Timestamps stay in UTC;
 the offset is only used to work out where the day starts and ends.
 """

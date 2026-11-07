@@ -4,7 +4,7 @@ The app has one rule about clocks: **store and compare in UTC, show in IST**.
 Every timestamp in the database is UTC, every window a query filters on is
 converted to UTC before it touches SQL, and every string a human reads is
 rendered in Asia/Kolkata. Keeping that conversion at the edges is what stops a
-timestamp from meaning two different things in two different files — which is
+timestamp from meaning two different things in two different files, which is
 how a payment made at 2am IST ends up in the previous day's statement.
 
 `IST` is a fixed +05:30 offset rather than a tz database lookup: India has had
@@ -14,7 +14,7 @@ need `zoneinfo` (or its tzdata) to be installed on the host.
 
 from datetime import date, datetime, timedelta, timezone
 
-# Asia/Kolkata. Fixed offset, no DST — see the module docstring.
+# Asia/Kolkata. Fixed offset, no DST, see the module docstring.
 IST = timezone(timedelta(minutes=330), "IST")
 
 # DD-MM-YYYY, the format every date in the app and on a statement is printed in.
@@ -51,7 +51,7 @@ def to_ist(value):
 
 
 def ist_date(value=None) -> date:
-    """The IST calendar day of an instant — now, by default.
+    """The IST calendar day of an instant, now, by default.
 
     Day boundaries in this app are Indian ones: a counter that resets "tomorrow"
     resets at midnight in Asia/Kolkata, which is 18:30 UTC the evening before.

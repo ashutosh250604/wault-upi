@@ -1,14 +1,14 @@
 # Sounds
 
 Recordings the app plays instead of synthesising a cue. Everything works
-without them — a missing or renamed file is a silent no-op, because the cue
+without them, a missing or renamed file is a silent no-op, because the cue
 falls back to its synthesiser for the rest of the session.
 
 ## What ships
 
 | File                  | Cue        | Plays when                                                     |
 | --------------------- | ---------- | -------------------------------------------------------------- |
-| `payment-success.mp3` | `paid`     | money left the wallet — a payment, a top-up, a settled request |
+| `payment-success.mp3` | `paid`     | money left the wallet, a payment, a top-up, a settled request |
 | `coins-redeemed.mp3`  | `redeemed` | coins were paid out into the wallet                            |
 
 Both are wired in `src/lib/feedback.ts`, in `SOUND_FILES`:
@@ -22,7 +22,7 @@ const SOUND_FILES: Partial<Record<SoundCue, string>> = {
 
 ## Replacing one
 
-Drop the new file in here under the same name — no code change. To give a cue
+Drop the new file in here under the same name, no code change. To give a cue
 that has no recording yet its own file, add its entry to `SOUND_FILES`; the cue
 keeps working before the file exists.
 
@@ -38,7 +38,7 @@ than layered, so a long recording can outlast the screen that triggered it.
 Nothing breaks. A cue whose file fails to load falls back to its synthesised
 version for the rest of the session, so a wrong filename or a bad export is a
 silent no-op rather than a dead payment screen. The server answers a missing
-`/sounds/*` path with a `404` — never with the app shell, which a browser would
+`/sounds/*` path with a `404`, never with the app shell, which a browser would
 try to decode as audio.
 
 ## Cues a file can replace

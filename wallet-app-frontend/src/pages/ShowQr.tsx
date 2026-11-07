@@ -14,7 +14,7 @@ export default function ShowQrPage() {
         {profile?.vpa ? (
           <>
             <p className="text-center text-[13px] leading-relaxed text-ink-500">
-              Hold this up to be paid — any UPI scanner can read it, no typing needed.
+              Hold this up to be paid. Any UPI scanner can read it, no typing needed.
             </p>
 
             <VpaQr vpa={profile.vpa} name={profile.name} />

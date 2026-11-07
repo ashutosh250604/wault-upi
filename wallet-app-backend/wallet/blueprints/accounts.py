@@ -80,7 +80,7 @@ def set_default_account(account_id):
 @bp.post("/accounts/<int:account_id>/balance")
 @require_auth
 def check_balance(account_id):
-    """Reveal a linked account's balance — the PIN-gated \"check balance\" flow."""
+    """Reveal a linked account's balance, the PIN-gated \"check balance\" flow."""
     data = request.get_json(silent=True) or {}
     account = _own_account(account_id)
     if account is None:
@@ -106,7 +106,7 @@ def check_balance(account_id):
 
 
 def _month_range(month: str | None) -> tuple[datetime | None, datetime | None, str]:
-    """Turn "2026-09" into a UTC window — the month as the user's calendar sees it.
+    """Turn "2026-09" into a UTC window, the month as the user's calendar sees it.
 
     The boundaries are built at IST midnight and only then converted, so a
     payment made at 1am on the 1st lands in that month instead of in the previous
@@ -150,7 +150,7 @@ def _statement_window(args) -> tuple[datetime | None, datetime | None, str]:
 
     `?month=2026-09` is one calendar month; `?from=&to=` is the inclusive pair
     of days the app's period picker sends. Anything missing or unparseable means
-    the whole statement, never an error — a download should not fail because a
+    the whole statement, never an error, a download should not fail because a
     date was mistyped.
     """
     start, end, month_label = _month_range(args.get("month"))
@@ -329,7 +329,7 @@ def statement_pdf():
             "Content-Disposition": f'attachment; filename="{_statement_filename(me, "pdf")}"',
             # Lets the SPA read the filename it should save the blob under.
             "Access-Control-Expose-Headers": "Content-Disposition",
-            # A statement is scoped to one session's ledger — never cached.
+            # A statement is scoped to one session's ledger, never cached.
             "Cache-Control": "no-store",
         },
     )

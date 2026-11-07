@@ -1,6 +1,6 @@
 """The inbox: what the wallet has to say, and what it still owes you.
 
-Three closely related things live here because they are read together — the bell,
+Three closely related things live here because they are read together, the bell,
 the offers strip and the coin chip all sit on the home screen.
 
 Notifications are a log of things that already happened and can be deleted
@@ -119,7 +119,7 @@ def mark_all_read():
 @bp.delete("/notifications/<int:note_id>")
 @require_auth
 def delete_notification(note_id):
-    """Removing a notification never touches money — it is only a note about it."""
+    """Removing a notification never touches money, it is only a note about it."""
     note = _own(note_id)
     if note is None:
         return jsonify({"message": "Notification not found"}), 404
@@ -149,7 +149,7 @@ def list_rewards():
 def coin_snapshot():
     """The coin chip's numbers: balance, worth, and progress to the next coin.
 
-    A pure read — coins earned are counted from the ledger, so nothing here has
+    A pure read, coins earned are counted from the ledger, so nothing here has
     to be kept up to date or reconciled.
     """
     return jsonify(snapshot(g.user_id)), 200
@@ -173,14 +173,14 @@ def list_scratch_cards():
 def scratch_scratch_card(card_id):
     """Scratch one card: reveal its coins, and count them.
 
-    This is the only write that moves the coin balance — the draw was decided
+    This is the only write that moves the coin balance, the draw was decided
     and stored when the payment settled, and it becomes spendable here. The
     claim is idempotent by construction (`coins.claim_card` lifts the cover with
     a conditional UPDATE and credits only if it was the request that changed the
     row), so a refresh, a double tap or two requests racing each other reveal
     the same card once and add its coins once.
 
-    Returns the card with its coins, plus how many this call credited — 0 for a
+    Returns the card with its coins, plus how many this call credited, 0 for a
     card that was already claimed, which is what the receipt of a second tap
     needs to know. The fresh coin snapshot comes back in the same response so
     the header chip moves with the reveal instead of a round trip behind it.

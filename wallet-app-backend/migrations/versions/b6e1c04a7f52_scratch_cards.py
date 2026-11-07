@@ -5,7 +5,7 @@ Revises: c1d5a70b4e62
 Create Date: 2026-10-09 23:40:00.000000
 
 A payment's draw is already written down (`coin_awards`), and the card that
-hides it only ever existed on the receipt screen — so a card nobody scratched
+hides it only ever existed on the receipt screen, so a card nobody scratched
 was lost the moment the receipt was closed, and the coins it held could never be
 shown as a card again. `coin_awards.scratched_at` is what makes the reveal a
 fact rather than a screen state: null means the coins are still under the cover

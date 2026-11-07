@@ -34,7 +34,7 @@ def normalise_vpa(raw) -> str | None:
 
 
 def classify_identifier(raw) -> tuple[str | None, str | None]:
-    """Split a typed identifier into (vpa, mobile) — at most one is set."""
+    """Split a typed identifier into (vpa, mobile), at most one is set."""
     text = str(raw or "").strip()
     if not text:
         return None, None

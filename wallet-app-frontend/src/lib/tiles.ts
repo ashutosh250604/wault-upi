@@ -1,5 +1,5 @@
 /**
- * The icon tile's measurements — the numbers half of the icon design system.
+ * The icon tile's measurements, the numbers half of the icon design system.
  *
  * These live outside the component because the tile cannot size the glyph
  * itself: a coin is a picture and a lock is a line drawing, and the only one who
@@ -16,7 +16,7 @@ export type IconScale = "xs" | "sm" | "md" | "lg";
 
 /** How big the glyph inside each tile is. */
 export const TILE_GLYPH: Record<IconScale, number> = {
-  /** In a line of text — a toast's mark. */
+  /** In a line of text, a toast's mark. */
   xs: 16,
   /** A list row with two lines of copy beside it. */
   sm: 17,
@@ -30,7 +30,7 @@ export const TILE_GLYPH: Record<IconScale, number> = {
 export const TILE_STROKE = 1.9;
 
 /**
- * What the glyph is coloured. The box never changes with it — that is the
+ * What the glyph is coloured. The box never changes with it, that is the
  * whole point of the system: a green arrow and a red warning sit on the same
  * paper, so two rows of one list look like one list.
  */

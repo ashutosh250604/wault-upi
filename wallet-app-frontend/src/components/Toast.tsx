@@ -20,7 +20,7 @@ import {
 /**
  * A toast is a receipt that arrives on its own: the state stamped in a square,
  * the message set large enough to be read at arm's length. It is deliberately
- * the loudest small object in the app — everything else waits to be looked at,
+ * the loudest small object in the app, everything else waits to be looked at,
  * and this interrupts.
  *
  * The tone is said once, by the tile: a filled square of the tone's own ink with
@@ -28,7 +28,7 @@ import {
  * and reads even where the paper behind it does not. There used to be a 5px
  * strip of the same ink down the toast's left edge as well. It was doing nothing
  * the tile was not already doing, and where the toast sat on a surface of a
- * similar colour it was the one part of the toast that vanished — which made a
+ * similar colour it was the one part of the toast that vanished, which made a
  * complete toast look clipped. It is gone, and the slip is now inset the same on
  * both sides.
  */
@@ -91,7 +91,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {/* The toasts hang off the viewport rather than the app frame, so on a
           laptop they used to start 12px from the top of the window while the
-          frame itself begins 20px down — the slip poked out above the surface it
+          frame itself begins 20px down, the slip poked out above the surface it
           belongs to and read as clipped. The desktop offset now clears the
           frame's top edge with room to spare. */}
       <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2.5 px-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-9">

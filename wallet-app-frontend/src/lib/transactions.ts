@@ -1,4 +1,4 @@
-/** Pure shaping helpers for the transaction list — no React, easy to unit test. */
+/** Pure shaping helpers for the transaction list, no React, easy to unit test. */
 
 import type { WalletTransaction } from "../types";
 import { formatCurrency, formatDayLabel, dayKey } from "./format";
@@ -9,7 +9,7 @@ export interface ClassifiedTransaction {
   /** "To Meera Iyer" / "From Meera Iyer" / "Wallet top-up" */
   title: string;
   counterpartyName: string;
-  /** "+₹400.00" for money in, "₹400.00" for money out — no minus sign. */
+  /** "+₹400.00" for money in, "₹400.00" for money out, no minus sign. */
   signedAmount: string;
   /** Sub-line under the title: note when present, otherwise the reference. */
   subtitle: string;
@@ -97,7 +97,7 @@ export function groupTransactionsByDay(
   return [...days.values()];
 }
 
-/** "Wallet top-up" / "Cashback" / "UPI-style transfer" — the Type row on a receipt. */
+/** "Wallet top-up" / "Cashback" / "UPI-style transfer", the Type row on a receipt. */
 export function transactionTypeLabel(type: WalletTransaction["type"]): string {
   if (type === "topup") return "Wallet top-up";
   if (type === "cashback") return "Cashback credit";
@@ -123,6 +123,6 @@ export function buildReceiptText(input: ReceiptTextInput): string {
     `Date: ${input.timestamp}`,
   ];
   if (input.note) lines.push(`Note: ${input.note}`);
-  lines.push("", "Paid with WAULT — UPI-style instant payments.");
+  lines.push("", "Paid with WAULT. UPI-style instant payments.");
   return lines.join("\n");
 }

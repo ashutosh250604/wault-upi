@@ -7,7 +7,7 @@ import type { InboxStatus } from "../lib/notifications";
  * Owns the inbox and its unread badge.
  *
  * `reloadKey` lets a parent pull in new rows when something that mints one has
- * happened — the newest transaction's id is the right key, because every
+ * happened, the newest transaction's id is the right key, because every
  * notification the money paths write is about a ledger row.
  */
 export function useNotifications(reloadKey?: unknown, limit = 50) {

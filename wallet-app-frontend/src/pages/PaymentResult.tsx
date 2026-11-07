@@ -112,7 +112,7 @@ export default function PaymentResultPage() {
           />
         </div>
 
-        {/* The card, as the thing to do next — and not as a paragraph about
+        {/* The card, as the thing to do next, and not as a paragraph about
             the thing to do next.
 
             This used to be a two-line notice under a secondary "Scratch Card"
@@ -121,7 +121,7 @@ export default function PaymentResultPage() {
             user was told one thing three times and handed the action as the
             quieter of two buttons.
 
-            Now it is one object that is obviously tappable — the app's slip: an
+            Now it is one object that is obviously tappable, the app's slip: an
             inked edge, a hard print shadow, the coin it pays out, and a chevron
             saying where it goes. It carries no amount, because the amount does
             not exist on this device until the card is scratched. */}

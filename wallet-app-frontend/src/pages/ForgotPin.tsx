@@ -18,8 +18,8 @@ import { StepDots } from "../components/ui/StepDots";
 /**
  * Forgot PIN: the registered number, a one-time code, a new PIN.
  *
- * A PIN is not recoverable — it is stored as a hash, so nobody can read it back,
- * not even the server — and until this screen existed a forgotten one left the
+ * A PIN is not recoverable, it is stored as a hash, so nobody can read it back,
+ * not even the server, and until this screen existed a forgotten one left the
  * wallet unusable for good. What is recoverable is the *phone*: proving it can
  * read a code is enough to choose a new PIN, and nothing more. The proven phone
  * buys a ten-minute token and the token buys one PIN; it never signs anybody in,
@@ -132,7 +132,7 @@ export default function ForgotPinPage() {
       setShakeToken((token) => token + 1);
       setPinValue("");
       setFirstPin("");
-      // The token is single-use in practice — it expires — but a failure here
+      // The token is single-use in practice, it expires, but a failure here
       // usually means it lapsed while the user was thinking, so send them back
       // to the start rather than letting them retype into a dead token.
       setStage("mobile");
@@ -244,7 +244,7 @@ export default function ForgotPinPage() {
             <Card tone="muted" className="mt-4 flex gap-2.5">
               <IconInfo size={16} className="mt-px shrink-0 text-ink-500" />
               <p className="text-[12.5px] leading-relaxed text-ink-600">
-                A PIN can&apos;t be looked up — it is stored as a hash, so nobody can read it
+                A PIN can&apos;t be looked up. It is stored as a hash, so nobody can read it
                 back, not even us. This is why a forgotten one is replaced rather than
                 recovered.
               </p>
@@ -259,7 +259,7 @@ export default function ForgotPinPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] font-semibold text-pending-700">Preview code</p>
                   <p className="text-[13px] text-pending-700">
-                    SMS delivery is off in this environment — use{" "}
+                    SMS delivery is off in this environment, so use{" "}
                     <span className="font-mono font-bold tracking-widest">
                       {notice.previewCode}
                     </span>
@@ -318,7 +318,7 @@ export default function ForgotPinPage() {
               <IconWarning size={16} className="mt-px shrink-0 text-pending-600" />
               <p className="text-[12.5px] leading-relaxed text-ink-600">
                 Five wrong attempts lock the PIN for 15 minutes, and a new day starts the count
-                over — both enforced by the server, not just this screen.
+                over. Both are enforced by the server, not just this screen.
               </p>
             </Card>
             <Card className="flex gap-2.5">

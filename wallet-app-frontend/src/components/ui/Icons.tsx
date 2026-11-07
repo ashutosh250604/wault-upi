@@ -1,5 +1,5 @@
 /**
- * Inline SVG icon set — one hand-rolled glyph per concept instead of an icon
+ * Inline SVG icon set, one hand-rolled glyph per concept instead of an icon
  * dependency, which keeps the bundle small and the stroke weight consistent.
  */
 
@@ -69,7 +69,7 @@ export const IconSent = (p: IconProps) => (
  * Money arriving: an arrow out of the top-right corner into the bottom-left one.
  *
  * The same shape `IconReceived` draws, under a second name because the payment
- * sheet needs it for "ask for money" and that is a different sentence — what the
+ * sheet needs it for "ask for money" and that is a different sentence, what the
  * payer is asking for is money coming in, so the arrow points inwards rather
  * than at the sky. Sharing the geometry is the point: one direction means one
  * direction everywhere in the app.
@@ -92,7 +92,7 @@ export const IconReceived = (p: IconProps) => (
  * A code being read: the four corners a camera locks onto, with the code itself
  * between them.
  *
- * The reticle used to carry a full-width line through its middle — which, drawn
+ * The reticle used to carry a full-width line through its middle, which, drawn
  * at the 21px the payment sheet asks for, is the universal "no entry" slash
  * laid across a QR frame. It read as "scanning is unavailable", on the one row
  * whose whole job is to start a scan.
@@ -112,7 +112,7 @@ export const IconScan = (p: IconProps) => (
  *
  * "Pay to UPI ID" used to be a person, which is the glyph for a contact, not for
  * the handle you type. The address and the person are different things on this
- * screen — the mobile row already has the person's side of it.
+ * screen, the mobile row already has the person's side of it.
  */
 export const IconAt = (p: IconProps) => (
   <Base {...p}>
@@ -125,7 +125,7 @@ export const IconAt = (p: IconProps) => (
  * Money going in: an arrow landing in the tray the balance sits on.
  *
  * "Add money" used to be a bare plus, which the app already uses for the raised
- * Pay bubble in the nav — one glyph, two meanings, one tap apart.
+ * Pay bubble in the nav, one glyph, two meanings, one tap apart.
  */
 export const IconAddMoney = (p: IconProps) => (
   <Base {...p}>
@@ -257,6 +257,37 @@ export const IconTrash = (p: IconProps) => (
   </Base>
 );
 
+/**
+ * A microphone: a capsule over the mouth of a stand.
+ *
+ * The capsule is a rounded rectangle rather than a circle so the glyph still
+ * reads at 17px in a list row, and the stand keeps the one-line-plus-arc shape
+ * the rest of the set uses for an object with a base.
+ */
+export const IconMic = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="9" y="2.5" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+    <path d="M12 17.5V21" />
+    <path d="M8.5 21h7" />
+  </Base>
+);
+
+/**
+ * A keyboard: the typed door onto the same grammar.
+ *
+ * This is the honest glyph on a browser with no recogniser. The row still opens
+ * the same sheet, but it says what will actually happen, the microphone glyph
+ * there promised a device the browser was never going to open.
+ */
+export const IconKeyboard = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2.5" />
+    <path d="M8 10h.01M12 10h.01M16 10h.01" />
+    <path d="M8 14h8" />
+  </Base>
+);
+
 export const IconPhone = (p: IconProps) => (
   <Base {...p}>
     <path d="M5 2.5h2.6l1.9 4.6-2.1 1.3a12.5 12.5 0 0 0 6.2 6.2l1.3-2.1 4.6 1.9V17a2.5 2.5 0 0 1-2.5 2.5A15.5 15.5 0 0 1 2.5 5 2.5 2.5 0 0 1 5 2.5Z" />
@@ -303,8 +334,8 @@ export const IconBell = (p: IconProps) => (
 /**
  * There is no `IconCoin` any more.
  *
- * A coin drawn as a stroked disc sat next to the real coin artwork — one glyph
- * standing in for money the app ships a picture of — and the two never quite
+ * A coin drawn as a stroked disc sat next to the real coin artwork, one glyph
+ * standing in for money the app ships a picture of, and the two never quite
  * agreed at small sizes. Everything that shows a coin now renders
  * `ui/Coin`, so the header chip, the rewards sheet, a transaction row and the
  * scratch card are all the supplied emblem at four sizes instead of a lookalike

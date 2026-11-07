@@ -22,7 +22,7 @@ export async function decodeQrFromImage(file: Blob): Promise<string | null> {
   if (!supported()) return null;
   try {
     detector = detector ?? new BarcodeDetector({ formats: ["qr_code"] });
-    // detect() accepts a Blob directly — no canvas round-trip needed.
+    // detect() accepts a Blob directly, no canvas round-trip needed.
     const codes = await detector.detect(file);
     return codes[0]?.rawValue ?? null;
   } catch {

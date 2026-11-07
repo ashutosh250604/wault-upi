@@ -6,7 +6,7 @@
 /**
  * `coins` is a coin redemption: real money, with no counterparty, because it
  * comes from WAULT rather than from a person. `cashback` is the same thing by an
- * older route — offers used to credit rupees straight into the balance and now
+ * older route, offers used to credit rupees straight into the balance and now
  * pay coins instead, so this type still exists to render the rows already in
  * people's histories.
  */
@@ -31,7 +31,7 @@ export interface WalletTransaction {
   receiver: number | null;
   sender_name: string | null;
   receiver_name: string | null;
-  /** Rupees, not paise — the API converts before sending. */
+  /** Rupees, not paise, the API converts before sending. */
   amount: number;
   note: string | null;
   /** ISO-8601 UTC timestamp. */
@@ -55,7 +55,7 @@ export interface StartLoginResponse {
    */
   requests_remaining?: number;
   /**
-   * The instant the next OTP may be requested, as an ISO timestamp — null
+   * The instant the next OTP may be requested, as an ISO timestamp, null
    * while requests are still free. The verify screen's countdown runs on this
    * rather than on a window of its own, so it survives a refresh and agrees
    * with the server that will enforce it.
@@ -204,7 +204,7 @@ export interface CoinSnapshot {
   redeemable: number;
   redeemable_value: number;
   /**
-   * What the last few awards paid out, newest first — a payment's draw, the
+   * What the last few awards paid out, newest first, a payment's draw, the
    * welcome bonus, or an offer. `label` is the server's wording for `reason`,
    * so "where did these coins come from" has one answer rather than one per
    * screen.
@@ -226,7 +226,7 @@ export interface CoinsRedeemedResponse {
  * An offer paid inside the same commit as the payment that completed it.
  *
  * Offers pay in coins, so `coins` is the payout and `amount` is what those
- * coins are worth — the same figure, because a coin redeems at ₹1, but sent by
+ * coins are worth, the same figure, because a coin redeems at ₹1, but sent by
  * the server rather than assumed here.
  */
 export interface CreditedReward {
@@ -308,7 +308,7 @@ export interface Reward {
   title: string;
   headline: string;
   detail: string;
-  /** Coins the offer pays out — every offer pays in coins. */
+  /** Coins the offer pays out, every offer pays in coins. */
   coins: number;
   /** Rupees those coins are worth. */
   reward: number;
@@ -331,7 +331,7 @@ export interface LimitsResponse {
   remaining: number;
   per_transaction: number;
   used_percent: number;
-  /** When the cap resets — midnight IST. */
+  /** When the cap resets, midnight IST. */
   resets_at: string;
 }
 
@@ -372,7 +372,7 @@ export interface RequestPaymentResponse {
   to: number;
   note: string | null;
   timestamp: string;
-  /** Set when this payment drew a scratch card — see `TransferResponse`. */
+  /** Set when this payment drew a scratch card, see `TransferResponse`. */
   scratch_card_waiting?: boolean;
   /** The scratch card this payment drew, so its receipt can open the same one. */
   coin_card_id?: number;
@@ -400,7 +400,7 @@ export interface Receipt {
 /**
  * One scratch card: a coin award, and whether its cover has been lifted.
  *
- * The coins are the user's own — credited the moment they were won — so they
+ * The coins are the user's own, credited the moment they were won, so they
  * travel with the card rather than being withheld: the cover is the screen's
  * device, not a secret, and the card never shows them until it is lifted.
  * `scratched` is what the collection remembers, so a card that has been opened
@@ -412,12 +412,12 @@ export interface ScratchCard {
   at: string;
   /** What won it: "payment", "signup" or "offer:<code>". */
   reason: string;
-  /** What won it, in a line — the fallback caption for a card with no payment. */
+  /** What won it, in a line, the fallback caption for a card with no payment. */
   caption: string;
   /**
    * What the card paid, or null while it is still under its cover. The amount
    * is decided and stored server-side the moment the card is won, and it is
-   * deliberately absent from this payload until the card is claimed — so a
+   * deliberately absent from this payload until the card is claimed, so a
    * covered card has nothing to reveal, in the response or on the screen.
    */
   coins: number | null;
@@ -441,15 +441,52 @@ export interface ScratchCardCollection {
 /**
  * The answer to scratching one card.
  *
- * `credited` is what the claim added to the coin balance — 0 for a card that
+ * `credited` is what the claim added to the coin balance, 0 for a card that
  * had already been claimed, which is how a repeat scratch is told apart from a
- * payout — and `coins` is the fresh snapshot, so the header chip moves with the
+ * payout, and `coins` is the fresh snapshot, so the header chip moves with the
  * reveal rather than a round trip behind it.
  */
 export interface ScratchCardClaimResponse {
   card: ScratchCard;
   credited: number;
   coins: CoinSnapshot;
+}
+
+/**
+ * A payee as the voice resolver returns them: one of this user's own people,
+ * never a stranger found by first name.
+ */
+export interface VoicePayee {
+  user_id: number;
+  name: string | null;
+  /** The owner's own label, which is what was most likely said out loud. */
+  nickname: string | null;
+  vpa: string | null;
+  mobile: string | null;
+  is_saved: boolean;
+}
+
+/**
+ * What a spoken instruction meant.
+ *
+ * It is an intent and not a payment: no money has moved, and the PIN screen is
+ * still what authorises the debit. `payee` is set when the sentence named one
+ * person; `matches` lists the candidates when it named several, so the sheet can
+ * ask instead of guessing. `amount` is null when nothing was said about money.
+ */
+export interface VoiceInterpretation {
+  understood: boolean;
+  /** The words the browser heard, tidied but not rewritten. */
+  transcript: string;
+  /** The payee phrase as parsed: a name, a number, or a handle. */
+  target: string | null;
+  amount: number | null;
+  /** The sum in words, so a misheard zero is visible on the confirmation. */
+  amount_in_words: string;
+  payee: VoicePayee | null;
+  matches: VoicePayee[];
+  /** A sentence the sheet can show as it is. */
+  message: string;
 }
 
 /** Router state for the amount-entry screen. */

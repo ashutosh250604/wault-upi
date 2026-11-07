@@ -9,8 +9,8 @@ One table, and only because coins are counted rather than kept.
 Everything a user has *earned* is derived from the ledger: a successful
 outgoing transfer is a payment, and every third one mints a coin, so the tally
 needs no storage and cannot drift from the history the app shows. Spending is
-the exception — a coin redemption lands in the wallet as an ordinary credit,
-which looks exactly like any other money arriving — so the redemption has to be
+the exception, a coin redemption lands in the wallet as an ordinary credit,
+which looks exactly like any other money arriving, so the redemption has to be
 written down. This row is therefore both the record of the payout and the guard
 that stops the same coins being spent twice.
 """

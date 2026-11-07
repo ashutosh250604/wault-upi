@@ -30,7 +30,7 @@ class User(db.Model):
     last_otp_sent_at = db.Column(db.DateTime(timezone=True))
     # How many codes have been asked for in a row. The first `OTP_FREE_REQUESTS`
     # are free; after that each one waits out `OTP_RESEND_SECONDS`. Reset when a
-    # code is verified, or once the previous code has lapsed — see
+    # code is verified, or once the previous code has lapsed, see
     # `blueprints/auth.py`, which is the only writer.
     otp_requests = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
@@ -72,7 +72,7 @@ class Wallet(db.Model):
 
 
 class Contact(db.Model):
-    """A saved payee — the app's address book.
+    """A saved payee, the app's address book.
 
     The payee's name/mobile/UPI ID are deliberately *not* copied into this
     table: they are read live from `users` on every read, because in UPI the
@@ -122,7 +122,7 @@ class LinkedAccount(db.Model):
     Modelled the way a UPI app actually thinks: the app never holds the money,
     it holds a pointer to an account plus a masked number. The balance is kept
     here but only handed out by the PIN-gated endpoint, because that is exactly
-    how a real app gates "check balance" — the number exists, but seeing it is
+    how a real app gates "check balance", the number exists, but seeing it is
     an authenticated action.
     """
 
@@ -139,7 +139,7 @@ class LinkedAccount(db.Model):
     )
     bank_name = db.Column(db.String(80), nullable=False)
     holder_name = db.Column(db.String(120))
-    # Only the last four digits are ever stored or shown — as with a real app.
+    # Only the last four digits are ever stored or shown, as with a real app.
     account_last4 = db.Column(db.String(4), nullable=False)
     ifsc = db.Column(db.String(11))
     nickname = db.Column(db.String(40))
@@ -171,7 +171,7 @@ class LinkedAccount(db.Model):
 
 
 class PaymentRequest(db.Model):
-    """"Please pay me" — a request for money, not money itself.
+    """"Please pay me", a request for money, not money itself.
 
     Deliberately separate from `transactions`: nothing has moved yet, and an
     declined or forgotten request must never show up in the ledger. A request
@@ -243,7 +243,7 @@ class Notification(db.Model):
     A projection of something that already happened, never a source of truth:
     the money lives in `transactions`, and this row only points at it
     (`transaction_id`) plus enough text to render without a join. A notification
-    is therefore safe to delete — nothing about the wallet changes.
+    is therefore safe to delete, nothing about the wallet changes.
     """
 
     __tablename__ = "notifications"
@@ -296,13 +296,13 @@ class Notification(db.Model):
 class Reward(db.Model):
     """A user's progress against one offer.
 
-    Only per-user state is stored here — status and dates. The offer itself
+    Only per-user state is stored here, status and dates. The offer itself
     (title, terms, target, payout) lives in `wallet/rewards.py`, so the promise
     the user is being held to has exactly one definition and can't drift from a
     row somebody edited.
 
     There is deliberately no pointer to a transaction. Offers pay in coins now,
-    and a coin award is itself the record of what was paid — the row here only
+    and a coin award is itself the record of what was paid, the row here only
     has to say that the promise was kept, and `credited_at` says when.
     """
 
@@ -335,7 +335,7 @@ class Reward(db.Model):
 class CoinAward(db.Model):
     """Coins a payment drew, written down the moment it settles.
 
-    A payout is random (1–50, weighted towards the low end — see
+    A payout is random (1–50, weighted towards the low end, see
     `wallet/coins.py`), and a random amount cannot be re-derived from the
     ledger the way a fixed "every third payment" rule could. So the draw is
     recorded here, against the transaction that earned it, and the balance is
@@ -346,14 +346,14 @@ class CoinAward(db.Model):
 
     **A draw is not spendable until it is claimed.** The amount is decided the
     moment the payment settles and is stored here immediately, but it counts
-    towards the coin balance only from `claimed_at` — the instant the user
+    towards the coin balance only from `claimed_at`, the instant the user
     scratched the card and was told what it paid. Crediting on settle meant the
     wallet announced a prize before anyone had opened the card, and a wrong
     number in a receipt is worse than a card still under its cover: the balance
     moved for money the user had not been told about yet.
 
     `claimed_at` and `scratched_at` are the same instant for every card won
-    since claiming existed. They can differ for the rows written before it —
+    since claiming existed. They can differ for the rows written before it,
     those coins were already spendable, so the migration stamped them claimed
     while leaving a card that was never opened still covered. Such a card
     reveals its coins when it is scratched and credits nothing, because they
@@ -365,7 +365,7 @@ class CoinAward(db.Model):
     #: A payment's draw. One row per payment, guarded by `transaction_id`.
     REASON_PAYMENT = "payment"
     #: The one-off welcome bonus, granted once per account and guarded by
-    #: `reason` — there is no transaction behind it to be unique on.
+    #: `reason`, there is no transaction behind it to be unique on.
     REASON_SIGNUP = "signup"
     #: Coins paid by an offer. The code is kept in the reason
     #: ("offer:three_payments") so an award can always be traced back to the
@@ -394,7 +394,7 @@ class CoinAward(db.Model):
     # When the coins started counting. This is the claim: the moment the user
     # was told the amount, which is the moment it may be spent. Null means the
     # draw is decided and nobody has been told it yet, so it is deliberately
-    # not in the balance — `coins.coins_earned` sums this column's rows only.
+    # not in the balance, `coins.coins_earned` sums this column's rows only.
     claimed_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
 
     transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
@@ -405,8 +405,8 @@ class CoinRedemption(db.Model):
 
     The coin *balance* is the award log minus this one (see `wallet/coins.py`),
     so neither needs a running total that could drift. Spending is the thing the
-    ledger can't tell us — the credit it buys looks like any other money
-    arriving — so this row is both the record of the payout and the guard that
+    ledger can't tell us, the credit it buys looks like any other money
+    arriving, so this row is both the record of the payout and the guard that
     stops the same coins being spent twice.
     """
 
@@ -430,7 +430,7 @@ class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(24), unique=True, index=True)
     # 'topup' | 'transfer' | 'cashback' | 'coins'. A cashback or coin credit has
-    # no sender — the money comes from WAULT's own rewards engine, not from
+    # no sender, the money comes from WAULT's own rewards engine, not from
     # another wallet.
     type = db.Column(db.String(16), nullable=False)
     status = db.Column(db.String(16), nullable=False, default="success")

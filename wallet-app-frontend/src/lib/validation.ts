@@ -1,6 +1,6 @@
 /**
  * Client-side validation mirroring the server's rules, so users get feedback
- * before a round trip. The server always re-validates — this is UX, not trust.
+ * before a round trip. The server always re-validates, this is UX, not trust.
  */
 
 import { formatCurrency } from "./format";
@@ -81,7 +81,7 @@ export function payeeIdentifierError(value: string): string | null {
 
 /** Strip everything a numeric keypad shouldn't produce and cap at 2 decimals. */
 export function sanitizeAmountInput(raw: string): string {
-  // A paste could contain "₹1,234.5678" — keep the digits and one separator.
+  // A paste could contain "₹1,234.5678", keep the digits and one separator.
   const cleaned = raw.replace(/[^\d.]/g, "").replace(/\.(?=.*\.)/g, "");
   const [whole = "", decimals] = cleaned.split(".");
   const trimmedWhole = whole.replace(/^0+(?=\d)/, "").slice(0, 9);

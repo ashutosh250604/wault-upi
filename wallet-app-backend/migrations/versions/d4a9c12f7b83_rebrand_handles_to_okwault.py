@@ -7,7 +7,7 @@ Create Date: 2026-10-06 21:40:00.000000
 The product took its final name, so the handle suffix follows it: `@okvault`
 becomes `@okwault`, exactly as `c3f8b2a01d47` moved `@okwalletpay` to `@okvault`
 before it. A handle is part of a user's identity, so changing the default in
-config only helps accounts created afterwards — every wallet that already exists
+config only helps accounts created afterwards, every wallet that already exists
 would keep advertising the old suffix. This rewrites them in place.
 
 It is a data migration rather than a schema one on purpose: nothing about the

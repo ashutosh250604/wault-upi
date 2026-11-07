@@ -5,7 +5,7 @@ Revises: e7b3c5f21a08
 Create Date: 2026-10-10 09:05:00.000000
 
 The coin balance counted every award the moment it was written, so a payment
-moved the balance by a random amount before the card over it had been opened —
+moved the balance by a random amount before the card over it had been opened,
 and the receipt said the number out loud. The card was decoration.
 
 `claimed_at` is when a draw becomes spendable, stamped by the claim
@@ -17,7 +17,7 @@ Rows written before this revision are backfilled as claimed. Under the old rule
 their coins were already spendable, which means the amount is already inside
 some balance: left null they would not have been hidden, they would have been
 *subtracted* from every account in the service. `scratched_at` is deliberately
-not touched, so a card that was never opened stays covered — the migration
+not touched, so a card that was never opened stays covered, the migration
 records what is true (the coins count) rather than inventing a scratch nobody
 made. Scratching such a card reveals its amount and credits nothing, because it
 was counted the first time.

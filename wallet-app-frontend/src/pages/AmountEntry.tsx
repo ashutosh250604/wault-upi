@@ -115,7 +115,7 @@ export default function AmountEntryPage() {
    * balance until they are redeemed.
    */
   /**
-   * Say that an offer paid — without saying how much.
+   * Say that an offer paid, without saying how much.
    *
    * An offer's coins are a card like any other payout, counted when it is
    * scratched, so the note names the promise and points at the collection. The
@@ -126,7 +126,7 @@ export default function AmountEntryPage() {
     if (!rewards?.length) return;
     toast.success(
       rewards.length === 1
-        ? `${rewards[0].headline ?? rewards[0].title} — a scratch card is waiting`
+        ? `${rewards[0].headline ?? rewards[0].title}. A scratch card is waiting`
         : `${rewards.length} scratch cards are waiting`,
     );
   };
@@ -163,7 +163,7 @@ export default function AmountEntryPage() {
               note: null,
               timestamp: new Date().toISOString(),
               // A top-up draws no card of its own; an offer it completed does,
-              // and that one is reported the same way — as something to open.
+              // and that one is reported the same way, as something to open.
               scratchCardWaiting: (result.rewards?.length ?? 0) > 0,
             },
           },
@@ -172,7 +172,7 @@ export default function AmountEntryPage() {
       }
 
       // The PIN travels with the payment, so the server authorises the debit
-      // itself — there is no gap between "PIN was fine" and "money moved".
+      // itself, there is no gap between "PIN was fine" and "money moved".
       const result = await api.transfer(
         intent.receiverId as number,
         value,
@@ -481,7 +481,7 @@ export default function AmountEntryPage() {
         ) : (
           // One line, and not the pad's own line again: the pad already says
           // the PIN is checked before money moves, so this says the other half
-          // — where the PIN goes — rather than repeating that half twice.
+          //, where the PIN goes, rather than repeating that half twice.
           <p className="mt-5 text-center text-[11.5px] leading-relaxed text-ink-400">
             Sent over HTTPS and never stored in plain text.
           </p>

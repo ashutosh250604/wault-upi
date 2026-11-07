@@ -6,7 +6,7 @@ export interface StepDotsProps {
   current: number;
 }
 
-/** Onboarding progress as rule marks — a sequence, so numbering is honest. */
+/** Onboarding progress as rule marks, a sequence, so numbering is honest. */
 export function StepDots({ total, current }: StepDotsProps) {
   return (
     <span

@@ -9,7 +9,7 @@ import { Coin } from "./ui/Coin";
  * The scratch card: a reward, hidden under the logo.
  *
  * The point of a scratch card is that the prize is *under* something, so the
- * cover is real silver rather than an animation — a canvas painted with the
+ * cover is real silver rather than an animation, a canvas painted with the
  * app-icon artwork, which the finger erases. Scratching a single pixel of it
  * shows a single pixel of the card underneath, which is what makes scratching
  * little and often feel like getting somewhere; the cover also dissolves on its
@@ -18,28 +18,28 @@ import { Coin } from "./ui/Coin";
  * The prize is not in the document until the cover is off. That is the whole
  * difference between a covered card and a revealed one: an unscratched card
  * that renders its number is a card whose number can be read without scratching
- * it — out of a screenshot, out of the accessibility tree, or out of a cover
+ * it, out of a screenshot, out of the accessibility tree, or out of a cover
  * that has not finished painting. So a covered card draws the paper face and
  * the words "keep scratching", and the coins arrive on the reveal.
  *
  * **The reveal waits for the claim.** The amount is not known until the server
- * answers the scratch — the card is what pays, and the scratch is what collects
- * — so crossing the threshold asks the caller to claim and holds the cover until
+ * answers the scratch, the card is what pays, and the scratch is what collects
+ *, so crossing the threshold asks the caller to claim and holds the cover until
  * it hears back. A refused claim puts the cover back in play (the card can be
  * scratched again) rather than showing a number nothing agreed with; a card
  * that has already been claimed simply renders it.
  *
  * The artwork is the supplied logo, not a redrawing of it: the field behind the
  * tile is the tile's own gradient, measured off the file, and the tile is drawn
- * whole at its own aspect — `public/brand/wault-icon.png` is square and its
+ * whole at its own aspect, `public/brand/wault-icon.png` is square and its
  * corners are already transparent, so it sits on that field with no seam.
  *
  * Reveal is deliberately cheap (`REVEAL_AT`): about an eighth of the card. A
  * scratch card that demands the whole surface is a chore, and the coins are
- * already in the balance either way — this is the telling, not the paying.
+ * already in the balance either way, this is the telling, not the paying.
  *
  * A scratch card is a pointer gesture, and a card is not allowed to have a
- * prize that a keyboard or a screen reader cannot get to — so the card itself
+ * prize that a keyboard or a screen reader cannot get to, so the card itself
  * is the control: focusable, announced as a button, and claimed by Enter or
  * Space exactly as a stroke claims it. That replaced a small underlined
  * "Reveal without scratching" link underneath, which got every covered card on
@@ -66,7 +66,7 @@ function coverScale(): number {
  * The plate is measured here rather than sized from props, and measured by the
  * caller whenever its box changes, because "measure once on mount" is not good
  * enough for a canvas that lives in a sheet that slides in. A canvas nobody
- * sizes keeps the 300×150 default it was born with — and one that was painted
+ * sizes keeps the 300×150 default it was born with, and one that was painted
  * before it had a box is not merely the wrong size, it is *empty*, which looks
  * exactly like a broken feature.
  *
@@ -121,7 +121,7 @@ function paintCover(canvas: HTMLCanvasElement, tile: HTMLImageElement | null) {
 export interface ScratchCardProps {
   /** The coins this card paid, or null while it is still under its cover. */
   coins: number | null;
-  /** True once the card has been claimed — owned by the caller, which stores it. */
+  /** True once the card has been claimed, owned by the caller, which stores it. */
   revealed: boolean;
   /**
    * Claim the card, and answer whether it worked. The caller owns the request
@@ -205,7 +205,7 @@ export function ScratchCard({
     return () => observer.disconnect();
   }, []);
 
-  // And once more when the artwork itself arrives — the box has not changed, so
+  // And once more when the artwork itself arrives, the box has not changed, so
   // the observer has nothing to say.
   useEffect(() => {
     if (!tileReady) return;
@@ -213,7 +213,7 @@ export function ScratchCard({
     if (canvas) paintCover(canvas, tileRef.current);
   }, [tileReady]);
 
-  /** How much of the cover is gone, sampled on a coarse grid — 0 to 1. */
+  /** How much of the cover is gone, sampled on a coarse grid, 0 to 1. */
   const coverage = useCallback((canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return 0;
@@ -231,7 +231,7 @@ export function ScratchCard({
     return sampled === 0 ? 0 : gone / sampled;
   }, []);
 
-  /** Claim the card if enough of the cover has gone — and ask exactly once. */
+  /** Claim the card if enough of the cover has gone, and ask exactly once. */
   const check = useCallback(
     (canvas: HTMLCanvasElement) => {
       if (announced.current) return;
@@ -292,7 +292,7 @@ export function ScratchCard({
     try {
       canvas.setPointerCapture(event.pointerId);
     } catch {
-      // Unknown or already-released pointer — erase without the capture.
+      // Unknown or already-released pointer, erase without the capture.
     }
     erasing.current = true;
     lastPoint.current = null;
@@ -309,7 +309,7 @@ export function ScratchCard({
     const point = pointFrom(canvas, event.clientX, event.clientY);
     eraseTo(canvas, point.x, point.y, point.radius);
     // Reading the whole canvas is the expensive part, so it happens every few
-    // moves rather than on every one — the pointer-up check always runs.
+    // moves rather than on every one, the pointer-up check always runs.
     moves.current += 1;
     if (moves.current % 5 === 0) check(canvas);
   };
@@ -334,7 +334,7 @@ export function ScratchCard({
       {/* The card is the control.
 
           It used to be a picture with a small underlined "Reveal without
-          scratching" button under it — which left every covered card on the
+          scratching" button under it, which left every covered card on the
           collection screen reading as three stacked lines of text, and put the
           card's own caption below two of them. The gesture is a pointer drag on
           the artwork, so the artwork is what a keyboard has to be able to
@@ -343,7 +343,7 @@ export function ScratchCard({
       <div
         role={revealed ? undefined : "button"}
         tabIndex={revealed ? undefined : 0}
-        aria-label={revealed ? undefined : "Scratch card — press to reveal your coins"}
+        aria-label={revealed ? undefined : "Scratch card: press to reveal your coins"}
         onKeyDown={
           revealed
             ? undefined
@@ -368,7 +368,7 @@ export function ScratchCard({
       >
         {/* The face of the card. The prize is deliberately absent while the
             cover is on: nothing in the document means nothing to read out of
-            it, so a covered card cannot hand its number over early — not to a
+            it, so a covered card cannot hand its number over early, not to a
             screenshot, not to a screen reader, and not to a cover that failed
             to paint. */}
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
@@ -414,7 +414,7 @@ export function ScratchCard({
           )}
         </div>
 
-        {/* What to do, on the cover, until the finger arrives — and then what is
+        {/* What to do, on the cover, until the finger arrives, and then what is
             happening while the claim is in flight. It is an overlay rather than
             a label beside the card because the gesture is the whole
             interaction, and pointer-events-none keeps the stroke that dismisses

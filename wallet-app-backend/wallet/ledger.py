@@ -1,7 +1,7 @@
 """Money movement, in one place.
 
 Both a direct P2P payment and "pay off a request" are the same operation, so
-they share this function rather than reimplementing the debit/credit dance —
+they share this function rather than reimplementing the debit/credit dance,
 which is exactly the kind of duplication that eventually lets one path check
 the balance and the other forget to.
 """
@@ -90,7 +90,7 @@ def settle_transfer(
     )
     db.session.add(txn)
     # If the payee is in the sender's address book, remember when they last paid
-    # them — that is what makes "recent" ordering on the people strip honest.
+    # them, that is what makes "recent" ordering on the people strip honest.
     stamp_last_paid(sender_id, receiver_id, settled_at)
 
     try:
@@ -151,7 +151,7 @@ def _announce(txn: Transaction, sender_id: int, receiver_id: int, settled_at) ->
     """Tell both sides about a payment, once, for every path that moves money.
 
     Done here rather than in the transfer endpoint so that paying off a money
-    request produces the same two inbox rows as a direct payment — the payer
+    request produces the same two inbox rows as a direct payment, the payer
     shouldn't get a different paper trail depending on who typed the amount.
     """
     people = {

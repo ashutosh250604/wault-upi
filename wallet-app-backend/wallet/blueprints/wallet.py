@@ -50,7 +50,7 @@ def topup():
         ), 400
 
     # Adding money moves money, so it needs the same server-side PIN check as a
-    # payment — a top-up is the easiest possible way to launder a stolen token.
+    # payment, a top-up is the easiest possible way to launder a stolen token.
     user = current_user()
     if user is None:
         return jsonify({"message": "User not found"}), 404
@@ -162,7 +162,7 @@ def transfer():
     settle_due(receiver_id, txn.timestamp)
     # Every payment draws a card, and a large draw is the point of the scheme.
     # The draw is queued here, in the same commit as the payment itself, so a
-    # payment can't succeed and its card silently not exist — but the amount is
+    # payment can't succeed and its card silently not exist, but the amount is
     # not in this payload. The card holds it until it is scratched, so the
     # receipt is told only that a card is waiting, never what it is worth.
     card = announce_coins(sender_id, txn.id, txn.timestamp)
@@ -189,7 +189,7 @@ def transfer():
 @bp.get("/limits")
 @require_auth
 def daily_limits():
-    """What is left of today's cap — the same numbers the ledger enforces.
+    """What is left of today's cap, the same numbers the ledger enforces.
 
     Deliberately not a client-side calculation: the amount screen and the debit
     itself read this one function, so a limit that is shown can't differ from

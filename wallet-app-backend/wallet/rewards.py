@@ -5,10 +5,10 @@ that rewards were not live. This module makes the promise real. An offer is a
 target, a payout and an expiry date; progress is counted from the ledger rather
 than kept in a counter, so it can't drift from what actually happened; and the
 payout is written as a coin award (`coins.grant`), which arrives as a scratch
-card — the coins count when the user scratches it, like every other prize.
+card, the coins count when the user scratches it, like every other prize.
 
 **Offers pay in coins, not cashback.** They used to credit rupees straight into
-the balance, which meant two reward currencies on one screen — a cashback strip
+the balance, which meant two reward currencies on one screen, a cashback strip
 that quietly moved your money, and a coins chip that was a separate game of its
 own. There is now one reward currency. Because a coin redeems at ₹1, an offer
 worth ₹25 pays 25 coins and is worth exactly what it always was; the difference
@@ -59,7 +59,7 @@ OFFERS = (
         "headline": "Send 3 payments",
         "caption": "Three payments",
         "detail": (
-            "Pay anyone three times — any amount, to any payee. The 50 coins arrive "
+            "Pay anyone three times, any amount, to any payee. The 50 coins arrive "
             "as a scratch card when the third payment settles."
         ),
         "reward_coins": 50,
@@ -172,13 +172,13 @@ def settle_due(user_id: int, now: datetime | None = None) -> list[Reward]:
     """Pay out every offer this user has just completed.
 
     Called from the payment paths while the money's own transaction is still
-    open, so the coins land in the same commit as the payment that earned them —
+    open, so the coins land in the same commit as the payment that earned them,
     there is no window where a payment succeeded and its reward silently did not.
     Idempotent: a credited row is skipped, so replaying a payment can't pay twice.
 
     `now` should be the instant of the event being settled (`txn.timestamp`),
     not the wall clock. An account's offers are activated on first sight, which
-    for a brand-new user happens inside the very first payment or top-up — and
+    for a brand-new user happens inside the very first payment or top-up, and
     activation at `utcnow()` would stamp `started_at` *after* the transaction
     that triggered it, so the event would be disqualified from its own offer and
     a new account's first top-up would silently earn nothing. Passing the
@@ -216,7 +216,7 @@ def settle_due(user_id: int, now: datetime | None = None) -> list[Reward]:
             user_id,
             Notification.SCRATCH_CARD,
             "Scratch card ready",
-            f"{offer['title']} earned from {offer['caption'].lower()} — collect it "
+            f"{offer['title']} earned from {offer['caption'].lower()}, collect it "
             f"in Scratch cards.",
             when=moment,
         )
@@ -240,7 +240,7 @@ def describe(reward: Reward, now: datetime | None = None) -> dict | None:
         "detail": offer["detail"],
         # The payout, as coins and as what those coins are worth. Both are sent
         # because the card leads with the coins and the receipt may want the
-        # money — and because a coin's redemption rate is not the client's to
+        # money, and because a coin's redemption rate is not the client's to
         # assume.
         "coins": offer["reward_coins"],
         "reward": paise_to_rupees(offer["reward_coins"] * coins.COIN_VALUE_PAISE),
@@ -253,7 +253,7 @@ def describe(reward: Reward, now: datetime | None = None) -> dict | None:
         "credited_at": as_utc(reward.credited_at).isoformat()
         if reward.credited_at
         else None,
-        # True once the target is met but before the next payment settles it —
+        # True once the target is met but before the next payment settles it,
         # which is what lets the card say "you've earned it" honestly.
         "earned": reward.status == Reward.ACTIVE and done >= offer["target"],
     }
@@ -279,8 +279,8 @@ def list_for(reward_rows: list[Reward], now: datetime | None = None) -> list[dic
 def credited_summary(rewards: list[Reward]) -> list[dict]:
     """Tiny payload for the payment response: which promises this payment paid.
 
-    The offer's own terms, not a new fact — every one of them is printed on the
-    home strip before it is earned — and each payout it names is waiting as a
+    The offer's own terms, not a new fact, every one of them is printed on the
+    home strip before it is earned, and each payout it names is waiting as a
     scratch card. Nothing here moves the balance; the card does that.
     """
     summary = []

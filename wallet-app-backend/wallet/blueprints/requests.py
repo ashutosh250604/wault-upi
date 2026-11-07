@@ -2,7 +2,7 @@
 
 A request is an *ask*, not a payment. Nothing touches a wallet until the person
 who was asked approves it with their PIN, and the resulting transfer is recorded
-in the same commit that closes the request — so there is never a state where the
+in the same commit that closes the request, so there is never a state where the
 money moved but the ask still looks open.
 """
 
@@ -106,7 +106,7 @@ def create_request():
     note = (data.get("note") or "").strip()[:MAX_NOTE] or None
 
     # Asking the same person for the same amount twice in a row usually means a
-    # double tap, not two separate debts — so refresh the open one instead.
+    # double tap, not two separate debts, so refresh the open one instead.
     duplicate = PaymentRequest.query.filter_by(
         requester_id=requester.id,
         payer_id=payer.id,
@@ -131,7 +131,7 @@ def create_request():
     db.session.add(payment_request)
     db.session.flush()
     # The ask is news for the person being asked, so it earns a place in their
-    # inbox. Refreshing a duplicate above deliberately does *not* notify again —
+    # inbox. Refreshing a duplicate above deliberately does *not* notify again,
     # a double tap must not look like two people asking.
     notify(
         payer.id,
@@ -224,11 +224,11 @@ def pay_request(request_id):
     # Settle offers for both sides before the single commit below: the payer may
     # have just completed their third payment, and the requester may have just
     # been paid for the first time. Timed at the transfer itself, as in the
-    # transfer blueprint — see `settle_due`.
+    # transfer blueprint, see `settle_due`.
     credited = settle_due(payer.id, txn.timestamp)
     settle_due(payment_request.requester_id, txn.timestamp)
     # Settling a request is a payment, so it draws a scratch card exactly as a
-    # direct transfer does — the card, not its amount, which stays under the
+    # direct transfer does, the card, not its amount, which stays under the
     # cover until it is scratched.
     card = announce_coins(payer.id, txn.id, txn.timestamp)
     # One commit for the ledger row and the request's new state: they can never
@@ -318,5 +318,5 @@ def _settle_without_money(payment_request: PaymentRequest, status: str, label: s
     db.session.commit()
 
     payload = payment_request.to_dict(g.user_id)
-    payload["message"] = f"{label} — no money moved"
+    payload["message"] = f"{label}: no money moved"
     return jsonify(payload), 200

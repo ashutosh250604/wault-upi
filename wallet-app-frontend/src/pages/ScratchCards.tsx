@@ -24,7 +24,7 @@ import { EmptyState, ErrorState, SkeletonCard } from "../components/ui/States";
  * been scratched shows what it paid.
  *
  * **This screen is where coins are collected.** A draw counts towards the
- * balance when its card is scratched and not before — the amount is decided
+ * balance when its card is scratched and not before, the amount is decided
  * when the card is won, stored on the server, and absent from every payload
  * until this screen claims it. So the reveal follows the server's answer rather
  * than racing it: the card holds its cover while the claim is in flight, and
@@ -70,7 +70,7 @@ export default function ScratchCardsPage() {
    * Claim a card: scratch it, and let the account pay it.
    *
    * Nothing is revealed until this answers, because the amount does not exist on
-   * this device until then — the card is where the prize lives. The response
+   * this device until then, the card is where the prize lives. The response
    * carries the coins, the card and the fresh coin snapshot, so the reveal, the
    * header chip and this list all move together. Nothing is written locally
    * first: an optimistic mark would show a prize the server had not paid, and a

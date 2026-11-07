@@ -60,7 +60,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // A session lasts 30 minutes and the client counts the same window down.
   //
-  // The token is the source of truth — the server refuses anything past `exp` —
+  // The token is the source of truth, the server refuses anything past `exp`,
   // so waiting for a 401 would mean finding out mid-payment, with the screen
   // half-rendered around a wallet that is already closed. Instead the app ends
   // the session the moment it lapses and says why.

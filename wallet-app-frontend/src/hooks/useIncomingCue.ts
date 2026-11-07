@@ -10,7 +10,7 @@ import { feedback } from "../lib/feedback";
  * balance, and none of those should sound like being paid. This watches only for
  * a new row that is an incoming transfer from another wallet.
  *
- * The first ledger it sees is absorbed silently — otherwise opening the app
+ * The first ledger it sees is absorbed silently, otherwise opening the app
  * would chirp about a payment from last week. A cue therefore only ever plays
  * for money that arrived while this screen was open, which is the honest
  * definition of "you just got paid".

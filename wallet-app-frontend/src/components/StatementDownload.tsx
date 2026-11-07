@@ -48,7 +48,7 @@ interface Period {
  * later and match what an accountant already has.
  */
 function periods(): Period[] {
-  // Every boundary here is built from the IST calendar — the one the statement
+  // Every boundary here is built from the IST calendar, the one the statement
   // itself is grouped by and the days are printed in. Deriving them from the
   // browser's own Date parts would hand a reader west of IST a window that
   // starts a day late and a month that ends a day early.
@@ -211,7 +211,7 @@ export function StatementDownload({
         </div>
 
         <p className="text-[11.5px] leading-relaxed text-ink-500">
-          The PDF carries your UPI ID, the period you pick and every entry in it —
+          The PDF carries your UPI ID, the period you pick and every entry in it:
           payments, top-ups and rewards, signed from your side of the ledger.
         </p>
       </Sheet>

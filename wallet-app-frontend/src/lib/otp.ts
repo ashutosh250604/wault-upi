@@ -3,7 +3,7 @@
  *
  * WAULT deliberately ships without an SMS gateway: while none is
  * configured the API returns the code (`dev_otp`) so the flow is walkable, and
- * the verify screen shows it. The screen itself stays delivery-agnostic — it
+ * the verify screen shows it. The screen itself stays delivery-agnostic, it
  * asks this module what to say rather than checking `devOtp` inline. When the
  * server starts sending codes by SMS it stops returning `dev_otp`, and this
  * screen switches to the "sent by SMS" copy on its own.

@@ -32,6 +32,7 @@ import type {
   TopUpResponse,
   TransferResponse,
   VerifyOtpResponse,
+  VoiceInterpretation,
   WalletTransaction,
 } from "../types";
 import { filenameFromDisposition } from "./download";
@@ -56,7 +57,7 @@ export class ApiError extends Error {
   /**
    * The rest of the response body, when there was one.
    *
-   * Some refusals are not just a sentence — a rate limit is a *when*, and the
+   * Some refusals are not just a sentence, a rate limit is a *when*, and the
    * only honest source for it is the server. The 429 from `start_login` carries
    * `retry_after` and `resend_available_at`, and the verify screen reads them
    * from here rather than guessing a window from the message it was handed.
@@ -93,7 +94,7 @@ interface RequestOptions {
   body?: unknown;
   /** Attach the Bearer token; throws early when there isn't one. */
   auth?: boolean;
-  /** Skip the /api prefix — only `/healthz` lives at the root. */
+  /** Skip the /api prefix, only `/healthz` lives at the root. */
   root?: boolean;
   signal?: AbortSignal;
 }
@@ -197,8 +198,8 @@ export const api = {
   /**
    * Forgot PIN, in its three steps.
    *
-   * None of them is authenticated — the user cannot get in, which is the whole
-   * problem — so the code they receive is the proof, and the token it buys is
+   * None of them is authenticated, the user cannot get in, which is the whole
+   * problem, so the code they receive is the proof, and the token it buys is
    * good for one new PIN. The answer to the first call says the same thing
    * whether or not the number has a wallet: see the endpoint's own note.
    */
@@ -391,6 +392,21 @@ export const api = {
       signal,
     }),
 
+  /**
+   * Turns a spoken instruction into a payee and an amount.
+   *
+   * The grammar lives on the server, one deterministic function with a table of
+   * tests, so the microphone only has to produce text. Nothing here moves
+   * money: the answer is an intent, and the PIN screen still authorises it.
+   */
+  interpretVoice: (transcript: string, signal?: AbortSignal) =>
+    request<VoiceInterpretation>("/voice/interpret", {
+      method: "POST",
+      body: { transcript },
+      auth: true,
+      signal,
+    }),
+
   recentPeople: (limit = 8, signal?: AbortSignal) =>
     request<Person[]>(`/people/recent?limit=${limit}`, { auth: true, signal }),
 
@@ -415,7 +431,7 @@ export const api = {
       { method: "POST", auth: true, signal },
     ),
 
-  /** Deleting a notification only forgets the note — the ledger row stays. */
+  /** Deleting a notification only forgets the note, the ledger row stays. */
   deleteNotification: (notificationId: number, signal?: AbortSignal) =>
     request<{ message: string; unread_count: number }>(`/notifications/${notificationId}`, {
       method: "DELETE",
@@ -447,8 +463,8 @@ export const api = {
   /**
    * Every scratch card this user holds, newest first.
    *
-   * Every coin award is a card — a payment's draw, an offer's payout and the
-   * welcome bonus — and an unclaimed one carries no amount at all: it is not
+   * Every coin award is a card, a payment's draw, an offer's payout and the
+   * welcome bonus, and an unclaimed one carries no amount at all: it is not
    * sent until the card is scratched.
    */
   scratchCards: (signal?: AbortSignal) =>
@@ -457,8 +473,8 @@ export const api = {
   /**
    * Scratches one card, which is the claim: this is the call that counts its
    * coins, so it is the one write that moves the coin balance outside a
-   * redemption. Idempotent server-side — a repeat returns the same amount with
-   * `credited` at 0 — so a double tap cannot pay for one card twice.
+   * redemption. Idempotent server-side, a repeat returns the same amount with
+   * `credited` at 0, so a double tap cannot pay for one card twice.
    */
   scratchCard: (cardId: number, signal?: AbortSignal) =>
     request<ScratchCardClaimResponse>(`/scratch-cards/${cardId}/scratch`, {

@@ -6,8 +6,8 @@ Create Date: 2026-10-10 11:20:00.000000
 
 Wrong PINs are meant to be five a day: the five-then-lock rule protects the
 wallet, and a counter that never clears punishes someone who mistyped a digit
-last Tuesday. `pin_attempts` alone could not express that — it has no idea which
-day it was counting — so `users.pin_attempts_date` records the IST day the count
+last Tuesday. `pin_attempts` alone could not express that, it has no idea which
+day it was counting, so `users.pin_attempts_date` records the IST day the count
 belongs to, and `check_pin` starts the count over when the day it sees is not the
 day it wrote.
 

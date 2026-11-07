@@ -36,7 +36,7 @@ def _request_run(user, now) -> int:
 
     A run is the stretch of requests made while a code is still valid. Someone
     who asks twice, verifies, and then signs in again next week has not made
-    three requests — the counter is per run, not per number, which is what
+    three requests, the counter is per run, not per number, which is what
     "five continuous requests" means. The run ends on a successful verify (see
     `verify_otp`) or once the previous code has lapsed; the value here is only
     read, and `start_login` writes the incremented one back.
@@ -54,7 +54,7 @@ def _cooldown_state(user, now, run: int):
 
     Returns `(wait_seconds, available_at)`. `wait_seconds` is 0 when the request
     may go ahead. Both are handed to the client so it can count the window down
-    from a timestamp the server chose, instead of starting its own clock — a
+    from a timestamp the server chose, instead of starting its own clock, a
     refresh, a backgrounded tab or a clock that ticks while the phone is asleep
     then all show the same remaining time.
     """
@@ -132,7 +132,7 @@ def start_login():
     )
     payload = {
         "message": "OTP sent!",
-        # How many of the free requests are left, and — once they run out — the
+        # How many of the free requests are left, and, once they run out, the
         # instant the next one may be made. The verify screen renders its
         # countdown from this rather than from its own 60-second guess.
         "requests_remaining": max(0, free - run),
@@ -188,13 +188,13 @@ def verify_otp():
     user.updated_at = utcnow()
     # Deliberately no "new sign-in" note. It used to be written on every
     # verification, so the same person signing in twice was told the same thing
-    # twice — news to nobody, and the quickest way to teach someone that the
+    # twice, news to nobody, and the quickest way to teach someone that the
     # bell can be ignored. The first login is the one with something to say, and
     # it already says it: the welcome bonus below writes its own note, once in
     # the life of the account.
     # The welcome bonus, in the same commit as the sign-in. Verifying a code is
-    # the moment an account becomes real — it is the first thing a new number
-    # does and the only thing every returning user does — and the grant is
+    # the moment an account becomes real, it is the first thing a new number
+    # does and the only thing every returning user does, and the grant is
     # idempotent, so "new" and "returning" need no branch here.
     coins.grant_signup_bonus(user.id)
     db.session.commit()
@@ -359,7 +359,7 @@ def me():
 # The PIN is the last gate before money moves, and it used to be the one
 # credential a user could not replace: chosen once during onboarding, and a
 # forgotten one left the wallet unusable for good. Recovery is the standard
-# shape — the registered number, a one-time code, a new PIN — in three steps
+# shape, the registered number, a one-time code, a new PIN, in three steps
 # rather than one, so that passing the code check buys nothing on its own:
 #
 #   /forgot_pin        asks for a code, throttled exactly like a sign-in code
@@ -432,7 +432,7 @@ def forgot_pin():
     if not deliver_otp(mobile, otp):
         if current_app.config["DEMO_MODE"]:
             # The demo has no SMS gateway, so the code is handed to the screen
-            # that asked for it — the same bargain the sign-in flow makes, and
+            # that asked for it, the same bargain the sign-in flow makes, and
             # the same reason it is refused outside demo mode.
             payload["dev_otp"] = otp
         else:
@@ -476,7 +476,7 @@ def verify_reset_otp():
         return jsonify({"message": f"Invalid code. {remaining} attempt(s) left."}), 400
 
     user.otp_is_used = True
-    # The run is over — the code has done its job, so the next request starts
+    # The run is over, the code has done its job, so the next request starts
     # from the free ones again, exactly as a verified sign-in does.
     user.otp_requests = 0
     user.updated_at = utcnow()
@@ -498,7 +498,7 @@ def verify_reset_otp():
 def reset_pin():
     """Write a new PIN, against the token from a verified reset code.
 
-    Unauthenticated by design — the whole point is that the user cannot get in —
+    Unauthenticated by design, the whole point is that the user cannot get in,
     so the token is the credential, and it is the only thing that can open this
     door. The lockout goes with the old PIN: the person holding the phone has
     just proved the phone is theirs, and staying locked out would only punish

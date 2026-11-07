@@ -6,7 +6,7 @@ import { api, errorMessage } from "../lib/api";
  * The offers strip's data.
  *
  * Progress is counted server-side from the ledger, so nothing here computes it;
- * `reloadKey` just says when to look again — a payment can complete an offer, and
+ * `reloadKey` just says when to look again, a payment can complete an offer, and
  * every payment mints a transaction.
  */
 export function useRewards(reloadKey?: unknown) {

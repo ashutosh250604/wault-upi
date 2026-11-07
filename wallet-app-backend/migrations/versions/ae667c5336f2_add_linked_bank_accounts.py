@@ -4,7 +4,7 @@ Revision ID: ae667c5336f2
 Revises: 321125cac3ac
 Create Date: 2026-10-01 00:26:11.402881
 
-Funding sources for top-ups. Only the last four digits are stored — a real UPI
+Funding sources for top-ups. Only the last four digits are stored, a real UPI
 app never holds the full account number, and neither does this one.
 """
 from alembic import op

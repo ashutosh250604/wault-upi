@@ -12,8 +12,8 @@ if __name__ == "__main__":
     # reach this branch at all: the container runs `gunicorn app:app`, which
     # reads $PORT itself.
     #
-    # PORT is honoured so a local run can be moved off 5000, but `PORT=0` — which
-    # some shells export — would otherwise pick an invisible random port, so a
+    # PORT is honoured so a local run can be moved off 5000, but `PORT=0`, which
+    # some shells export, would otherwise pick an invisible random port, so a
     # zero falls back to the documented 5000.
     app.run(
         debug=os.getenv("FLASK_DEBUG", "").strip().lower() in {"1", "true", "yes"},

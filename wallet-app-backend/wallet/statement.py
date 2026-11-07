@@ -1,13 +1,13 @@
 """The branded PDF statement.
 
 A downloaded statement should still look like WAULT. This module draws it
-in the same "Ink & Seal" language the app uses — an ink band carrying the seal
-mark, warm paper, hairline ledger rules, money set in bold numerals — and prints
+in the same "Ink & Seal" language the app uses, an ink band carrying the seal
+mark, warm paper, hairline ledger rules, money set in bold numerals, and prints
 the same facts the Transactions screen shows, so the file is readable without the
 app.
 
 The faces: reportlab's built-in Helvetica has no ₹ glyph, so the builder looks
-for a Unicode font — a licensed face dropped into `wallet/assets/fonts/` first,
+for a Unicode font, a licensed face dropped into `wallet/assets/fonts/` first,
 then the system's (the Docker image installs `fonts-dejavu-core` for exactly
 this). When none is found the statement falls back to Helvetica with "INR" in
 place of the rupee sign, and says so in the log, because a statement printed in
@@ -97,7 +97,7 @@ class _Fonts(NamedTuple):
     body: str
     bold: str
     mono: str
-    #: "₹" when the face has the glyph, otherwise "INR " — the amount prefix.
+    #: "₹" when the face has the glyph, otherwise "INR ", the amount prefix.
     currency: str
 
 
@@ -118,13 +118,13 @@ def _fonts() -> _Fonts:
             log.info("Statement font %s carries the rupee sign", regular)
             return _Fonts("WAULTSans", "WAULTSans-Bold", "Courier", "₹")
         log.warning(
-            "Statement font %s has no ₹ glyph — amounts will print as INR", regular
+            "Statement font %s has no ₹ glyph, amounts will print as INR", regular
         )
         return _Fonts("WAULTSans", "WAULTSans-Bold", "Courier", "INR ")
     # Worth a warning rather than a silent fallback: "INR" on every line of a
     # downloaded statement is the visible symptom, and this is the cause.
     log.warning(
-        "No Unicode font found for statements — amounts will print as INR. "
+        "No Unicode font found for statements, amounts will print as INR. "
         "Install fonts-dejavu-core (the Docker image does) or drop a TTF into %s",
         _FONT_DIR,
     )
@@ -136,7 +136,7 @@ def _money(paise: int, currency: str) -> str:
 
 
 def _day_label(when: datetime) -> str:
-    """DD-MM-YYYY, in IST — the one date format the app and the statement share."""
+    """DD-MM-YYYY, in IST, the one date format the app and the statement share."""
     return format_date(when)
 
 
@@ -233,7 +233,7 @@ def _draw_brand_mark(canvas, x: float, y: float, size: float) -> None:
     The supplied artwork itself, not a redrawing of it. This letterhead used to
     replay the app's vector geometry in four strokes and two rounded rectangles,
     which meant the statement carried a *version* of the logo for as long as it
-    took the two to drift — and the drift is what a brand audit finds. One PNG,
+    took the two to drift, and the drift is what a brand audit finds. One PNG,
     used by the app, the QR code and this page.
 
     The mark is square and carries its own transparent corners, so `size` is both
@@ -293,7 +293,7 @@ def _draw_page(canvas, doc, *, period_label: str, generated_label: str) -> None:
     canvas.line(_MARGIN, 42, _PAGE_WIDTH - _MARGIN, 42)
     canvas.setFillColor(INK_MUTED)
     canvas.setFont(fonts.body, 7.5)
-    canvas.drawString(_MARGIN, 32, "Built from the WAULT ledger — the same rows the app shows, in IST.")
+    canvas.drawString(_MARGIN, 32, "Built from the WAULT ledger: the same rows the app shows, in IST.")
     canvas.setFont(fonts.mono, 7.5)
     canvas.setFillColor(INK_SOFT)
     canvas.drawRightString(_PAGE_WIDTH - _MARGIN, 32, f"Page {doc.page}")
@@ -318,7 +318,7 @@ def _meta_table(
     table = Table(
         [
             [label("Account holder"), value(holder_name), label("Period"), value(period_label)],
-            [label("UPI ID"), value(holder_vpa or "—"), label("Entries"), value(str(entries))],
+            [label("UPI ID"), value(holder_vpa or "-"), label("Entries"), value(str(entries))],
         ],
         colWidths=[82, 156, 52, 233],
     )
@@ -350,8 +350,8 @@ def _summary_table(
 ) -> Table:
     """The account summary, in the shape a bank statement uses.
 
-    Opening balance, total credits, total debits, net change and closing balance
-    — the five figures that let a reader check the arithmetic instead of trusting
+    Opening balance, total credits, total debits, net change and closing balance,
+    the five figures that let a reader check the arithmetic instead of trusting
     it. Three columns by two rows keeps each number large enough to read at a
     glance, which a five-across row does not.
 
@@ -407,7 +407,7 @@ def _month_groups(rows: Sequence, viewer_id: int) -> list[dict]:
     """Split the ledger by calendar month, with each month's own totals.
 
     A statement covering one month is what people are used to, and a long
-    statement is easier to read a month at a time — so the entries are grouped
+    statement is easier to read a month at a time, so the entries are grouped
     and each group is subtotalled. The order is the order they arrive in, which
     the caller has already sorted oldest-first.
     """
@@ -568,7 +568,7 @@ def build_statement_pdf(
 
     The balances are derived, not guessed. `wallet_balance_paise` is the live
     balance the app shows, and `movement_after_paise` is the signed total of
-    everything that happened *after* this period — so the closing balance is the
+    everything that happened *after* this period, so the closing balance is the
     wallet as it stood at the end of the window, and the opening balance is that
     minus the period's own movement. The two are therefore always consistent
     with each other and with the entries printed between them, whatever window
@@ -589,7 +589,7 @@ def build_statement_pdf(
         rightMargin=_MARGIN,
         topMargin=_TOP_MARGIN,
         bottomMargin=_BOTTOM_MARGIN,
-        title=f"WAULT transaction statement — {period_label}",
+        title=f"WAULT transaction statement, {period_label}",
         author="WAULT",
         subject=f"WAULT transaction statement for {holder_name}",
     )
@@ -642,8 +642,8 @@ def build_statement_pdf(
         ),
         Spacer(1, 7),
         # The panel is checkable by hand, so print the sum it rests on. "Net
-        # change" on its own invites the wrong reading — that it is the balance
-        # left in the wallet — and a reader with a calculator has no way to
+        # change" on its own invites the wrong reading, that it is the balance
+        # left in the wallet, and a reader with a calculator has no way to
         # settle the argument.
         Paragraph(
             f"Opening balance {_money(opening, currency)} plus total credits "
@@ -674,7 +674,7 @@ def build_statement_pdf(
         story.append(Spacer(1, 6))
         story.append(
             Paragraph(
-                "Choose a wider range — or make a payment — and download the statement again.",
+                "Choose a wider range, or make a payment, then download the statement again.",
                 styles["note"],
             )
         )

@@ -1,7 +1,7 @@
 /**
  * Router state is `unknown` at runtime (a refresh or a hand-typed URL can put
  * anything there), so these guards convert it into the shapes the payment
- * screens expect — or reject it and send the user somewhere sane.
+ * screens expect, or reject it and send the user somewhere sane.
  */
 
 import type { PaymentIntent, Receipt } from "../types";

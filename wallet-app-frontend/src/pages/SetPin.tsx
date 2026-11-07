@@ -54,7 +54,7 @@ export default function SetPinPage() {
       // patch, home would keep showing "Set your PIN to start paying".
       patchProfile({ has_pin: true });
       void refresh({ silent: true });
-      toast.success("PIN set — you're ready to pay");
+      toast.success("PIN set. You're ready to pay");
       navigate("/home", { replace: true });
     } catch (err) {
       setError(errorMessage(err));
@@ -100,7 +100,7 @@ export default function SetPinPage() {
         <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-500">
           {isConfirm
             ? "Confirm the PIN you just chose so we know it wasn't a typo."
-            : "You'll enter this PIN to approve every payment. Keep it private — you'll need it for every transfer."}
+            : "You'll enter this PIN to approve every payment. Keep it private. You'll need it for every transfer."}
         </p>
 
         <div className="mt-6 space-y-3">
@@ -115,7 +115,7 @@ export default function SetPinPage() {
           <Card className="flex gap-2.5">
             <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
             <p className="text-[12.5px] leading-relaxed text-ink-600">
-              Your PIN is stored as a salted scrypt hash — the plain PIN is never
+              Your PIN is stored as a salted scrypt hash. The plain PIN is never
               written to the database, and no API response ever returns it.
             </p>
           </Card>

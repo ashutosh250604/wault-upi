@@ -35,7 +35,7 @@ import {
 } from "../components/ui/Icons";
 import { feedback } from "../lib/feedback";
 
-/** The greeting follows the IST clock, not the browser's — see `istHour`. */
+/** The greeting follows the IST clock, not the browser's, see `istHour`. */
 function greeting(): string {
   const hour = istHour();
   if (hour < 12) return "Good morning";
@@ -45,7 +45,7 @@ function greeting(): string {
 
 /**
  * One quick action. These used to share a single bordered ticket; they are now
- * four separate slips — each with its own inked edge and hard print shadow —
+ * four separate slips, each with its own inked edge and hard print shadow,
  * spaced tightly enough that the row still reads as one object.
  *
  * The icon sits in a double-ring stamp: a solid inked circle with a dashed
@@ -120,7 +120,7 @@ export default function HomePage() {
   const { unreadCount } = useNotifications(transactions?.[0]?.id ?? null);
   const latestTransactionId = transactions?.[0]?.id ?? null;
   // Coins are counted from the ledger, so the newest row is exactly when the
-  // tally can have changed — a payment today may have been the third one.
+  // tally can have changed, a payment today may have been the third one.
   const { coins, setCoins } = useCoins(latestTransactionId);
   const [coinsOpen, setCoinsOpen] = useState(false);
   const claimable = (coins?.redeemable ?? 0) > 0;
@@ -152,7 +152,7 @@ export default function HomePage() {
         <header className="relative bg-ink-900 px-5 pt-[max(0.65rem,env(safe-area-inset-top))] pb-8 text-ink-25">
           {/* The masthead: the full lockup, at a size the eye lands on before
               the controls beside it. It used to be the smallest thing in its own
-              row — a 26px seal and 16.5px type next to a 36px button cluster, so
+              row, a 26px seal and 16.5px type next to a 36px button cluster, so
               the brand read as one more chip in the toolbar. The seal now
               matches the cluster's height and the name is the largest label on
               the ink, while the row itself is unchanged: same padding, same
@@ -227,7 +227,7 @@ export default function HomePage() {
 
           {/* Three registers, one per line, in descending size: who the wallet
               is greeting, what is in it, and the handle it answers to. The
-              refresh shares the greeting's line rather than the balance's —
+              refresh shares the greeting's line rather than the balance's,
               that row had room in it, and this keeps the numeral alone on its
               own with the eye toggle, which is the one control that is about
               the amount itself. */}
@@ -260,7 +260,7 @@ export default function HomePage() {
       }
     >
       {/* Lifted above the tear line so the scan button sits half on the ink
-          hero and half on the paper — the one overlap in the app. */}
+          hero and half on the paper, the one overlap in the app. */}
       <div className="relative z-10 -mt-4 space-y-2.5 px-5 pb-4">
         {/* A warm slip with an inked hairline, so the label stays legible even
             where the button crosses the dark tear line. */}

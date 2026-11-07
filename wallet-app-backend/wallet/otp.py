@@ -1,8 +1,8 @@
 """OTP delivery.
 
 The login code is generated and stored by the auth blueprint; how it reaches
-the phone is decided here. WAULT ships without an SMS gateway on purpose —
-the public demo would otherwise burn someone's SMS credit — so `deliver_otp`
+the phone is decided here. WAULT ships without an SMS gateway on purpose,
+the public demo would otherwise burn someone's SMS credit, so `deliver_otp`
 reports that nothing was sent and the caller falls back to returning the code
 in the API response (demo mode) or logging it.
 

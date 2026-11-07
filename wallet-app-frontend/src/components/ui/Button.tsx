@@ -27,7 +27,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   // button: at 45% opacity the white label on mid-grey looked like a smudge.
   primary:
     "bg-ink-900 text-paper-25 shadow-[inset_0_1px_0_rgba(255,250,230,0.16),0_12px_26px_-18px_rgba(15,15,13,0.85)] hover:bg-ink-800 active:bg-ink-950 active:shadow-[inset_0_1px_0_rgba(255,250,230,0.08),0_3px_8px_-6px_rgba(15,15,13,0.9)] disabled:bg-paper-100 disabled:text-ink-400 disabled:shadow-none",
-  // Warm slip + inked hairline — a tab pressed into the page rather than a pale
+  // Warm slip + inked hairline, a tab pressed into the page rather than a pale
   // grey rectangle. Deep enough that it never reads as the browser's white,
   // quiet enough to line up under an ink button without competing.
   secondary:
@@ -78,7 +78,7 @@ export function Button({
   return (
     <button
       type={type}
-      // A loading button must not be clickable twice — that's how double
+      // A loading button must not be clickable twice, that's how double
       // transfers happen.
       disabled={disabled || loading}
       aria-busy={loading || undefined}

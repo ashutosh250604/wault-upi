@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ *
- * Design tokens — "Ink & Seal"
+ * Design tokens, "Ink & Seal"
  *
  * WAULT looks like a crisp payment slip: press-ink type on warm
  * paper, hairline ledger rules instead of card soup, and one sealing-red
- * accent used the way a rubber stamp is used — brand mark, attention,
+ * accent used the way a rubber stamp is used, brand mark, attention,
  * destructive confirmation, and the PAID stamp on a finished payment.
  * ------------------------------------------------------------------ */
 @theme {
@@ -17,7 +17,7 @@
   --font-mono:
     "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Warm graphite — one grey family for the whole app. The light end is warmed
+  /* Warm graphite, one grey family for the whole app. The light end is warmed
      just enough to sit on yellow paper; ink-25 is "light ink" for text on a dark
      ground, so it matches paper-25. */
   --color-ink-25: #f9efc0;
@@ -33,7 +33,7 @@
   --color-ink-900: #191916;
   --color-ink-950: #0f0f0d;
 
-  /* Seal red — the only accent, desaturated toward print ink. */
+  /* Seal red, the only accent, desaturated toward print ink. */
   --color-seal-50: #fbe4dd;
   --color-seal-100: #f7cfc5;
   --color-seal-300: #eda290;
@@ -44,13 +44,13 @@
   --color-seal-800: #78231a;
   --color-seal-900: #641f18;
 
-  /* Premium paper — the app's one surface family. Every surface in the UI is one
+  /* Premium paper, the app's one surface family. Every surface in the UI is one
      of these: a warm butter yellow, never white. The ramp is pitched deep
-     deliberately — the brightest sheet still reads as cream next to the page,
+     deliberately, the brightest sheet still reads as cream next to the page,
      and a well is warmer than the page it is pressed into. Nothing here is
      allowed to climb back toward #fff, because a slip that reads as white is
      the one thing this palette exists to avoid. */
-  --color-paper-25: #f9efc0; /* slips, cards, buttons — the brightest sheet */
+  --color-paper-25: #f9efc0; /* slips, cards, buttons, the brightest sheet */
   --color-paper-50: #f3e5a8; /* the app page itself */
   --color-paper-100: #ebd894; /* wells (inputs), muted notes, hover washes */
   --color-paper-200: #dfc87c; /* the desk behind the frame; skeleton marks */
@@ -70,7 +70,7 @@
   --color-pending-300: #dfa955;
   --color-pending-600: #a3630f;
   --color-pending-700: #834d0c;
-  /* The darkest amber — body copy on a pending-50/100 note. */
+  /* The darkest amber, body copy on a pending-50/100 note. */
   --color-pending-800: #6b3f0a;
 
   /* Press inks for avatars: muted pigment that encodes *who*, so it is
@@ -87,7 +87,9 @@
   --animate-slide-up: slide-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-shake: shake 0.4s ease-in-out both;
   --animate-scan: scan-sweep 2.2s ease-in-out infinite;
-  /* Route/page entry — the difference between "a website" and "an app". */
+  /* The listening pulse: a house-timed ring instead of a generic ping. */
+  --animate-listen: listen-pulse 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  /* Route/page entry, the difference between "a website" and "an app". */
   --animate-enter: enter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;
   /* The one orchestrated moment: a stamp landing on a receipt. */
@@ -129,6 +131,17 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+  @keyframes listen-pulse {
+    0% {
+      transform: scale(0.92);
+      opacity: 0.4;
+    }
+    70%,
+    100% {
+      transform: scale(1.55);
+      opacity: 0;
     }
   }
   @keyframes shimmer {
@@ -237,7 +250,7 @@ input:-webkit-autofill:focus {
   display: none;
 }
 
-/* Tall pages inside the app surface scroll on their own — and say nothing about
+/* Tall pages inside the app surface scroll on their own, and say nothing about
    it. A visible scrollbar is the one piece of browser chrome that instantly
    makes the app read as a web page, so the bar is hidden and only the scrolling
    stays. The pages are built to fit one screen; the ones that cannot (Profile,
@@ -251,7 +264,7 @@ input:-webkit-autofill:focus {
 }
 
 /* ------------------------------------------------------------------ *
- * Layering scale — keep every z-index on this ladder, no local numbers:
+ * Layering scale, keep every z-index on this ladder, no local numbers:
  *   0   page content
  *  10   in-page floating chrome (hero overlap, scanner chrome)
  *  30   app chrome that must beat the scroll area (bottom nav + its Pay bubble)

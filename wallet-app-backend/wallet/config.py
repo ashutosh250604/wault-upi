@@ -55,8 +55,8 @@ class Config:
 
     OTP_TTL_MINUTES = int(os.getenv("OTP_TTL_MINUTES", "5"))
     # How many codes a number may ask for in a row before the wait kicks in.
-    # Asking again and again is normal while a code is still on its way — people
-    # do it whenever the SMS is slow — so the first few are free and the
+    # Asking again and again is normal while a code is still on its way, people
+    # do it whenever the SMS is slow, so the first few are free and the
     # throttle only exists to stop a script turning this into an SMS cannon.
     OTP_FREE_REQUESTS = int(os.getenv("OTP_FREE_REQUESTS", "5"))
     # Minimum seconds between two OTP requests for the same number, once the
@@ -68,7 +68,7 @@ class Config:
     PIN_MAX_ATTEMPTS = 5
     PIN_LOCK_MINUTES = 15
     # How long a verified PIN-reset token stays usable. A reset is finished in
-    # the same sitting it starts in — the code has just been typed — so the
+    # the same sitting it starts in, the code has just been typed, so the
     # window is minutes, not hours.
     PIN_RESET_TTL_MINUTES = int(os.getenv("PIN_RESET_TTL_MINUTES", "10"))
 
@@ -78,7 +78,7 @@ class Config:
     # What one account may send out in a day, enforced in the ledger. Set to 0 to
     # lift the cap entirely (a self-hosted instance may not want one).
     MAX_DAILY_RUPEES = int(os.getenv("MAX_DAILY_RUPEES", "100000"))
-    # Minutes to add to UTC to get the limit day's local midnight — 330 is IST,
+    # Minutes to add to UTC to get the limit day's local midnight, 330 is IST,
     # the same offset `wallet/timeutils.py` renders every timestamp with.
     LIMIT_TZ_OFFSET_MINUTES = int(os.getenv("LIMIT_TZ_OFFSET_MINUTES", "330"))
 

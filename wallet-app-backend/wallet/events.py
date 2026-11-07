@@ -5,7 +5,7 @@ wording lives in one file instead of being sprinkled across the blueprints that
 happen to cause the event.
 
 `notify()` deliberately never commits. A notification describes money that
-moved, so it has to be written in the *same* database transaction as the money —
+moved, so it has to be written in the *same* database transaction as the money,
 otherwise a rolled-back payment could still leave an inbox row claiming it
 happened, and a successful one could vanish from the inbox. The caller owns the
 commit, exactly as it does for `settle_transfer`.

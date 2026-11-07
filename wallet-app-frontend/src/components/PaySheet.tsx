@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { usePayeeResolution } from "../hooks/usePayeeResolution";
 import { cx } from "../lib/cx";
 import { mobileError, vpaError } from "../lib/validation";
+import { speechSupported } from "../lib/voice";
 import { useRecentPeople } from "../hooks/useRecentPeople";
 import { PeopleStrip } from "./People";
 import { Button } from "./ui/Button";
@@ -11,6 +12,8 @@ import {
   IconAddMoney,
   IconAt,
   IconChevronRight,
+  IconKeyboard,
+  IconMic,
   IconPhone,
   IconRequest,
   IconScan,
@@ -20,12 +23,14 @@ import { TILE_GLYPH, TILE_STROKE, type IconTone } from "../lib/tiles";
 import { IconTile } from "./ui/IconTile";
 import { Sheet } from "./ui/Sheet";
 
-/** The glyph size every row in this sheet uses — the system's `lg` tile. */
+/** The glyph size every row in this sheet uses, the system's `lg` tile. */
 const ICON = TILE_GLYPH.lg;
 
 export interface PaySheetProps {
   open: boolean;
   onClose: () => void;
+  /** Opens the voice sheet, which the shell owns so the mic is released on close. */
+  onPayByVoice: () => void;
 }
 
 /**
@@ -39,7 +44,7 @@ export interface PaySheetProps {
  *
  * Every row carries the same edge and the same shadow. An earlier pass gave the
  * scanner a darker edge to rank it first, which just made the other four look
- * switched off — the icon tile is where a row is allowed to differ.
+ * switched off, the icon tile is where a row is allowed to differ.
  *
  * The five glyphs are drawn as one set: 24-unit grid, 1.75 stroke, round caps
  * and joins, no fills, and each one an object rather than an abstraction. The
@@ -94,12 +99,16 @@ function OptionRow({
 type EntryMode = "mobile" | "vpa" | null;
 
 /** The centre action: how real UPI apps start a payment. */
-export function PaySheet({ open, onClose }: PaySheetProps) {
+export function PaySheet({ open, onClose, onPayByVoice }: PaySheetProps) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<EntryMode>(null);
   const [value, setValue] = useState("");
   const [issue, setIssue] = useState<string | null>(null);
   const { resolve, startPayment, busy, error, clearError } = usePayeeResolution();
+  // Same sheet either way, the row just says which door it opens. A row
+  // labelled "Pay by voice" on Firefox promised a microphone the browser ships
+  // switched off, and the failure only arrived after the tap.
+  const voiceWorks = speechSupported();
   // Recents load with the sheet, so the fastest path is one tap from opening.
   const { people, status, reload } = useRecentPeople(8);
 
@@ -166,6 +175,22 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
           tone="ink"
           solid
           onClick={() => go("/scan")}
+        />
+        <OptionRow
+          icon={
+            voiceWorks ? (
+              <IconMic size={ICON} strokeWidth={TILE_STROKE} />
+            ) : (
+              <IconKeyboard size={ICON} strokeWidth={TILE_STROKE} />
+            )
+          }
+          title={voiceWorks ? "Pay by voice" : "Pay by typing"}
+          description={voiceWorks ? "Say “pay Rohan 250”" : "Type “pay Rohan 250”"}
+          tone="seal"
+          onClick={() => {
+            onClose();
+            onPayByVoice();
+          }}
         />
         <OptionRow
           icon={<IconPhone size={ICON} strokeWidth={TILE_STROKE} />}
@@ -240,7 +265,7 @@ export function PaySheet({ open, onClose }: PaySheetProps) {
 
       <p className="mt-4 flex items-start gap-2 rounded-[10px] bg-seal-50 p-3 text-[11.5px] leading-relaxed text-seal-900 ring-1 ring-seal-100 ring-inset">
         <IconWarning size={14} className="mt-px shrink-0 text-seal-600" />
-        Check the name before you approve — a transfer can't be reversed.
+        Check the name before you approve. A transfer can't be reversed.
       </p>
     </Sheet>
   );

@@ -216,8 +216,8 @@ export function AddContactSheet({ open, onClose, onSaved }: AddContactSheetProps
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 size-5 rounded-full bg-paper-25 shadow transition-all ${
-                      favourite ? "left-[1.375rem]" : "left-0.5"
+                    className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-paper-25 shadow transition-transform duration-150 ease-out ${
+                      favourite ? "translate-x-5" : "translate-x-0"
                     }`}
                   />
                 </span>

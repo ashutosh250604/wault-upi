@@ -5,8 +5,8 @@ Revises: b6e1c04a7f52
 Create Date: 2026-10-10 00:30:00.000000
 
 The collection screen listed only a payment's draw, because only a payment had
-a card handed over on a receipt. Every coin award is the same kind of thing — a
-payout that lands the moment it is won — so offers and the welcome bonus belong
+a card handed over on a receipt. Every coin award is the same kind of thing, a
+payout that lands the moment it is won, so offers and the welcome bonus belong
 in the same collection, and `coins.card_collection` no longer filters by reason.
 
 Those older awards are backfilled as scratched, exactly as the payment awards

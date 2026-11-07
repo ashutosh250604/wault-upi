@@ -147,7 +147,7 @@ export default function AccountsPage() {
             <span className="font-semibold text-ink-800">Sample accounts, not real ones.</span>{" "}
             WAULT never connects to a bank: these stand in for the accounts a
             top-up could come from. Your <span className="font-semibold text-ink-700">wallet</span>{" "}
-            is the balance you pay from — adding money moves it from the account
+            is the balance you pay from. Adding money moves it from the account
             you pick here into the wallet, inside this demo.
           </p>
         </Card>
@@ -262,7 +262,7 @@ export default function AccountsPage() {
         <Card tone="muted" className="flex gap-2.5">
           <IconLock size={16} className="mt-px shrink-0 text-ink-500" />
           <p className="text-[12.5px] leading-relaxed text-ink-600">
-            Balances stay hidden until you enter your PIN — the same server check that
+            Balances stay hidden until you enter your PIN. It is the same server check that
             authorises a payment. Only the last four digits of an account number are ever
             stored.
           </p>

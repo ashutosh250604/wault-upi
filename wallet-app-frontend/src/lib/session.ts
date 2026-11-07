@@ -8,7 +8,7 @@ import type { Session } from "../types";
 
 const STORAGE_KEY = "okwault.session.v1";
 
-/** localStorage throws in some privacy modes — never let that crash the app. */
+/** localStorage throws in some privacy modes, never let that crash the app. */
 function storage(): Storage | null {
   try {
     const probe = "__okwault__";

@@ -7,7 +7,7 @@ export async function copyText(text: string): Promise<boolean> {
       return true;
     }
   } catch {
-    // Permission denied or an insecure context — fall through to execCommand.
+    // Permission denied or an insecure context, fall through to execCommand.
   }
   try {
     const area = document.createElement("textarea");

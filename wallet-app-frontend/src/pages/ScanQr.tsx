@@ -27,7 +27,7 @@ import { Spinner } from "../components/ui/Spinner";
 function cameraErrorMessage(error: IScannerError): string {
   switch (error.kind) {
     case "permission-denied":
-      return "Camera access is blocked. Allow it in your browser's site settings, then try again — or upload a QR image";
+      return "Camera access is blocked. Allow it in your browser's site settings, then try again, or upload a QR image";
     case "no-camera":
       return "No camera on this device. Upload a QR image or type the UPI ID instead.";
     case "in-use":
@@ -212,10 +212,10 @@ export default function ScanQrPage() {
     setManualOpen(false);
   };
 
-  // One sentence for why the camera can't run — said where the camera would
+  // One sentence for why the camera can't run, said where the camera would
   // have been, rather than as a status line under the buttons.
   const cameraReason = !secureContext
-    ? "Scanning needs a secure connection — HTTPS or localhost. Upload a photo of the code, or type the number instead."
+    ? "Scanning needs a secure connection: HTTPS or localhost. Upload a photo of the code, or type the number instead."
     : unsupported
       ? "This browser has no camera API. Upload a photo of the code, or type the number instead."
       : cameraError
@@ -300,8 +300,8 @@ export default function ScanQrPage() {
 
         {/* Floating chrome, with a hierarchy: a titled head that says what this
             screen is and what it accepts, then one control on the right. It was
-            a row of three equal objects — a button, a label and another button
-            — which left the title reading as a caption between two icons. */}
+            a row of three equal objects: a button, a label and another button,
+            which left the title reading as a caption between two icons. */}
         <header className="relative z-10 flex items-start gap-2 px-2.5 pt-[max(0.6rem,env(safe-area-inset-top))]">
           <button
             type="button"
@@ -343,7 +343,7 @@ export default function ScanQrPage() {
             Three tiers instead of two buttons of equal weight. The status line
             is a live indicator while the camera is open (it used to sit as
             static grey text saying what the header now says), the photo upload
-            is the primary action, and typing a handle is a quiet row under it —
+            is the primary action, and typing a handle is a quiet row under it,
             which is the real order of preference when a camera is already
             pointing at something. */}
         <div className="relative z-10 space-y-2.5 rounded-t-[18px] border-t border-ink-800 bg-ink-950/85 px-4 pt-3.5 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-md">
@@ -371,7 +371,7 @@ export default function ScanQrPage() {
             ) : (
               <span className="inline-flex items-center gap-2 text-[12.5px] font-medium text-ink-300">
                 <span aria-hidden="true" className="relative flex size-2">
-                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-credit-600 opacity-70" />
+                  <span className="absolute inline-flex size-full animate-listen rounded-full bg-credit-600 opacity-70" />
                   <span className="relative inline-flex size-2 rounded-full bg-credit-600" />
                 </span>
                 Looking for a code

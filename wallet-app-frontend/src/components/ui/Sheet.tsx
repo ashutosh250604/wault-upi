@@ -31,6 +31,7 @@ export function Sheet({
   className,
 }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -49,31 +50,92 @@ export function Sheet({
     };
   }, [open]);
 
-  // Escape dismisses. Re-registering per render is free and keeps the handler
-  // on the current props.
+  // Escape dismisses; Tab stays inside.
+  //
+  // `aria-modal` tells a screen reader that everything outside the dialog is
+  // unavailable, so the keyboard has to agree with it. Without the trap, Tab
+  // walked out of the sheet and into the page behind it, focusing controls the
+  // dialog had just declared did not exist. Re-registering per render is free
+  // and keeps the handler on the current props.
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && dismissible) onClose();
+      if (event.key === "Escape" && dismissible) {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+      // Hidden nodes are skipped: a sheet can hold a collapsed form section, and
+      // Tab must not land on a control nobody can see.
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((node) => node.offsetParent !== null || node === document.activeElement);
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && panel.contains(active);
+
+      if (!inside) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, dismissible, onClose]);
 
-  // Move focus into the dialog for keyboard and screen-reader users — once per
+  // Hand the keyboard back to whatever opened the sheet. A dialog that swallows
+  // focus and closes to <body> leaves a keyboard user at the top of the page,
+  // having lost the control they pressed.
+  //
+  // No cleanup function: this runs as `open` flips, and the captured element is
+  // the trigger that existed *before* the sheet was in the tree.
+  useEffect(() => {
+    if (open) {
+      returnFocus.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      return;
+    }
+    const target = returnFocus.current;
+    returnFocus.current = null;
+    // One sheet can close as another takes its place (pay → voice). The new
+    // dialog's own focus step owns the caret then, and focusing the page behind
+    // it would pull the keyboard straight back out of the dialog.
+    if (!target || !target.isConnected || document.querySelector('[role="dialog"]')) return;
+    target.focus();
+  }, [open]);
+
+  // Move focus into the dialog for keyboard and screen-reader users, once per
   // opening.
   //
   // This used to share one effect with the two above, and to re-arm itself
   // whenever the component re-rendered. Its target is the first control in the
   // panel, which is the header's close button, so any re-render while a sheet
   // was open pulled the caret out of whatever was being typed into and closed
-  // the on-screen keyboard — one disappearing keyboard per character.
+  // the on-screen keyboard, one disappearing keyboard per character.
   useEffect(() => {
     if (!open) return;
     const focusTimer = window.setTimeout(() => {
       const panel = panelRef.current;
       const active = document.activeElement;
-      // Whatever the user has already focused wins — this only runs on opening,
+      // Whatever the user has already focused wins, this only runs on opening,
       // but a control that took focus itself must not be moved.
       if (panel && active instanceof HTMLElement && panel.contains(active)) return;
       // Prefer an explicit autofocus target over the header's close button.
@@ -131,7 +193,7 @@ export function Sheet({
                 type="button"
                 onClick={onClose}
                 aria-label="Close"
-                className="-mt-1 -mr-1 rounded-[6px] p-1.5 text-ink-400 transition hover:bg-paper-100 hover:text-ink-700"
+                className="-mt-1 -mr-1 rounded-[6px] p-1.5 text-ink-400 transition hover:bg-paper-100 hover:text-ink-700 active:bg-paper-200 focus-visible:ring-2 focus-visible:ring-ink-900/40 focus-visible:ring-offset-2 focus-visible:ring-offset-paper-25 focus-visible:outline-none"
               >
                 <IconClose size={18} />
               </button>

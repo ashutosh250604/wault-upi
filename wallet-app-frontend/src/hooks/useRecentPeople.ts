@@ -5,7 +5,7 @@ import type { PeopleStatus } from "../lib/people";
 
 /**
  * Fetches the home avatar row: people paid recently, then saved contacts.
- * `reloadKey` lets a parent refetch it when something payment-shaped happened —
+ * `reloadKey` lets a parent refetch it when something payment-shaped happened,
  * the newest transaction's id is a good key, since paying someone mints one.
  */
 export function useRecentPeople(limit = 8, reloadKey?: unknown) {

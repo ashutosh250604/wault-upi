@@ -12,7 +12,7 @@ export interface ScannedPayment {
 }
 
 /**
- * The `upi://pay?...` string the "My QR" screen encodes — the one place the app
+ * The `upi://pay?...` string the "My QR" screen encodes, the one place the app
  * builds a deep link, so the scanner, the gallery upload and the QR renderer all
  * agree on its shape.
  */

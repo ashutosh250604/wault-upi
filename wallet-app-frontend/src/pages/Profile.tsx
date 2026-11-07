@@ -38,7 +38,7 @@ import {
 
 const REPO_URL = "https://github.com/ashutosh250604/wault-upi";
 
-/** "28 minutes" / "1h 5m" — a 30-minute session reads badly as "0h 28m". */
+/** "28 minutes" / "1h 5m", a 30-minute session reads badly as "0h 28m". */
 function countdown(minutes: number): string {
   if (minutes < 1) return "less than a minute";
   if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
@@ -99,7 +99,7 @@ export default function ProfilePage() {
   }, []);
 
   // The cap the ledger enforces, read from the endpoint the ledger itself uses
-  // rather than recomputed here — a limit shown must be a limit applied.
+  // rather than recomputed here, a limit shown must be a limit applied.
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
@@ -151,7 +151,7 @@ export default function ProfilePage() {
                 <CopyButton value={profile.vpa} label="Copy UPI ID" size={14} />
               </span>
             ) : (
-              "—"
+              "-"
             )}
           </DetailRow>
           <DetailRow label="Verified">{profile?.is_verified ? "Yes" : "No"}</DetailRow>
@@ -163,7 +163,7 @@ export default function ProfilePage() {
                 to="/onboarding/pin"
                 className="font-semibold text-seal-700 underline decoration-seal-300 decoration-1 underline-offset-4"
               >
-                Not set — add one
+                Not set. Add one
               </Link>
             )}
           </DetailRow>
@@ -187,7 +187,7 @@ export default function ProfilePage() {
               <div className="mt-3 h-1.5 overflow-hidden rounded-[3px] bg-paper-200">
                 <span
                   className={cx(
-                    "block h-full rounded-[3px] transition-all",
+                    "block h-full rounded-[3px] transition-[width] duration-200 ease-out",
                     limits.used_percent >= 90 ? "bg-seal-600" : "bg-ink-900",
                   )}
                   style={{ width: `${Math.min(100, Math.max(0, limits.used_percent))}%` }}
@@ -212,7 +212,7 @@ export default function ProfilePage() {
             title="Notifications"
             subtitle={
               unreadCount > 0
-                ? `${unreadCount} unread — payments, requests and rewards`
+                ? `${unreadCount} unread: payments, requests and rewards`
                 : "Payments, requests and rewards"
             }
           />
@@ -253,7 +253,7 @@ export default function ProfilePage() {
                 <p className="mt-0.5">
                   Signed in until {formatDateTime(token.expiresAt.toISOString())}
                   {token.minutesLeft !== null
-                    ? ` — about ${countdown(token.minutesLeft)} left.`
+                    ? `. About ${countdown(token.minutesLeft)} left.`
                     : "."}
                 </p>
               ) : (
@@ -297,8 +297,8 @@ export default function ProfilePage() {
             >
               <span
                 className={cx(
-                  "absolute top-1 size-5 rounded-[4px] transition-all",
-                  sound ? "left-6 bg-paper-25" : "left-1 bg-paper-25 ring-1 ring-ink-200",
+                  "absolute left-1 top-1 size-5 rounded-[4px] transition-transform duration-150 ease-out",
+                  sound ? "translate-x-5 bg-paper-25" : "translate-x-0 bg-paper-25 ring-1 ring-ink-200",
                 )}
               />
             </button>
@@ -334,7 +334,7 @@ export default function ProfilePage() {
                   into a flex row that cannot fold. */}
               <span className="min-w-0">
                 Sample accounts: <span className="font-mono">9000000001</span> and{" "}
-                <span className="font-mono">9000000002</span> — PIN{" "}
+                <span className="font-mono">9000000002</span>, PIN{" "}
                 <span className="font-mono">1234</span>.
               </span>
             </li>

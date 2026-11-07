@@ -28,7 +28,7 @@ export interface CoinsSheetProps {
  * This sheet used to explain itself: a paragraph of rule under the title, a
  * three-line progress panel for the next coin, a table of lifetime totals and a
  * footnote about where redeemed coins go. None of it answered the two questions
- * anyone opens a reward screen to ask — how many coins do I have, and can I
+ * anyone opens a reward screen to ask, how many coins do I have, and can I
  * spend them yet. It says those two things and then gets out of the way: the
  * balance and its worth, the gate (with the payout it unlocks), and the last few
  * payments that paid out, which is all the history this needs.
@@ -40,7 +40,7 @@ export interface CoinsSheetProps {
  * coin struck into the top of it.
  *
  * The figures come off the server's snapshot rather than being restated here, so
- * the minimum, the payout and the value cannot drift from what is enforced — in
+ * the minimum, the payout and the value cannot drift from what is enforced, in
  * particular `redeemable` is the whole balance once the gate is clear, not a
  * rounded-down number of tens.
  */
@@ -68,7 +68,7 @@ export function CoinsSheet({
       // No amount: a redemption takes the whole balance.
       const result = await api.redeemCoins();
       // The payout is the moment, so the cue waits for the server to confirm it
-      // — a redemption that was refused must not sound like money arriving.
+      //, a redemption that was refused must not sound like money arriving.
       feedback.redeemed();
       onRedeemed?.(result.coins);
       onBalanceChanged?.();
@@ -112,7 +112,7 @@ export function CoinsSheet({
               </p>
             ) : (
               <p className="text-center text-[11.5px] font-medium text-ink-500">
-                All {coins.coins} coins go in one payout — nothing is left behind.
+                All {coins.coins} coins go in one payout. Nothing is left behind.
               </p>
             )}
           </div>
@@ -183,7 +183,7 @@ export function CoinsSheet({
             </div>
           </div>
 
-          {/* Two figures, side by side, as a printed summary line — the whole
+          {/* Two figures, side by side, as a printed summary line, the whole
               lifetime of the coin balance without a table around it. */}
           <div className="mt-3 grid grid-cols-2 divide-x divide-ink-200 rounded-[12px] border-[1.5px] border-ink-900/20 bg-paper-100 px-4 py-3">
             <div className="pr-3">

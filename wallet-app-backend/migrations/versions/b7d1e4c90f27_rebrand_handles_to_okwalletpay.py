@@ -5,7 +5,7 @@ Revises: ae667c5336f2
 Create Date: 2026-10-01 01:05:00.000000
 
 The handle suffix is part of a user's identity, so changing the default in
-config only helps accounts created afterwards — every wallet that already exists
+config only helps accounts created afterwards, every wallet that already exists
 would keep advertising the old suffix. This rewrites them in place.
 
 It is a data migration rather than a schema one on purpose: nothing about the

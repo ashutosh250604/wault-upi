@@ -6,7 +6,7 @@ import { api, errorMessage } from "../lib/api";
  * The last snapshot the server sent, kept for the next mount.
  *
  * Claiming a scratch card changes the coin balance without minting a
- * transaction, so the home screen's reload key — the newest ledger row — would
+ * transaction, so the home screen's reload key, the newest ledger row, would
  * not move and the chip would read a stale number until a full reload. The
  * scratch screen is handed the fresh snapshot the moment a claim lands, so it
  * hands it over here: the chip is then right on the frame it mounts, and its own
@@ -22,7 +22,7 @@ export function primeCoins(snapshot: CoinSnapshot): void {
  * The coin chip's data.
  *
  * Coins earned are counted from the claim on the server, so nothing here
- * computes a balance; `reloadKey` merely says when to look again — a payment
+ * computes a balance; `reloadKey` merely says when to look again, a payment
  * mints a transaction and draws a card, and scratching it is what counts.
  */
 export function useCoins(reloadKey?: unknown) {

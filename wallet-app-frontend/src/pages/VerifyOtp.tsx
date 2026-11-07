@@ -18,8 +18,8 @@ const OTP_LENGTH = 6;
 /**
  * Where the resend deadline is kept between renders of this screen.
  *
- * `location.state` is gone the moment the page is reloaded — the browser keeps a
- * history entry, not its payload — so a refresh would otherwise hand the screen a
+ * `location.state` is gone the moment the page is reloaded, the browser keeps a
+ * history entry, not its payload, so a refresh would otherwise hand the screen a
  * blank slate and re-enable Resend while the server was still refusing. Writing
  * the same instant to `sessionStorage` is what makes the wait survive a reload,
  * and it is the *server's* instant either way: this screen stores a timestamp, it
@@ -56,7 +56,7 @@ function deadlineFrom(stamp: string | null | undefined): number | null {
  * The seconds left on a deadline, recomputed from the clock every tick.
  *
  * Deliberately not a counter: a `setTimeout` chain that decrements is a second
- * clock running beside the server's, and it drifts — it pauses in a background
+ * clock running beside the server's, and it drifts, it pauses in a background
  * tab, so a phone left on this screen for a minute comes back still saying 45.
  * Subtracting `Date.now()` from the deadline instead means the number shown is
  * always the truth, however long the timer was asleep, and the visibility and
@@ -134,7 +134,7 @@ export default function VerifyOtpPage() {
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const submitted = useRef(false);
   // Only bounce away visitors who were *already* signed in when they landed
-  // here — otherwise this guard races the post-verification navigate() and
+  // here, otherwise this guard races the post-verification navigate() and
   // sends brand-new users straight to the wallet, skipping onboarding.
   const wasAuthenticated = useRef(isAuthenticated);
   const code = digits.join("");
@@ -190,7 +190,7 @@ export default function VerifyOtpPage() {
     try {
       const result = await api.startLogin(mobile);
       setDevOtp(result.dev_otp ?? null);
-      // Whatever the server says the window is now — none while the free
+      // Whatever the server says the window is now, none while the free
       // requests last, sixty seconds once they are used up. The screen never
       // sets this itself, which is why a refusal can't leave it counting down
       // from a number that never came from anywhere.
@@ -252,7 +252,7 @@ export default function VerifyOtpPage() {
          * two lines of type and then a lot of nothing, which is what made it feel
          * unfinished: the mark now sits over it at the top, the code entry is one
          * inked slip instead of six loose boxes, and the resend line has
-         * something to hang from. No new facts are introduced — the number, the
+         * something to hang from. No new facts are introduced, the number, the
          * delivery note and the resend control are the ones that were already
          * here.
          */}
@@ -290,9 +290,9 @@ export default function VerifyOtpPage() {
         {/* The preview sits a step deeper in the amber than it used to
             (`pending-50`): on a lit phone that cream read as white, which made
             the one panel that is *not* part of the app look like the brightest
-            thing on the screen. Same family, one step further in — and the
+            thing on the screen. Same family, one step further in, and the
             Fill control is a warm slip rather than a second ink button, so the
-            screen keeps one primary action — the Verify button below. */}
+            screen keeps one primary action, the Verify button below. */}
         {notice.previewCode ? (
           <div className="mt-5 flex items-center gap-3 rounded-[10px] border border-dashed border-pending-300 bg-pending-100 p-3.5">
             <IconTile tone="pending" scale="sm">
@@ -301,7 +301,7 @@ export default function VerifyOtpPage() {
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-semibold text-pending-700">Preview code</p>
               <p className="text-[13px] text-pending-700">
-                SMS delivery is off in this environment — use{" "}
+                SMS delivery is off in this environment, so use{" "}
                 <span className="font-mono font-bold tracking-widest">
                   {notice.previewCode}
                 </span>
@@ -325,7 +325,7 @@ export default function VerifyOtpPage() {
             screen.
 
             The slip is a warm `paper-100` mat and the boxes are set on the
-            page's own `paper-50` — no step in this stack climbs towards white.
+            page's own `paper-50`, no step in this stack climbs towards white.
             It used to be the other way round, a `paper-25` slip holding
             `paper-100` wells, and between the brightest sheet in the palette and
             the glow of a lit display the fields read as six white tiles pasted

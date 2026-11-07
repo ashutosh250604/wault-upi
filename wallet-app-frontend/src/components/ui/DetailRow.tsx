@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /**
- * Label on the left, value on the right, separated by a dashed rule — the row
+ * Label on the left, value on the right, separated by a dashed rule, the row
  * language of a printed receipt. Shared by receipts, sheets and profile.
  */
 export function DetailRow({

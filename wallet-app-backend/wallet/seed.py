@@ -1,6 +1,6 @@
 """Seed data for the public demo: accounts, an address book and some history.
 
-Idempotent by design — every deploy runs this, so it may only create what is
+Idempotent by design, every deploy runs this, so it may only create what is
 missing. History is only written when the ledger is completely empty, so a
 production-ish database is never re-seeded underneath its owner.
 """
@@ -266,7 +266,7 @@ def _seed_notifications():
     db.session.commit()
 
     # A fresh install shouldn't look like it ignored a fortnight of alerts, so
-    # everything backfilled counts as read — except the two most recent, which
+    # everything backfilled counts as read, except the two most recent, which
     # give the bell a real badge to point at.
     Notification.query.update({"is_read": True})
     db.session.flush()

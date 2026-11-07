@@ -5,7 +5,7 @@ Revises: e1a7c4dns0b9
 Create Date: 2026-10-06 09:40:00.000000
 
 A handle is part of a user's identity, so changing the default in config only
-helps accounts created afterwards — every wallet that already exists would keep
+helps accounts created afterwards, every wallet that already exists would keep
 advertising the old `@okwalletpay` suffix. This rewrites them in place, exactly
 as `b7d1e4c90f27` did when the suffix moved to `@okwalletpay` in the first place.
 

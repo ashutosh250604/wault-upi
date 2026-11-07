@@ -115,7 +115,7 @@ export default function SetNamePage() {
           <Field
             label="Email (optional)"
             error={emailIssue}
-            hint="Only used on your account record — we never email you."
+            hint="Only used on your account record. We never email you."
           >
             {({ id, describedBy }) => (
               <TextInput
@@ -141,7 +141,7 @@ export default function SetNamePage() {
           <Card tone="muted" className="flex gap-2.5">
             <IconInfo size={16} className="mt-px shrink-0 text-ink-400" />
             <p className="text-[12.5px] leading-relaxed text-ink-600">
-              We'll create your UPI-style ID from your mobile number — for example{" "}
+              We'll create your UPI-style ID from your mobile number, for example{" "}
               <span className="font-mono font-semibold text-ink-800">
                 9000000001@okwault
               </span>

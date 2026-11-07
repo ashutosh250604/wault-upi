@@ -252,7 +252,7 @@ export default function ContactsPage() {
 
         {/* The empty state is a warm panel, not a bright slip.
 
-            It used to be the default `Card` — the brightest sheet in the
+            It used to be the default `Card`, the brightest sheet in the
             palette, a full screen of near-white behind three lines of copy,
             which is the loudest the emptiest screen in the app ever got. It is
             now the same warm ochre as the wells and the muted notes, with an

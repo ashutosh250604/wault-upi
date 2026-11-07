@@ -26,7 +26,7 @@ def create_app(config_overrides=None):
     # start: the local-dev flow deliberately runs without one.
     if app.config["SECRET_KEY"] == Config.DEV_SECRET_KEY:
         app.logger.warning(
-            "SECRET_KEY is unset and the development key is in use — set SECRET_KEY "
+            "SECRET_KEY is unset and the development key is in use, set SECRET_KEY "
             "before deploying (the hosting config generates one; see .env.example)."
         )
 
@@ -46,6 +46,7 @@ def create_app(config_overrides=None):
     from .blueprints.inbox import bp as inbox_bp
     from .blueprints.people import bp as people_bp
     from .blueprints.requests import bp as requests_bp
+    from .blueprints.voice import bp as voice_bp
     from .blueprints.wallet import bp as wallet_bp
 
     # Everything under /api so the API can never shadow a client route. Without
@@ -58,13 +59,14 @@ def create_app(config_overrides=None):
     app.register_blueprint(requests_bp, url_prefix=API_PREFIX)
     app.register_blueprint(accounts_bp, url_prefix=API_PREFIX)
     app.register_blueprint(inbox_bp, url_prefix=API_PREFIX)
+    app.register_blueprint(voice_bp, url_prefix=API_PREFIX)
 
     @app.after_request
     def security_headers(response):
         """The browser-side protections the app can state about itself.
 
         A payment app is a phishing target by nature, so four headers are set
-        on every response — JSON, statement download and the SPA alike:
+        on every response, JSON, statement download and the SPA alike:
 
           - `nosniff` stops a browser from second-guessing a Content-Type, which
             is how a JSON body gets treated as scriptable HTML.
@@ -72,7 +74,7 @@ def create_app(config_overrides=None):
             cannot be clickjacked into approving a payment.
           - `no-referrer` keeps a UPI ID or a statement URL from leaking to a
             third party through the `Referer` of an outbound link.
-          - `Permissions-Policy` allows the camera — the scanner needs it — and
+          - `Permissions-Policy` allows the camera, the scanner needs it, and
             switches off the sensors the app has no use for.
 
         HSTS is sent unconditionally because it is only honoured on an HTTPS
@@ -149,7 +151,7 @@ def _register_frontend(app):
         if os.path.isfile(candidate):
             return send_from_directory(static_dir, path)
 
-        # A request for a missing *file* — an image, a font, an audio cue — is a
+        # A request for a missing *file*, an image, a font, an audio cue, is a
         # 404, not the app. Handing back index.html would have the browser try to
         # decode an HTML document as a PNG or a sound, and would hide a renamed
         # or deleted asset until someone noticed the silence. Client routes never

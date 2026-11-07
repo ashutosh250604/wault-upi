@@ -26,7 +26,7 @@ export function CopyButton({
   return (
     <button
       type="button"
-      aria-label={copied ? `${label} — copied` : label}
+      aria-label={copied ? `${label} copied` : label}
       onClick={async () => {
         const ok = await copy(value);
         onCopied?.(ok);

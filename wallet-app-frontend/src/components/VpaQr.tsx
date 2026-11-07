@@ -24,7 +24,7 @@ export interface VpaQrProps {
  * painted onto the canvas rather than layered in DOM, which is what keeps the
  * downloaded PNG branded too.
  *
- * The mark itself is `public/brand/wault-mark.png` — the supplied artwork, on
+ * The mark itself is `public/brand/wault-mark.png`, the supplied artwork, on
  * the same cream plate so the modules underneath keep the quiet zone a scanner
  * expects. It used to be redrawn here from `lib/brand.ts`'s geometry, which is
  * exactly why the code in the middle of this screen looked like a lookalike of
@@ -36,7 +36,7 @@ function drawCentreMark(canvas: HTMLCanvasElement, mark: HTMLImageElement | null
 
   // qrcode.react paints through a transform of its own (one canvas unit is one
   // module), and it leaves that transform in place. The mark is measured in
-  // device pixels, so the transform is reset before drawing — otherwise the
+  // device pixels, so the transform is reset before drawing, otherwise the
   // plate lands several screens away from the code.
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -149,7 +149,7 @@ export function VpaQr({ vpa, name }: VpaQrProps) {
 
       <div className="flex flex-col items-center px-4 pt-5">
         {/* The code pressed into a warm well, with the scanner's reticle drawn
-            around it — the same four ticks the camera screen uses. */}
+            around it, the same four ticks the camera screen uses. */}
         <div className="rounded-[18px] bg-paper-100 p-4">
           <div className="relative">
             <QRCodeCanvas

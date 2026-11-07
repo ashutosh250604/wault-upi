@@ -19,7 +19,7 @@ export function personHandle(person: {
   vpa?: string | null;
   mobile?: string | null;
 }): string {
-  return person.vpa?.trim() || formatMobile(person.mobile) || "—";
+  return person.vpa?.trim() || formatMobile(person.mobile) || "-";
 }
 
 /** "You paid" / "Paid you" / when they were last in touch. */

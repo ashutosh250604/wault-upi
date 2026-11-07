@@ -303,7 +303,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
               <p className="truncate font-display text-[14.5px] font-bold tracking-tight text-ink-900">
                 {personLabel(target)}
               </p>
-              <p className="truncate font-mono text-[11.5px] text-ink-500">{target.vpa ?? "—"}</p>
+              <p className="truncate font-mono text-[11.5px] text-ink-500">{target.vpa ?? "-"}</p>
             </div>
             <span className="flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-ink-900 text-ink-25">
               <IconCheck size={15} />
@@ -321,7 +321,7 @@ export function RequestComposerSheet({ open, onClose, onCreated }: RequestCompos
                   id={id}
                   aria-describedby={describedBy}
                   // The field the sheet exists for: the caret starts here, and
-                  // only here — the sheet focuses once per opening.
+                  // only here, the sheet focuses once per opening.
                   data-autofocus
                   inputMode="tel"
                   placeholder="9000000004 or name@okwault"

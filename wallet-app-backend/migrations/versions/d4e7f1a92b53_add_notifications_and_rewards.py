@@ -6,7 +6,7 @@ Create Date: 2026-10-01 01:40:00.000000
 
 Two tables that make the wallet tell the truth about itself.
 
-`notifications` is a projection of things that already happened — it holds no
+`notifications` is a projection of things that already happened, it holds no
 money and no state of its own, only a pointer at the ledger row (`transaction_id`)
 plus enough text to render an inbox row without a join.
 

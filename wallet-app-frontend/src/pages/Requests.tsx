@@ -20,7 +20,7 @@ import { EmptyState, ErrorState, TransactionSkeleton } from "../components/ui/St
 
 /**
  * Money requests. Paying one is a real debit, so it goes through the same PIN
- * sheet as a payment — the difference is who typed the amount.
+ * sheet as a payment, the difference is who typed the amount.
  */
 export default function RequestsPage() {
   const navigate = useNavigate();
@@ -63,10 +63,10 @@ export default function RequestsPage() {
       // Paying a request is a payment: it gets the payment tick, not the quiet
       // "something was written" blip.
       feedback.paid();
-      // An offer paid — as a card, not as a balance. The note names the promise
+      // An offer paid, as a card, not as a balance. The note names the promise
       // and never its amount: the coins are counted when the card is scratched.
       for (const reward of result.rewards ?? []) {
-        toast.success(`${reward.headline ?? "An offer paid out"} — a scratch card is waiting`);
+        toast.success(`${reward.headline ?? "An offer paid out"}. A scratch card is waiting`);
       }
       replace(result.request);
       if (profile) {
@@ -85,7 +85,7 @@ export default function RequestsPage() {
             counterpartyVpa: result.request.counterparty.vpa,
             note: result.note,
             timestamp: result.timestamp,
-            // Paying a request is a payment, so it draws a card too — the same
+            // Paying a request is a payment, so it draws a card too, the same
             // one an ordinary transfer draws, and with its amount still under
             // the cover.
             scratchCardWaiting: result.scratch_card_waiting === true,
@@ -201,7 +201,7 @@ export default function RequestsPage() {
             <EmptyState
               icon={<IconReceipt size={22} />}
               title="No requests yet"
-              description="Ask a contact for money — they can approve it with their PIN, or decline if it isn't right."
+              description="Ask a contact for money. They can approve it with their PIN, or decline if it isn't right."
             />
           </Card>
         ) : null}

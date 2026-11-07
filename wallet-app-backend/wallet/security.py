@@ -21,7 +21,7 @@ RESET_TOKEN = "pin_reset"
 
 
 def hash_secret(secret: str) -> str:
-    """Salted scrypt hash — used for both PINs and OTP codes."""
+    """Salted scrypt hash, used for both PINs and OTP codes."""
     from werkzeug.security import generate_password_hash
 
     return generate_password_hash(secret, method="scrypt")
@@ -64,7 +64,7 @@ def issue_reset_token(user_id: int) -> str:
     """A short-lived proof that this number just passed an OTP check.
 
     Deliberately not a session: resetting a PIN proves the *phone*, so it buys
-    the right to choose a new PIN and nothing else — it must not open the
+    the right to choose a new PIN and nothing else, it must not open the
     wallet, and it must not be usable as a Bearer token.
     """
     now = datetime.now(timezone.utc)
@@ -82,7 +82,7 @@ def issue_reset_token(user_id: int) -> str:
 
 
 def session_payload(user_id: int) -> dict:
-    """A new token, plus when it lapses — spelled out, in IST.
+    """A new token, plus when it lapses, spelled out, in IST.
 
     Every sign-in response carries this. The client could read `exp` out of the
     token itself, but a session that says when it ends is one the UI can count
@@ -164,7 +164,7 @@ def check_pin(user: User, pin: str) -> tuple[str | None, int]:
 
     Returns `(message, status)` when the PIN can't be accepted, or `(None, 200)`.
 
-    Every debit path goes through here — approvals and transfers alike — so a
+    Every debit path goes through here, approvals and transfers alike, so a
     payment can never be authorised by a weaker check than the one the PIN
     screen performs, and the attempt counter can't be sidestepped by choosing a
     different endpoint.

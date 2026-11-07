@@ -18,7 +18,7 @@ function readHidden(): boolean {
 /**
  * The refresh control, on its own.
  *
- * It used to live inside the balance's label row, opposite "Available balance" —
+ * It used to live inside the balance's label row, opposite "Available balance",
  * a capsule sitting directly above the right-hand end of the hero numeral, at
  * the same weight as the label, so the two fought over the same line. The
  * greeting is the row with space in it, so that is where it goes now: the

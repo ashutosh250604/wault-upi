@@ -38,7 +38,7 @@ const TONES: Record<AvatarTone, string> = {
 
 export interface AvatarProps {
   name?: string | null;
-  /** Overrides the derived initials — institutions stamp their own short code. */
+  /** Overrides the derived initials, institutions stamp their own short code. */
   label?: string;
   size?: keyof typeof BOX;
   tone?: AvatarTone;

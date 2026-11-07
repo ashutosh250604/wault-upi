@@ -29,3 +29,5 @@ static_frontend/
 
 # editor settings (machine-local)
 .vscode/
+wallet-app-backend/voice_5055.log
+wallet-app-backend/voice_tests.log

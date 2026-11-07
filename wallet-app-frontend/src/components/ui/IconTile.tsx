@@ -20,7 +20,7 @@ import type { IconScale, IconTone } from "../../lib/tiles";
  *   - **One size per role.** `xs` for a tile that sits inside a line of text,
  *     `sm`/`md` for rows, `lg` for the illustration at the head of a state.
  *     Radius tracks the box, so the corners always look like the same corner.
- *   - **The glyph carries the meaning.** Colour is the *foreground's* job —
+ *   - **The glyph carries the meaning.** Colour is the *foreground's* job,
  *     money in is green, a reward is amber, a refusal is seal red, everything
  *     neutral is ink. The background never changes, which is what stops two
  *     rows of the same list looking like two different systems.
@@ -49,7 +49,7 @@ const GLYPH_TONE: Record<IconTone, string> = {
   muted: "text-ink-500",
 };
 
-/** A filled tile's own inks — the tone said once, at full strength. */
+/** A filled tile's own inks, the tone said once, at full strength. */
 const SOLID_TONE: Record<IconTone, string> = {
   credit: "bg-credit-600 text-paper-25",
   pending: "bg-pending-600 text-paper-25",
