@@ -74,8 +74,11 @@ def create_app(config_overrides=None):
             cannot be clickjacked into approving a payment.
           - `no-referrer` keeps a UPI ID or a statement URL from leaking to a
             third party through the `Referer` of an outbound link.
-          - `Permissions-Policy` allows the camera, the scanner needs it, and
-            switches off the sensors the app has no use for.
+          - `Permissions-Policy` allows the two inputs the app itself uses —
+            the scanner's camera and the voice sheet's microphone — and
+            switches off everything else. `microphone=()` was here before the
+            voice feature: it does not merely withhold a prompt, it refuses
+            the microphone to the whole document, so the browser never asks.
 
         HSTS is sent unconditionally because it is only honoured on an HTTPS
         response: over plain HTTP (local development) browsers ignore it, and
@@ -85,7 +88,7 @@ def create_app(config_overrides=None):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault(
-            "Permissions-Policy", "camera=(self), microphone=(), geolocation=()"
+            "Permissions-Policy", "camera=(self), microphone=(self), geolocation=()"
         )
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"

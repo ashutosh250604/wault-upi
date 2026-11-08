@@ -5,7 +5,7 @@ import { api, errorMessage } from "../lib/api";
 import { feedback } from "../lib/feedback";
 import { firstName, formatCurrency } from "../lib/format";
 import { TILE_GLYPH, TILE_STROKE } from "../lib/tiles";
-import { listenForCommand, speechProblem } from "../lib/voice";
+import { askForMicrophone, listenForCommand, speechProblem } from "../lib/voice";
 import type { Listening } from "../lib/voice";
 import { usePayeeResolution } from "../hooks/usePayeeResolution";
 import { Avatar } from "./ui/Avatar";
@@ -20,7 +20,14 @@ import { Spinner } from "./ui/Spinner";
 
 const MIC = 32;
 
-type Phase = "idle" | "listening" | "thinking" | "confirm" | "choose" | "failed";
+type Phase =
+  | "idle"
+  | "asking"
+  | "listening"
+  | "thinking"
+  | "confirm"
+  | "choose"
+  | "failed";
 
 const EXAMPLES = [
   "Pay Rohan 250",
@@ -72,6 +79,10 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
   const [typed, setTyped] = useState("");
 
   const listening = useRef<Listening | null>(null);
+  // Identifies the run that owns the microphone. A permission bubble can stay
+  // open while the sheet closes or another listen begins, and neither the stale
+  // prompt nor its answer may start a recogniser behind the next screen.
+  const runId = useRef(0);
   // Read once per render: the reason voice can't run here, if it can't.
   const unavailable = speechProblem();
   // No recogniser means there is nothing to tap, so the sheet opens on the typed
@@ -80,6 +91,7 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
   const showingTyped = typing || typesOnly;
 
   const stopListening = useCallback(() => {
+    runId.current += 1;
     listening.current?.abort();
     listening.current = null;
   }, []);
@@ -143,6 +155,14 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
     }
   }, []);
 
+  /**
+   * The microphone, in the only order a browser honours: permission, then the
+   * recogniser.
+   *
+   * Asking through `getUserMedia` from the tap is what puts the permission
+   * bubble on screen. Left to the recogniser, a refusal surfaces as "no speech"
+   * several seconds later, under a sheet that has already said it is listening.
+   */
   const start = useCallback(() => {
     setIssue(null);
     setAnswer(null);
@@ -158,28 +178,42 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
     }
 
     feedback.tap();
-    setPhase("listening");
+    const run = (runId.current += 1);
+    setPhase("asking");
 
-    const handle = listenForCommand({
-      onPartial: setHeard,
-      onFinal: (text) => void interpret(text),
-      onError: (message) => {
-        setIssue(message);
+    void askForMicrophone().then((problem) => {
+      // The sheet closed, or another listen started, while the browser was
+      // still waiting for an answer: this run has nothing left to open.
+      if (runId.current !== run) return;
+
+      if (problem) {
+        setIssue(problem);
         setPhase("failed");
-      },
-      // Only step back to the microphone if nothing was heard; a final result
-      // has already moved the sheet on to thinking or confirming.
-      onEnd: () => {
-        listening.current = null;
-        setPhase((current) => (current === "listening" ? "idle" : current));
-      },
-    });
+        return;
+      }
 
-    listening.current = handle;
-    if (!handle) {
-      setIssue("The microphone didn't start. Try again, or enter the payment instead.");
-      setPhase("failed");
-    }
+      setPhase("listening");
+      const handle = listenForCommand({
+        onPartial: setHeard,
+        onFinal: (text) => void interpret(text),
+        onError: (message) => {
+          setIssue(message);
+          setPhase("failed");
+        },
+        // Only step back to the microphone if nothing was heard; a final result
+        // has already moved the sheet on to thinking or confirming.
+        onEnd: () => {
+          listening.current = null;
+          setPhase((current) => (current === "listening" ? "idle" : current));
+        },
+      });
+
+      listening.current = handle;
+      if (!handle) {
+        setIssue("The microphone didn't start. Try again, or enter the payment instead.");
+        setPhase("failed");
+      }
+    });
   }, [interpret, unavailable]);
 
   const finishSpeaking = useCallback(() => {
@@ -220,8 +254,10 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
           one phase for another without a page change, so a result nobody
           announces is a dialog that silently became a different dialog. */}
       <p role="status" className="sr-only">
-        {phase === "confirm" && payee
-          ? `Paying ${payee.name}${amount !== null ? `, ${formatCurrency(amount)}` : ""}. Check the name before you approve.`
+        {phase === "asking"
+          ? "Waiting for the microphone. Allow it in the prompt from your browser."
+          : phase === "confirm" && payee
+            ? `Paying ${payee.name}${amount !== null ? `, ${formatCurrency(amount)}` : ""}. Check the name before you approve.`
           : phase === "choose" && answer
             ? answer.message
             : phase === "failed" && issue
@@ -247,7 +283,8 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
             </button>
             <p className="mt-3 text-[12.5px] font-semibold text-ink-700">Tap to speak</p>
             <p className="mt-1 text-[11.5px] leading-relaxed text-ink-500">
-              Nothing is sent until you confirm who it found.
+              Your browser will ask for the microphone. Nothing is sent until you
+              confirm who it found.
             </p>
           </div>
           )}
@@ -302,6 +339,18 @@ export function VoicePaySheet({ open, onClose }: VoicePaySheetProps) {
             </button>
           )}
         </>
+      ) : null}
+
+      {phase === "asking" ? (
+        <div className="py-6 text-center">
+          <Spinner size={22} className="mx-auto text-ink-500" />
+          <p className="mt-3 text-[13px] font-semibold text-ink-700">
+            Waiting for the microphone…
+          </p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-ink-500">
+            Allow it in the prompt from your browser. Nothing is heard until you do.
+          </p>
+        </div>
       ) : null}
 
       {phase === "listening" ? (

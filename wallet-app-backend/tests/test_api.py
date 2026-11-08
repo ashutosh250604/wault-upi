@@ -102,6 +102,11 @@ def test_every_response_carries_the_browser_side_protections(client, demo_auth):
         assert response.headers["X-Frame-Options"] == "DENY"
         assert response.headers["Referrer-Policy"] == "no-referrer"
         assert "camera=(self)" in response.headers["Permissions-Policy"]
+        # The voice sheet listens through the browser's recogniser, so the
+        # microphone has to be allowed for this origin — with `microphone=()`
+        # the browser refuses outright instead of asking the user.
+        assert "microphone=(self)" in response.headers["Permissions-Policy"]
+        assert "geolocation=()" in response.headers["Permissions-Policy"]
         # Ignored by browsers over plain HTTP, so it is safe to always send.
         assert response.headers["Strict-Transport-Security"].startswith("max-age=")
 

@@ -90,6 +90,87 @@ export function speechSupported(): boolean {
   return speechProblem() === null;
 }
 
+const BLOCKED_MESSAGE =
+  "Microphone access is blocked. Allow it in your browser's site settings, then try again, or enter the payment instead.";
+const MISSING_MESSAGE = "No microphone was found on this device. Enter the payment instead.";
+const BUSY_MESSAGE =
+  "The microphone is busy in another app. Close it and try again, or enter the payment instead.";
+
+/** What the browser already thinks of the microphone, before anybody asks. */
+type MicrophonePermission = "granted" | "prompt" | "denied" | "unknown";
+
+async function microphonePermission(): Promise<MicrophonePermission> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+    return "unknown";
+  }
+  try {
+    const status = await navigator.permissions.query({
+      // `microphone` is in the permissions registry but not in every TS lib
+      // version, and Firefox/Safari reject the name at runtime.
+      name: "microphone" as PermissionName,
+    });
+    return status.state;
+  } catch {
+    return "unknown";
+  }
+}
+
+/** The sentence for a refused or absent microphone, by the browser's own name. */
+function microphoneError(error: unknown): string {
+  const name =
+    typeof error === "object" && error !== null && "name" in error
+      ? String((error as { name: unknown }).name)
+      : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "PermissionDeniedError":
+    case "SecurityError":
+      return BLOCKED_MESSAGE;
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+    case "OverconstrainedError":
+      return MISSING_MESSAGE;
+    case "NotReadableError":
+    case "TrackStartError":
+    case "AbortError":
+      return BUSY_MESSAGE;
+    default:
+      return "The microphone didn't start. Try again, or enter the payment instead.";
+  }
+}
+
+/**
+ * Ask the browser for the microphone, on the click that wanted it.
+ *
+ * The recogniser is left to decide when to ask for permission, and it is a bad
+ * decision-maker: the refusal arrives seconds later as "no speech", over a
+ * sheet that has already told the reader it is listening. A `getUserMedia` call
+ * made from the tap is the one request a browser is guaranteed to put a
+ * permission bubble behind, and its rejection names the problem (blocked, no
+ * device, device busy) instead of hiding it.
+ *
+ * Resolves to null once the microphone is usable, or to the sentence to show.
+ * The stream is stopped immediately: the recogniser opens its own, and two open
+ * microphones on one tab is a light people notice.
+ */
+export async function askForMicrophone(): Promise<string | null> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return "This browser can't reach a microphone. Enter the payment instead.";
+  }
+
+  // A browser that has already refused will not prompt again, so there is no
+  // point opening a device that can only fail. Say what to change instead.
+  if ((await microphonePermission()) === "denied") return BLOCKED_MESSAGE;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+    return null;
+  } catch (error) {
+    return microphoneError(error);
+  }
+}
+
 export interface ListenOptions {
   /** Words as they arrive, before the recogniser has committed to them. */
   onPartial?: (text: string) => void;
@@ -113,7 +194,7 @@ function speechError(code: string): string {
   switch (code) {
     case "not-allowed":
     case "service-not-allowed":
-      return "Microphone access is blocked. Allow it in your browser's site settings, then try again, or enter the payment instead.";
+      return BLOCKED_MESSAGE;
     case "no-speech":
       return "I didn't hear anything. Tap the microphone and say “pay Rohan 250”.";
     case "audio-capture":

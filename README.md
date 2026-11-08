@@ -256,7 +256,7 @@ Facts, measured on this deployment rather than assumed:
 3. Render → **New → Blueprint**, select the repo, and paste the string as `DATABASE_URL` when prompted. `SECRET_KEY` is generated. The service is defined in `render.yaml`: Docker runtime, `wallet-app-backend/Dockerfile`, context at the repository root, health check `/healthz`.
 4. First boot runs `flask db upgrade && flask seed-demo`, so the sample accounts exist immediately.
 
-Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a camera-only `Permissions-Policy` and HSTS. Terminate TLS in front of the container (Render does); over plain HTTP the HSTS header is ignored, which is what keeps local development on `http://` working. A request for a missing asset is an honest 404, the SPA fallback answers extension-less client routes only, never a URL that looks like a file.
+Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a `Permissions-Policy` that allows the camera and the microphone for this origin only (geolocation stays off) and HSTS. Terminate TLS in front of the container (Render does); over plain HTTP the HSTS header is ignored, which is what keeps local development on `http://` working. A request for a missing asset is an honest 404, the SPA fallback answers extension-less client routes only, never a URL that looks like a file.
 
 ## Known limitations
 
